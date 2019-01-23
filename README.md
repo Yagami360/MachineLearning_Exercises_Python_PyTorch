@@ -1,11 +1,13 @@
 # MachineLearning_Exercises_Python_PyTorch
-Pytorch の練習コード集。（実装中）<br>
+Pytorch の練習コード集。<br>
 
 ## ■ 動作環境
 
 - Python : 3.6
 - Anaconda : 5.0.1
 - PyTorch : 1.0.0
+- scikit-learn : 0.20.2
+
 
 ### ◎ 機械学習ライブラリ
 <!--
@@ -30,7 +32,7 @@ http://tensorflow.classcat.com/2016/02/13/tensorflow-how-tos-graph-visualization
 
 ## ■ 項目（フォルダ別）
 
-1. [./MazeSimple_Ramdom](https://github.com/Yagami360/ReinforcementLearning_Exercises/tree/master/MazeSimple_Ramdom)
+1. [./Processing_PyTorch](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/Processing_PyTorch)
 
 ## ■ 参考文献＆サイト
 
