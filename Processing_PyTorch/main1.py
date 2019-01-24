@@ -20,12 +20,14 @@ import torchvision      # 画像処理関連
 # 自作クラス
 from MLPreProcess import MLPreProcess
 
-
+#======================================================================
+# アルゴリズム（モデル）のパラメータを設定
+#======================================================================
 # 設定可能な定数
-BATCH_SIZE = 32         # バッチサイズ
-NUM_EPOCHES = 10
-LEARNING_RATE = 0.001
-NUM_CLASSES = 10
+BATCH_SIZE = 64         # バッチサイズ
+NUM_EPOCHES = 2        #
+LEARNING_RATE = 0.0005   #
+NUM_CLASSES = 10        # MNIST の 0~9 の数字
 
 
 def main():
@@ -39,11 +41,7 @@ def main():
     # ライブラリのバージョン確認
     print( "PyTorch :", torch.__version__ )
     print( "sklearn :", sklearn.__version__ )
-
-    #======================================================================
-    # アルゴリズム（モデル）のパラメータを設定
-    #======================================================================
-
+    
     #======================================================================
     # データセットを読み込み or 生成
     #======================================================================
@@ -121,13 +119,14 @@ def main():
     #======================================================================
     #---------------------------------------------------------------
     # numpy データを Tensor に変換
+    # Pytorchでは入力データがfloat型、target（ラベル）はlong型という決まり
     # Tensor型 : 
     #---------------------------------------------------------------
-    X_train = torch.Tensor( X_train )
+    X_train = torch.Tensor( X_train )           # float 型の FloatTensor
     X_test = torch.Tensor( X_test )
-    y_train = torch.Tensor( y_train )
-    y_test = torch.Tensor( y_test )
-    
+    y_train = torch.LongTensor( y_train )       # 整数型の Tensor
+    y_test = torch.LongTensor( y_test )         #
+
     print( "X_train <Tensor> :", X_train )
     print( "X_test <Tensor> :", X_test )
     print( "y_train <Tensor> :", y_train )
@@ -186,27 +185,92 @@ def main():
     model.add_module( "relu1", nn.ReLU() )
     model.add_module( "fc2", nn.Linear( 100, 100 ) )
     model.add_module( "relu2", nn.ReLU() )
-    model.add_module( "fc3", nn.Linear( 100, 10 ) )
+    model.add_module( "fc3", nn.Linear( 100, NUM_CLASSES ) )
 
     print( "model :\n", model )
 
     #---------------------------------------------------------------
     # 損失関数を設定
     #---------------------------------------------------------------
+    loss_fn = nn.CrossEntropyLoss()
 
     #---------------------------------------------------------------
     # optimizer を設定
     #---------------------------------------------------------------
+    optimizer = torch.optim.Adam(
+        params = model.parameters(),    # 勾配の計算対象となる model のパラメーター
+        lr = LEARNING_RATE
+    )
 
     #======================================================================
-    # モデルの初期化と学習（トレーニング）
+    # モデルの学習フェイズ
     #======================================================================
+    # model を学習モードに切り替える（PyTorch特有の処理）
+    model.train()
+
+    # for ループでエポック数分トレーニング
+    for epoch in range( NUM_EPOCHES ):
+
+        # DataLoader から 1minibatch 分取り出し、ミニバッチ処理
+        for (inputs,targets) in dloader_train:
+            # 勾配を 0 に初期化（この初期化処理が必要なのは、勾配がイテレーション毎に加算される仕様のため）
+            optimizer.zero_grad()
+
+            # 学習用データをモデルに流し込む
+            # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
+            # outputs : Tensor型
+            outputs = model( inputs )
+            #print( "outputs :", outputs )   # shape = [32,10]
+
+            # 出力と教師データを損失関数に設定し、誤差 loss を計算
+            # この設定は、損失関数を __call__ をオーバライト
+            # lossはPytorchのVariableとして帰ってくるので、これをloss.data[0]で数値として見る必要があり
+            loss = loss_fn( outputs, targets )
+
+            # 誤差逆伝搬
+            loss.backward()
+
+            # backward() で計算した勾配を元に、設定した optimizer に従って、重みを更新
+            optimizer.step()
+
+            #
+            print( "epoch %d / loss = %0.3f" % ( epoch + 1, loss ) )
 
     #======================================================================
-    # モデルの評価
-    # (Optional) Evaluate the model.
+    # モデルの推論フェーズ
     #======================================================================
+    n_correct = 0
 
+    # model を推論モードに切り替える（PyTorch特有の処理）
+    model.eval()
+
+    # torch.no_grad()
+    # 微分を行わない処理の範囲を with 構文で囲む
+    # pytorchではtrain時，forward計算時に勾配計算用のパラメータを保存しておくことでbackward計算の高速化を行っており、
+    # これは，model.eval()で行っていてもパラメータが保存されるために、torch.no_grad() でパラメータの保存を止める必要がある。
+    with torch.no_grad():
+        for (inputs,targets) in dloader_test:
+            # テストデータをモデルに流し込む
+            outputs = model( inputs )
+
+            # 確率値が最大のラベル 0~9 を予想ラベルとする。
+            # dim = 1 ⇒ 列方向で最大値をとる
+            # Returns : (Tensor, LongTensor)
+            _, predicts = torch.max( outputs.data, dim = 1 )
+            #print( "predicts :", predicts )
+
+            #--------------------
+            # 正解数のカウント
+            #--------------------
+            # Tensorのサイズを変えたい場合にはviewメソッドを使います（numpyでのreshapeに対応）。
+            #print( "targets.data.view_as() :", targets.data.view_as( predicts ) )
+            
+            # ミニバッチ内で一致したラベルをカウント
+            n_correct += predicts.eq( targets.data.view_as( predicts ) ).sum()
+
+    # 正解率
+    n_tests = len( dloader_test.dataset )
+    print( "Accuracy [test] : {}/{} {:.0f}%\n".format( n_correct, n_tests, 100 * n_correct / n_tests ) )
 
     print("Finish main()")
     return
