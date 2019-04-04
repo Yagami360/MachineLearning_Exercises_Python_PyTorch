@@ -265,7 +265,7 @@ def main():
             # Tensorのサイズを変えたい場合にはviewメソッドを使います（numpyでのreshapeに対応）。
             #print( "targets.data.view_as() :", targets.data.view_as( predicts ) )
             
-            # ミニバッチ内で一致したラベルをカウント
+            # ? ミニバッチ内で一致したラベルをカウント
             n_correct += predicts.eq( targets.data.view_as( predicts ) ).sum()
 
     # 正解率
