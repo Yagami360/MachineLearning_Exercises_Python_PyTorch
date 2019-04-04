@@ -25,8 +25,11 @@ $ python main.py
 - 設定可能な定数
 ```python
 [main.py]
-BATCH_SIZE = 32         # バッチサイズ
-LEARNING_RATE = 0.001
+DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
+DATASET_PATH = "./dataset"    # 学習用データセットへのパス
+NUM_EPOCHES = 25              # エポック数（学習回数）
+LEARNING_RATE = 0.0002        # 学習率
+BATCH_SIZE = 32               # ミニバッチサイズ (Default:32)
 ```
 
 
@@ -39,6 +42,8 @@ LEARNING_RATE = 0.001
 |パラメータ名|値（実行条件１）|値（実行条件２）|
 |---|---|---|
 |学習用データセット|MNIST|←|
+|使用デバイス：`DEVICE`|GPU|←|
+|エポック数：`NUM_EPOCHES`|25|←|
 |バッチサイズ：`BATCH_SIZE`|32|←|
 |最適化アルゴリズム|Adam|←|
 |学習率：`LEARNING_RATE`|0.0002|←|

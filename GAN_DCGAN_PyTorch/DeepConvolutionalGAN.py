@@ -138,11 +138,14 @@ class DeepConvolutionalGAN( object ):
     [protected] 変数名の前にアンダースコア _ を付ける
         _device : <toech.cuda.device> 実行デバイス
 
+        _n_epoches : <int> エポック数（学習回数）
         _learnig_rate : <float> 最適化アルゴリズムの学習率
         _batch_size : <int> ミニバッチ学習時のバッチサイズ
 
         _generator : <nn.Module> DCGAN の生成器
         _discriminator : <nn.Module> DCGAN の識別器
+
+        _loss_fn : <> 損失関数
 
         _G_optimizer : <torch.optim.Optimizer> 生成器の最適化アルゴリズム
         _D_optimizer : <torch.optim.Optimizer> 識別器の最適化アルゴリズム
@@ -153,16 +156,19 @@ class DeepConvolutionalGAN( object ):
     def __init__(
         self,
         device,
+        n_epoches = 25,
         learing_rate = 0.0001,
         batch_size = 32
     ):
         self._device = device
 
+        self._n_epoches = n_epoches
         self._learning_rate = learing_rate
         self._batch_size = batch_size
 
         self._generator = None
         self._dicriminator = None
+        self._loss_fn = None
         self._G_optimizer = None
         self._D_optimizer = None
 
@@ -178,10 +184,12 @@ class DeepConvolutionalGAN( object ):
         print( self )
         print( str )
         print( "_device :", self._device )
+        print( "_n_epoches :", self._n_epoches )
         print( "_learning_rate :", self._learning_rate )
         print( "_batch_size :", self._batch_size )
         print( "_generator :", self._generator )
         print( "_dicriminator :", self._dicriminator )
+        print( "_loss_fn :", self._loss_fn )
         print( "_G_optimizer :", self._G_optimizer )
         print( "_D_optimizer :", self._D_optimizer )
         print( "----------------------------------" )
@@ -217,6 +225,15 @@ class DeepConvolutionalGAN( object ):
         [Args]
         [Returns]
         """
+        # Binary Cross Entropy
+        # L(x,y) = - { y*log(x) + (1-y)*log(1-x) }
+        # real ラベルを 1 としてそして fake ラベルを 0 として定義
+
+        # Discriminator の損失関数：
+        # L_D = E[ log{D(x)} ] + E[ log{1-D(G(z))} ]
+        # D(.) は 0~1 の値（０⇒偽物、1⇒本物）
+        self._loss_fn = nn.BCELoss()
+
         return
 
     def optimizer( self ):
@@ -245,11 +262,59 @@ class DeepConvolutionalGAN( object ):
         return
 
 
-    def fit( self ):
+    def fit( self, data_loader ):
         """
         指定されたトレーニングデータで、モデルの fitting 処理を行う。
         [Args]
+            data_loader : <> 学習用データセットの DataLoader
+
         [Returns]
         """
+        #-------------------------------------
+        # モデルを学習モードに切り替える。
+        #-------------------------------------
+        self._generator.train()
+        self._dicriminator.train()
+
+        #-------------------------------------
+        # 損失関数を計算する
+        #-------------------------------------
+
+        #-------------------------------------
+        # 勾配を 0 に初期化
+        # （この初期化処理が必要なのは、勾配がイテレーション毎に加算される仕様のため）
+        #-------------------------------------
+        #self._optimizer.zero_grad()
+
+        #-------------------------------------
+        # 誤差逆伝搬
+        #-------------------------------------
+        #self._loss_fn.backward()
+
+        #-------------------------------------
+        # backward() で計算した勾配を元に、設定した optimizer に従って、重みを更新
+        #-------------------------------------
+        #self._optimizer.step()
+
         return
 
+
+    def generate_images( self, input_noize ):
+        """
+        DCGAN の Generator から、画像データを自動生成する。
+        [Input]
+            input_noize : ndarry / shape = [n_samples, z_dim] / z_dim = ノイズデータの次数
+                Generator に入力するノイズデータ
+        
+        [Output]
+            images : list / shape = [n_samples, z_dim]
+                生成された画像データのリスト
+                行成分は生成する画像の数 n_samples
+        """
+        #-------------------------------------
+        # 生成器を学習モードに切り替える。
+        #-------------------------------------
+        self._generator.eval()
+
+
+        return
