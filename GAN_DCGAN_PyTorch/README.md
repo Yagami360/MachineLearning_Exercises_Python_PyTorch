@@ -1,4 +1,4 @@
-# DCGAN_PyTorch
+# 【実装中...】GAN_DCGAN_PyTorch
 DCGAN の PyTorch での実装。
 
 ## ■ 項目 [Contents]
@@ -23,12 +23,10 @@ $ python main.py
 ```
 
 - 設定可能な定数
-```
+```python
 [main.py]
 BATCH_SIZE = 32         # バッチサイズ
-NUM_EPOCHES = 10
 LEARNING_RATE = 0.001
-NUM_CLASSES = 10
 ```
 
 
@@ -40,5 +38,8 @@ NUM_CLASSES = 10
 
 |パラメータ名|値（実行条件１）|値（実行条件２）|
 |---|---|---|
+|学習用データセット|MNIST|←|
+|バッチサイズ：`BATCH_SIZE`|32|←|
+|最適化アルゴリズム|Adam|←|
+|学習率：`LEARNING_RATE`|0.0002|←|
 |xxx|xxx|xxx|
-
