@@ -3,9 +3,11 @@ Pytorch の練習コード集。<br>
 
 ## ■ 動作環境
 
+- Windows 10
+- Geforce GTX1050 / VRAM:2GB
 - Python : 3.6
 - Anaconda : 5.0.1
-- PyTorch : 1.0.0
+- PyTorch : 1.0.0 ~ 1.0.1
 - scikit-learn : 0.20.2
 
 
@@ -33,7 +35,7 @@ http://tensorflow.classcat.com/2016/02/13/tensorflow-how-tos-graph-visualization
 ## ■ 項目（フォルダ別）
 
 1. [./Processing_PyTorch](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/Processing_PyTorch)
-1. [./GAN_DCGAN_PyTorch【実装中...】](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_DCGAN_PyTorch)
+1. [./GAN_DCGAN_PyTorch](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_DCGAN_PyTorch)
 
 ## ■ 参考文献＆サイト
 
