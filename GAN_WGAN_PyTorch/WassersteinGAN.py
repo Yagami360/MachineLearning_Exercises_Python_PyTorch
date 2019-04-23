@@ -19,7 +19,7 @@ from torchvision.utils import save_image
 
 class Generator( nn.Module ):
     """
-    DCGAN の生成器 G [Generator] 側のネットワーク構成を記述したモデル。
+    WGAN の生成器 G [Generator] 側のネットワーク構成を記述したモデル。
 
     [public]
     [protected] 変数名の前にアンダースコア _ を付ける
@@ -32,11 +32,11 @@ class Generator( nn.Module ):
     def __init__(
         self,
         device,
-        n_input_noize_z = 62
+        n_input_noize_z = 100
     ):
         super( Generator, self ).__init__()
         self._device = device
-
+        
         # 全結合層 [fully connected layer]
         # 入力ノイズ z を、6272 = 128 * 7 * 7 の次元まで拡張
         self._fc_layer = nn.Sequential(
@@ -85,13 +85,13 @@ class Generator( nn.Module ):
 
 class Critic( nn.Module ):
     """
-    DCGAN のクリティック側のネットワーク構成を記述したモデル。
+    WGAN のクリティック側のネットワーク構成を記述したモデル。
 
     [public]
     [protected] 変数名の前にアンダースコア _ を付ける
         _device : <toech.cuda.device> 使用デバイス
-        _conv_layer : <nn.Sequential> 識別器の Conv 処理を行う層
-        _fc_layer : <nn.Sequential> 識別器の全結合層 
+        _conv_layer : <nn.Sequential> クリティックの Conv 処理を行う層
+        _fc_layer : <nn.Sequential> クリティックの全結合層 
     [private] 変数名の前にダブルアンダースコア __ を付ける（Pythonルール）
     """
     def __init__(
@@ -172,6 +172,8 @@ class WassersteinGAN( object ):
 
         _images_historys : <list> 生成画像のリスト
 
+        _f_historys : <list> クリティックからの出力（リプシッツ連続な関数 f）
+
     [private] 変数名の前にダブルアンダースコア __ を付ける（Pythonルール）
 
     """
@@ -181,7 +183,7 @@ class WassersteinGAN( object ):
         n_epoches = 300,
         learing_rate = 0.0001,
         batch_size = 64,
-        n_input_noize_z = 62,
+        n_input_noize_z = 100,
         n_critic = 5,
         w_clamp_lower = - 0.01,
         w_clamp_upper = 0.01
@@ -205,6 +207,8 @@ class WassersteinGAN( object ):
         self._loss_G_historys = []
         self._loss_C_historys = []
         self._images_historys = []
+        self._f_historys = []
+
         self.model()
         self.loss()
         self.optimizer()
@@ -255,6 +259,10 @@ class WassersteinGAN( object ):
     def images_historys( self ):
         return self._images_historys
 
+    @property
+    def f_historys( self ):
+        return self._f_historys
+
 
     def model( self ):
         """
@@ -293,16 +301,28 @@ class WassersteinGAN( object ):
         # これにより TensorFlow における、
         # tf.control_dependencies(...) : sess.run で実行する際のトレーニングステップの依存関係（順序）を定義
         # に対応する処理が簡単にわかりやすく行える。
+        """
         self._G_optimizer = optim.Adam(
             params = self._generator.parameters(),
             lr = self._learning_rate,
             betas = (0.5,0.999)
         )
+        """
+        self._G_optimizer = optim.RMSprop(
+            params = self._generator.parameters(),
+            lr = self._learning_rate
+        )
 
+        """
         self._C_optimizer = optim.Adam(
             params = self._critic.parameters(),
             lr = self._learning_rate,
             betas = (0.5,0.999)
+        )
+        """
+        self._C_optimizer = optim.RMSprop(
+            params = self._critic.parameters(),
+            lr = self._learning_rate
         )
 
         return
@@ -353,6 +373,9 @@ class WassersteinGAN( object ):
                 #====================================================
                 # クリティック C の fitting 処理
                 #====================================================
+                for param in self._critic.parameters():
+                    param.requires_grad = True  # they are set to False below in netG update
+
                 for n in range( self._n_critic ):
                     #----------------------------------------------------
                     # 重みクリッピング
@@ -377,7 +400,8 @@ class WassersteinGAN( object ):
                     # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
                     #----------------------------------------------------
                     # f = C(x) : 本物画像 x = image を入力したときのクリティックの出力 (リプシッツ連続な関数 f)
-                    C_x = self._critic( images )
+                    C_x = self._critic( images )    # torch.Size([batch_size, 1])
+                    self._f_historys.append( torch.mean( C_x ) / self._batch_size )
                     #print( "C_x.size() :", C_x.size() )   # torch.Size([128, 1])
                     #print( "C_x :", C_x )
 
@@ -397,24 +421,26 @@ class WassersteinGAN( object ):
                     # この設定は、損失関数を __call__ をオーバライト
                     # loss は Pytorch の Variable として帰ってくるので、これをloss.data[0]で数値として見る必要があり
                     #----------------------------------------------------
-                    # E[ log{C(x)} ]
-                    loss_C_real = self._loss_fn( C_x, ones_tsr )
+                    # E_x[ C(x) ]
+                    #loss_C_real = self._loss_fn( C_x, ones_tsr )
+                    loss_C_real = torch.mean( C_x ) / self._batch_size
                     #print( "loss_C_real : ", loss_C_real.item() )
 
-                    # E[ 1 - log{C(G(z))} ]
-                    loss_C_fake = self._loss_fn( C_G_z, zeros_tsr )
+                    # E_z[ C(G(z) ]
+                    #loss_C_fake = self._loss_fn( C_G_z, zeros_tsr )
+                    loss_C_fake = torch.mean( C_G_z ) / self._batch_size
                     #print( "loss_C_fake : ", loss_C_fake.item() )
 
-                    # クリティック C の損失関数 = E[ log{C(x)} ] + E[ 1 - log{C(G(z))} ]
-                    loss_C = loss_C_real + loss_C_fake
+                    # クリティック C の損失関数 = E_x[ C(x) ] + E_z[ C(G(z) ]
+                    #loss_C = loss_C_real + loss_C_fake
+                    loss_C = loss_C_real - loss_C_fake
                     #print( "loss_C : ", loss_C.item() )
-
-                    self._loss_C_historys.append( loss_C.item() )
 
                     #----------------------------------------------------
                     # 誤差逆伝搬
                     #----------------------------------------------------
-                    loss_C.backward()
+                    #loss_C.backward()
+                    loss_C.backward( ones_tsr )
 
                     #----------------------------------------------------
                     # backward() で計算した勾配を元に、設定した optimizer に従って、重みを更新
@@ -424,6 +450,9 @@ class WassersteinGAN( object ):
                 #====================================================
                 # 生成器 G の fitting 処理
                 #====================================================
+                for param in self._generator.parameters():
+                    param.requires_grad = False # to avoid computation
+
                 # 生成器 G に入力するノイズ z (62 : ノイズの次元)
                 # Generatorの更新の前にノイズを新しく生成しなおす必要があり。
                 input_noize_z = torch.rand( size = (self._batch_size, self._n_input_noize_z) ).to( self._device )
@@ -450,20 +479,25 @@ class WassersteinGAN( object ):
                 #----------------------------------------------------
                 # 損失関数を計算する
                 #----------------------------------------------------
-                # L_G = E[ log{C(G(z))} ]
-                loss_G = self._loss_fn( C_G_z, ones_tsr )
+                # L_G = E_z[ C(G(z) ]
+                #loss_G = self._loss_fn( C_G_z, ones_tsr )
+                loss_G = torch.mean( C_G_z ) / self._batch_size
                 #print( "loss_G :", loss_G )
-                self._loss_G_historys.append( loss_G.item() )
 
                 #----------------------------------------------------
                 # 誤差逆伝搬
                 #----------------------------------------------------
-                loss_G.backward()
+                #loss_G.backward()
+                loss_G.backward( zeros_tsr )
 
                 #----------------------------------------------------
                 # backward() で計算した勾配を元に、設定した optimizer に従って、重みを更新
                 #----------------------------------------------------
                 self._G_optimizer.step()
+
+                #
+                self._loss_C_historys.append( loss_C.item() )
+                self._loss_G_historys.append( loss_G.item() )
 
             #----------------------------------------------------
             # 学習過程での自動生成画像
@@ -475,7 +509,7 @@ class WassersteinGAN( object ):
 
                 save_image( 
                     tensor = images, 
-                    filename = "DCGAN_Image_epoches{}_iters{}.png".format( epoch, iterations )
+                    filename = "WGAN_Image_epoches{}_iters{}.png".format( epoch, iterations )
                 )
 
 

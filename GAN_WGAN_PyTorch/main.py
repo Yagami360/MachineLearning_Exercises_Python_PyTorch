@@ -27,10 +27,10 @@ DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
 DATASET_PATH = "./dataset"    # 学習用データセットへのパス
 NUM_SAVE_STEP = 1             # 自動生成画像の保存間隔（エポック単位）
 
-NUM_EPOCHES = 10              # エポック数（学習回数）
+NUM_EPOCHES = 2              # エポック数（学習回数）
 LEARNING_RATE = 0.00005       # 学習率
-BATCH_SIZE = 128              # ミニバッチサイズ
-NUM_INPUT_NOIZE_Z = 62        # 生成器に入力するノイズ z の次数
+BATCH_SIZE = 64               # ミニバッチサイズ
+NUM_INPUT_NOIZE_Z = 100       # 生成器に入力するノイズ z の次数
 NUM_CRITIC = 5                # クリティックの更新回数
 WEIGHT_CLAMP_LOWER = - 0.01   # 重みクリッピングの下限値
 WEIGHT_CLAMP_UPPER = 0.01     # 重みクリッピングの上限値
@@ -67,14 +67,17 @@ def main():
         use_cuda = torch.cuda.is_available()
         if( use_cuda == True ):
             device = torch.device( "cuda" )
+            print( "実行デバイス :", device)
+            print( "GPU名 :", torch.cuda.get_device_name(0))
+            print("torch.cuda.current_device() =", torch.cuda.current_device())
         else:
             print( "can't using gpu." )
             device = torch.device( "cpu" )
+            print( "実行デバイス :", device)
     else:
         device = torch.device( "cpu" )
+        print( "実行デバイス :", device)
 
-    print( "実行デバイス :", device)
-    print( "GPU名 :", torch.cuda.get_device_name(0))
     print( "----------------------------------------------" )
 
     # seed 値の固定
@@ -209,6 +212,27 @@ def main():
     )
     plt.show()
 
+    #-----------------------------------
+    # クリティックの出力（＝リプシッツ連続な関数 f ）の plot
+    #-----------------------------------
+    plt.clf()
+    plt.plot(
+        range( 0, len(model.f_historys) ), model.f_historys,
+        label = "Lipschitz function : f",
+        linestyle = '-',
+        linewidth = 0.2,
+        color = 'blue'
+    )
+    plt.legend( loc = 'best' )
+    #plt.ylim( [0, 1.05] )
+    plt.xlabel( "iterations" )
+    plt.grid()
+    plt.tight_layout()
+    plt.savefig(
+        "LipschitzFunction_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE ),  
+        dpi = 300, bbox_inches = "tight"
+    )
+    plt.show()
 
     #-------------------------------------------------------------------
     # 学習済み DCGAN に対し、自動生成画像を表示

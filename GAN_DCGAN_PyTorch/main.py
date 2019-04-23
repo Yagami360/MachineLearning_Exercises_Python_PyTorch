@@ -61,14 +61,16 @@ def main():
         use_cuda = torch.cuda.is_available()
         if( use_cuda == True ):
             device = torch.device( "cuda" )
+            print( "実行デバイス :", device)
+            print( "GPU名 :", torch.cuda.get_device_name(0))
         else:
             print( "can't using gpu." )
             device = torch.device( "cpu" )
+            print( "実行デバイス :", device)
     else:
         device = torch.device( "cpu" )
-
-    print( "実行デバイス :", device)
-    print( "GPU名 :", torch.cuda.get_device_name(0))
+        print( "実行デバイス :", device)
+        
     print( "----------------------------------------------" )
 
     # seed 値の固定
