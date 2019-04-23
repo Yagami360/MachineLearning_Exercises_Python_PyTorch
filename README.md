@@ -10,32 +10,17 @@ Pytorch の練習コード集。<br>
 - PyTorch : 1.0.0 ~ 1.0.1
 - scikit-learn : 0.20.2
 
-
-### ◎ 機械学習ライブラリ
-<!--
-https://www.tensorflow.org </br>
-
-> GitHub : 
->> https://github.com/tensorflow/tensorflow </br>
-
-> チートシート： </br>
->> https://github.com/louishenrifranc/Tensorflow-Cheatsheet </br>
-
-> API 集 : </br>
->> https://www.tensorflow.org/api_docs/python/ </br>
-
-> TensorBorad : </br>
-https://deepage.net/tensorflow/2017/04/25/tensorboard.html </br>
-http://tensorflow.classcat.com/2016/02/13/tensorflow-how-tos-graph-visualization/</br>
--->
-
 ### ◎ 検証用データセット
 
+- MNIST
 
 ## ■ 項目（フォルダ別）
 
 1. [./Processing_PyTorch](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/Processing_PyTorch)
-1. [./GAN_DCGAN_PyTorch](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_DCGAN_PyTorch)
+1. GAN
+    1. [./GAN_DCGAN_PyTorch](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_DCGAN_PyTorch)
+    1. [./GAN_WGAN_PyTorch【実装中...】](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_WGAN_PyTorch)
+
 
 ## ■ 参考文献＆サイト
 

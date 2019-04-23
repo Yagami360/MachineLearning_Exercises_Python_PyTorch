@@ -16,7 +16,7 @@ import torchvision.transforms as transforms
 from torchvision.utils import save_image
 
 # 自作モジュール
-from DeepConvolutionalGAN import DeepConvolutionalGAN
+from WassersteinGAN import WassersteinGAN
 
 
 #--------------------------------
@@ -27,15 +27,18 @@ DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
 DATASET_PATH = "./dataset"    # 学習用データセットへのパス
 NUM_SAVE_STEP = 1             # 自動生成画像の保存間隔（エポック単位）
 
-NUM_EPOCHES = 10              # エポック数（学習回数）
-LEARNING_RATE = 0.0002        # 学習率
+NUM_EPOCHES = 1               # エポック数（学習回数）
+LEARNING_RATE = 0.00005       # 学習率
 BATCH_SIZE = 128              # ミニバッチサイズ
 NUM_INPUT_NOIZE_Z = 62        # 生成器に入力するノイズ z の次数
+NUM_CRITIC = 5                # クリティックの更新回数
+WEIGHT_CLAMP_LOWER = - 0.01   # 重みクリッピングの下限値
+WEIGHT_CLAMP_UPPER = 0.01     # 重みクリッピングの上限値
 
 
 def main():
     """
-    DCGAN による画像の自動生成
+    Wasserstein による画像の自動生成
     ・学習用データセットは、MNIST
     """
     print("Start main()")
@@ -53,6 +56,9 @@ def main():
     print( "LEARNING_RATE : ", LEARNING_RATE )
     print( "BATCH_SIZE : ", BATCH_SIZE )
     print( "NUM_INPUT_NOIZE_Z : ", NUM_INPUT_NOIZE_Z )
+    print( "NUM_CRITIC : ", NUM_CRITIC )
+    print( "WEIGHT_CLAMP_LOWER : ", WEIGHT_CLAMP_LOWER )
+    print( "WEIGHT_CLAMP_UPPER : ", WEIGHT_CLAMP_UPPER )
 
     #===================================
     # 実行 Device の設定
@@ -139,12 +145,15 @@ def main():
     #======================================================================
     # モデルの構造を定義する。
     #======================================================================
-    model = DeepConvolutionalGAN(
+    model = WassersteinGAN(
         device = device,
         n_epoches = NUM_EPOCHES,
         learing_rate = LEARNING_RATE,
         batch_size = BATCH_SIZE,
-        n_input_noize_z = NUM_INPUT_NOIZE_Z
+        n_input_noize_z = NUM_INPUT_NOIZE_Z,
+        n_critic = NUM_CRITIC,
+        w_clamp_lower = WEIGHT_CLAMP_LOWER,
+        w_clamp_upper = WEIGHT_CLAMP_UPPER
     )
 
     model.print( "after init()" )
@@ -181,7 +190,7 @@ def main():
         color = 'red'
     )
     plt.plot(
-        range( 0, len(model.loss_D_history) ), model.loss_D_history,
+        range( 0, len(model.loss_C_history) ), model.loss_C_history,
         label = "loss_D",
         linestyle = '-',
         linewidth = 0.2,
