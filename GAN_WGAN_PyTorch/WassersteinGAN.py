@@ -55,7 +55,7 @@ class Generator( nn.Module ):
             nn.BatchNorm2d(64),
             nn.ReLU(),
             nn.ConvTranspose2d(64, 1, kernel_size=4, stride=2, padding=1),
-            nn.Sigmoid(),
+            # nn.Sigmoid(),
         ).to( self._device )
 
         self.init_weight()
@@ -156,8 +156,8 @@ class WassersteinGAN( object ):
         _n_input_noize_z : <int> 入力ノイズ z の次元数
 
         _n_critic : <int> クリティックの更新回数
-        _w_clamp_lower : 重みクリッピングの下限値
-        _w_clamp_upper : 重みクリッピングの上限値
+        _w_clamp_lower : <float> 重みクリッピングの下限値
+        _w_clamp_upper : <float> 重みクリッピングの上限値
 
         _generator : <nn.Module> DCGAN の生成器
         _critic : <nn.Module> DCGAN のクリティック
@@ -354,74 +354,72 @@ class WassersteinGAN( object ):
                 # クリティック C の fitting 処理
                 #====================================================
                 for n in range( self._n_critic ):
-                    pass
+                    #----------------------------------------------------
+                    # 重みクリッピング
+                    #----------------------------------------------------
+                    for param in self._critic.parameters():
+                        #print( "critic param :", param )
+                        param.data.clamp_( self._w_clamp_lower, self._w_clamp_upper )
+                        #print( "critic param :", param )
 
-                #----------------------------------------------------
-                # 重みクリッピング
-                #----------------------------------------------------
-                for param in self._critic.parameters():
-                    #print( "critic param :", param )
-                    param.data.clamp_( self._w_clamp_lower, self._w_clamp_upper )
-                    #print( "critic param :", param )
+                    # 生成器 G に入力するノイズ z (62 : ノイズの次元)
+                    # Generatorの更新の前にノイズを新しく生成しなおす必要があり。
+                    input_noize_z = torch.rand( size = (self._batch_size, self._n_input_noize_z) ).to( self._device )
 
-                # 生成器 G に入力するノイズ z (62 : ノイズの次元)
-                # Generatorの更新の前にノイズを新しく生成しなおす必要があり。
-                input_noize_z = torch.rand( size = (self._batch_size, self._n_input_noize_z) ).to( self._device )
+                    #----------------------------------------------------
+                    # 勾配を 0 に初期化
+                    # （この初期化処理が必要なのは、勾配がイテレーション毎に加算される仕様のため）
+                    #----------------------------------------------------
+                    self._C_optimizer.zero_grad()
 
-                #----------------------------------------------------
-                # 勾配を 0 に初期化
-                # （この初期化処理が必要なのは、勾配がイテレーション毎に加算される仕様のため）
-                #----------------------------------------------------
-                self._C_optimizer.zero_grad()
+                    #----------------------------------------------------
+                    # 学習用データをモデルに流し込む
+                    # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
+                    #----------------------------------------------------
+                    # f = C(x) : 本物画像 x = image を入力したときのクリティックの出力 (リプシッツ連続な関数 f)
+                    C_x = self._critic( images )
+                    #print( "C_x.size() :", C_x.size() )   # torch.Size([128, 1])
+                    #print( "C_x :", C_x )
 
-                #----------------------------------------------------
-                # 学習用データをモデルに流し込む
-                # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
-                #----------------------------------------------------
-                # C(x) : 本物画像 x = image を入力したときの識別器の出力 (連続値)
-                C_x = self._critic( images )
-                print( "C_x.size() :", C_x.size() )
-                print( "C_x :", C_x )
+                    # G(z) : 生成器から出力される偽物画像
+                    G_z = self._generator( input_noize_z )
+                    #print( "G_z.size() :", G_z.size() )     # torch.Size([128, 1, 28, 28])
+                    #print( "G_z :", G_z )
 
-                # G(z) : 生成器から出力される偽物画像
-                G_z = self._generator( input_noize_z )
-                print( "G_z.size() :", G_z.size() )
-                print( "G_z :", G_z )
+                    # f = C( G(z) ) : 偽物画像を入力したときの識別器の出力 (リプシッツ連続な関数 f)
+                    C_G_z = self._critic( G_z )
+                    #print( "C_G_z.size() :", C_G_z.size() )
+                    #print( "C_G_z :", C_G_z )
 
-                # f = C( G(z) ) : 偽物画像を入力したときの識別器の出力 (リプシッツ連続な関数 f)
-                C_G_z = self._critic( G_z )
-                print( "C_G_z.size() :", C_G_z.size() )
-                print( "C_G_z :", C_G_z )
+                    #----------------------------------------------------
+                    # 損失関数を計算する
+                    # 出力と教師データを損失関数に設定し、誤差 loss を計算
+                    # この設定は、損失関数を __call__ をオーバライト
+                    # loss は Pytorch の Variable として帰ってくるので、これをloss.data[0]で数値として見る必要があり
+                    #----------------------------------------------------
+                    # E[ log{C(x)} ]
+                    loss_C_real = self._loss_fn( C_x, ones_tsr )
+                    #print( "loss_C_real : ", loss_C_real.item() )
 
-                #----------------------------------------------------
-                # 損失関数を計算する
-                # 出力と教師データを損失関数に設定し、誤差 loss を計算
-                # この設定は、損失関数を __call__ をオーバライト
-                # loss は Pytorch の Variable として帰ってくるので、これをloss.data[0]で数値として見る必要があり
-                #----------------------------------------------------
-                # E[ log{C(x)} ]
-                loss_C_real = self._loss_fn( C_x, ones_tsr )
-                print( "loss_C_real : ", loss_C_real.item() )
+                    # E[ 1 - log{C(G(z))} ]
+                    loss_C_fake = self._loss_fn( C_G_z, zeros_tsr )
+                    #print( "loss_C_fake : ", loss_C_fake.item() )
 
-                # E[ 1 - log{C(G(z))} ]
-                loss_C_fake = self._loss_fn( C_G_z, zeros_tsr )
-                print( "loss_C_fake : ", loss_C_fake.item() )
+                    # クリティック C の損失関数 = E[ log{C(x)} ] + E[ 1 - log{C(G(z))} ]
+                    loss_C = loss_C_real + loss_C_fake
+                    #print( "loss_C : ", loss_C.item() )
 
-                # クリティック C の損失関数 = E[ log{C(x)} ] + E[ 1 - log{C(G(z))} ]
-                loss_C = loss_C_real + loss_C_fake
-                print( "loss_C : ", loss_C.item() )
+                    self._loss_C_historys.append( loss_C.item() )
 
-                self._loss_C_historys.append( loss_C.item() )
+                    #----------------------------------------------------
+                    # 誤差逆伝搬
+                    #----------------------------------------------------
+                    loss_C.backward()
 
-                #----------------------------------------------------
-                # 誤差逆伝搬
-                #----------------------------------------------------
-                loss_C.backward()
-
-                #----------------------------------------------------
-                # backward() で計算した勾配を元に、設定した optimizer に従って、重みを更新
-                #----------------------------------------------------
-                self._C_optimizer.step()
+                    #----------------------------------------------------
+                    # backward() で計算した勾配を元に、設定した optimizer に従って、重みを更新
+                    #----------------------------------------------------
+                    self._C_optimizer.step()
 
                 #====================================================
                 # 生成器 G の fitting 処理
