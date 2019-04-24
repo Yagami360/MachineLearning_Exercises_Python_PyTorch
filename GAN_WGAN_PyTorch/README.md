@@ -60,13 +60,13 @@ WEIGHT_CLAMP_UPPER = 0.01     # 重みクリッピングの上限値
 |学習用データセット：`DATASET`|"MNIST"|"CIFAR-10"|
 |使用デバイス：`DEVICE`|GPU|←|
 |シード値|`random.seed(8)`<br>`np.random.seed(8)`<br>`torch.manual_seed(8)`|←|
-|エポック数：`NUM_EPOCHES`|10|x|
+|エポック数：`NUM_EPOCHES`|10|50|
 |バッチサイズ：`BATCH_SIZE`|64|64|
 |生成器に入力するノイズ z の次数：`NUM_INPUT_NOIZE_Z`|100|100|
-|入力画像のサイズ：`IMAGE_SIZE`|-|64|
-|入力画像のチャンネル数：`NUM_CHANNELS`|-|3|
-|特徴マップの枚数：`NUM_FEATURE_MAPS`|-|64|
-|最適化アルゴリズム|RMSProp|←|
+|入力画像のサイズ：`IMAGE_SIZE`|64|64|
+|入力画像のチャンネル数：`NUM_CHANNELS`|1|3|
+|特徴マップの枚数：`NUM_FEATURE_MAPS`|64|64|
+|最適化アルゴリズム|Adam|←|
 |学習率：`LEARNING_RATE`|0.00005|←|
 |クリティックの更新回数：`NUM_CRITIC`|5|←|
 |重みクリッピングの下限値：`WEIGHT_CLAMP_LOWER`|-0.01|←|
@@ -78,50 +78,20 @@ WEIGHT_CLAMP_UPPER = 0.01     # 重みクリッピングの上限値
 
 #### ☆ 生成器から生成された自動生成画像（実行条件１）
 
-- エポック数 : 1 / イテレーション回数：xxx<br>
+- エポック数 : 1 / イテレーション回数：937<br>
+![WGAN_Image_epoches0_iters937](https://user-images.githubusercontent.com/25688193/56650043-3971ee80-66c1-11e9-9788-e21a045fd1f6.png)<br>
 
-- エポック数 : 2 / イテレーション回数：xxx<br>
+- エポック数 : 2 / イテレーション回数：1874<br>
+![WGAN_Image_epoches1_iters1874](https://user-images.githubusercontent.com/25688193/56650044-3971ee80-66c1-11e9-9d79-9bf412420c55.png)<br>
 
+- エポック数 : 3 / イテレーション回数 : 2811<br>
+![WGAN_Image_epoches2_iters2811](https://user-images.githubusercontent.com/25688193/56650046-3a0a8500-66c1-11e9-92b2-664689014d73.png)<br>
 
-- エポック数 : 10 / イテレーション回数 : xxxx<br>
+- エポック数 : 4 / イテレーション回数 : 3749<br>
+![WGAN_Image_epoches3_iters3748](https://user-images.githubusercontent.com/25688193/56650704-8d310780-66c2-11e9-8dc0-5b2fe87fb867.png)<br>
+
+- エポック数 : 10 / イテレーション回数 : xxx<br>
 <br>
 
 
 ## ■ デバッグ情報
-
-```python
-CGAN_G(
-  (main): Sequential(
-    (initial:100-512:convt): ConvTranspose2d(100, 512, kernel_size=(4, 4), stride=(1, 1), bias=False)
-    (initial:512:batchnorm): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-    (initial:512:relu): ReLU(inplace)
-    (pyramid:512-256:convt): ConvTranspose2d(512, 256, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1), bias=False)
-    (pyramid:256:batchnorm): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-    (pyramid:256:relu): ReLU(inplace)
-    (pyramid:256-128:convt): ConvTranspose2d(256, 128, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1), bias=False)
-    (pyramid:128:batchnorm): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-    (pyramid:128:relu): ReLU(inplace)
-    (pyramid:128-64:convt): ConvTranspose2d(128, 64, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1), bias=False)
-    (pyramid:64:batchnorm): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-    (pyramid:64:relu): ReLU(inplace)
-    (final:64-3:convt): ConvTranspose2d(64, 3, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1), bias=False)
-    (final:3:tanh): Tanh()
-  )
-)
-DCGAN_D(
-  (main): Sequential(
-    (initial:3-64:conv): Conv2d(3, 64, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1), bias=False)
-    (initial:64:relu): LeakyReLU(negative_slope=0.2, inplace)
-    (pyramid:64-128:conv): Conv2d(64, 128, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1), bias=False)
-    (pyramid:128:batchnorm): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-    (pyramid:128:relu): LeakyReLU(negative_slope=0.2, inplace)
-    (pyramid:128-256:conv): Conv2d(128, 256, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1), bias=False)
-    (pyramid:256:batchnorm): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-    (pyramid:256:relu): LeakyReLU(negative_slope=0.2, inplace)
-    (pyramid:256-512:conv): Conv2d(256, 512, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1), bias=False)
-    (pyramid:512:batchnorm): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-    (pyramid:512:relu): LeakyReLU(negative_slope=0.2, inplace)
-    (final:512-1:conv): Conv2d(512, 1, kernel_size=(4, 4), stride=(1, 1), bias=False)
-  )
-)
-```

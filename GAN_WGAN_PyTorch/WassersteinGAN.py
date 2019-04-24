@@ -314,6 +314,7 @@ class WassersteinGAN( object ):
         # これにより TensorFlow における、
         # tf.control_dependencies(...) : sess.run で実行する際のトレーニングステップの依存関係（順序）を定義
         # に対応する処理が簡単にわかりやすく行える。
+        """
         self._G_optimizer = optim.Adam(
             params = self._generator.parameters(),
             lr = self._learning_rate,
@@ -336,7 +337,6 @@ class WassersteinGAN( object ):
             params = self._critic.parameters(),
             lr = self._learning_rate
         )
-        """
         return
 
 
@@ -419,13 +419,16 @@ class WassersteinGAN( object ):
                     #print( "C_x.size() :", C_x.size() )
                     #print( "C_x :", C_x )
 
+                    # G(z) : 生成器から出力される偽物画像
+                    G_z = self._generator( input_noize_z )
+                    
                     # 微分を行わない処理の範囲を with 構文で囲む
                     # クリティック D の学習中は、生成器 G のネットワークの勾配は更新しない。
-                    with torch.no_grad():
-                        # G(z) : 生成器から出力される偽物画像
-                        G_z = self._generator( input_noize_z )
-                        #print( "G_z.size() :", G_z.size() )     # torch.Size([128, 1, 28, 28])
-                        #print( "G_z :", G_z )
+                    #with torch.no_grad():
+                        #G_z = self._generator( input_noize_z )
+                    
+                    #print( "G_z.size() :", G_z.size() )     # torch.Size([128, 1, 28, 28])
+                    #print( "G_z :", G_z )
 
                     # E[ C( G(z) ) ] : 偽物画像を入力したときの識別器の出力 (平均化処理済み)
                     C_G_z = self._critic( G_z )
@@ -455,9 +458,9 @@ class WassersteinGAN( object ):
                     #----------------------------------------------------
                     # 誤差逆伝搬
                     #----------------------------------------------------
-                    loss_C_real.backward( one_tsr )
-                    loss_C_fake.backward( mone_tsr )
-                    #loss_C.backward()
+                    loss_C.backward()
+                    #loss_C_real.backward( one_tsr )
+                    #loss_C_fake.backward( mone_tsr )
 
                     #----------------------------------------------------
                     # backward() で計算した勾配を元に、設定した optimizer に従って、重みを更新
@@ -505,8 +508,8 @@ class WassersteinGAN( object ):
                 #----------------------------------------------------
                 # 誤差逆伝搬
                 #----------------------------------------------------
-                #loss_G.backward()
-                loss_G.backward( one_tsr )
+                loss_G.backward()
+                #loss_G.backward( one_tsr )
 
                 #----------------------------------------------------
                 # backward() で計算した勾配を元に、設定した optimizer に従って、重みを更新

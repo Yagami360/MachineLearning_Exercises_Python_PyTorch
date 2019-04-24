@@ -420,11 +420,14 @@ class WassersteinGANforMNIST( object ):
                     #print( "C_x.size() :", C_x.size() )
                     #print( "C_x :", C_x )
 
+                    # G(z) : 生成器から出力される偽物画像
+                    G_z = self._generator( input_noize_z )
+
                     # 微分を行わない処理の範囲を with 構文で囲む
                     # クリティック D の学習中は、生成器 G のネットワークの勾配は更新しない。
                     with torch.no_grad():
                         # G(z) : 生成器から出力される偽物画像
-                        G_z = self._generator( input_noize_z )
+                        #G_z = self._generator( input_noize_z )
                         #print( "G_z.size() :", G_z.size() )     # torch.Size([128, 1, 28, 28])
                         #print( "G_z :", G_z )
 
@@ -456,9 +459,9 @@ class WassersteinGANforMNIST( object ):
                     #----------------------------------------------------
                     # 誤差逆伝搬
                     #----------------------------------------------------
-                    loss_C_real.backward( one_tsr)
-                    loss_C_fake.backward( mone_tsr )
-                    #loss_C.backward()
+                    #loss_C_real.backward( one_tsr)
+                    #loss_C_fake.backward( mone_tsr )
+                    loss_C.backward()
 
                     #----------------------------------------------------
                     # backward() で計算した勾配を元に、設定した optimizer に従って、重みを更新
@@ -512,8 +515,8 @@ class WassersteinGANforMNIST( object ):
                 #----------------------------------------------------
                 # 誤差逆伝搬
                 #----------------------------------------------------
-                #loss_G.backward()
-                loss_G.backward( one_tsr )
+                loss_G.backward()
+                #loss_G.backward( one_tsr )
 
                 #----------------------------------------------------
                 # backward() で計算した勾配を元に、設定した optimizer に従って、重みを更新
