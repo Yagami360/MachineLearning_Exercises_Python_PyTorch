@@ -32,11 +32,12 @@ $ python main.py
 [main.py]
 #DEVICE = "CPU"               # 使用デバイス ("CPU" or "GPU")
 DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
+DATASET = "MNIST"             # データセットの種類（"MNIST" or "CIFAR-10"）
 DATASET_PATH = "./dataset"    # 学習用データセットへのパス
 NUM_SAVE_STEP = 1             # 自動生成画像の保存間隔（エポック単位）
 
 NUM_EPOCHES = 25              # エポック数（学習回数）
-LEARNING_RATE = 0.0002        # 学習率
+LEARNING_RATE = 0.00005       # 学習率
 BATCH_SIZE = 128              # ミニバッチサイズ
 IMAGE_SIZE = 64               # 入力画像のサイズ（pixel単位）
 NUM_CHANNELS = 3              # 入力画像のチャンネル数
@@ -56,15 +57,15 @@ WEIGHT_CLAMP_UPPER = 0.01     # 重みクリッピングの上限値
 
 |パラメータ名|値（実行条件１）|値（実行条件２）|
 |---|---|---|
-|学習用データセット|MNIST|CIFAR-10|
+|学習用データセット：`DATASET`|"MNIST"|"CIFAR-10"|
 |使用デバイス：`DEVICE`|GPU|←|
 |シード値|`random.seed(8)`<br>`np.random.seed(8)`<br>`torch.manual_seed(8)`|←|
 |エポック数：`NUM_EPOCHES`|10|x|
 |バッチサイズ：`BATCH_SIZE`|64|64|
 |生成器に入力するノイズ z の次数：`NUM_INPUT_NOIZE_Z`|100|100|
-|入力画像のサイズ：`IMAGE_SIZE`|28|64|
-|入力画像のチャンネル数：`NUM_CHANNELS`|1|3|
-|特徴マップの枚数：`NUM_FEATURE_MAPS`|64|64|
+|入力画像のサイズ：`IMAGE_SIZE`|-|64|
+|入力画像のチャンネル数：`NUM_CHANNELS`|-|3|
+|特徴マップの枚数：`NUM_FEATURE_MAPS`|-|64|
 |最適化アルゴリズム|RMSProp|←|
 |学習率：`LEARNING_RATE`|0.00005|←|
 |クリティックの更新回数：`NUM_CRITIC`|5|←|

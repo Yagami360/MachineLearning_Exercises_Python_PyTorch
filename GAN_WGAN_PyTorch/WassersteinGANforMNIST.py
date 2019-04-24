@@ -20,43 +20,43 @@ from torchvision.utils import save_image
 class Generator( nn.Module ):
     """
     WGAN の生成器 G [Generator] 側のネットワーク構成を記述したモデル。
+    ・MNIST データの構造に最適化されている。
 
     [public]
     [protected] 変数名の前にアンダースコア _ を付ける
         _device : <toech.cuda.device> 使用デバイス
-        _layer : <nn.Sequential> 生成器のネットワーク構成
+        _fc_layer : <nn.Sequential> 生成器の全結合層 （ノイズデータの次元を拡張）
+        _deconv_layer : <nn.Sequential> 生成器の DeConv 処理を行う層
     [private] 変数名の前にダブルアンダースコア __ を付ける（Pythonルール）
 
     """
     def __init__(
         self,
         device,
-        n_input_noize_z = 100,
-        n_channels = 3,
-        n_fmaps = 64
+        n_input_noize_z = 62
     ):
         super( Generator, self ).__init__()
         self._device = device
         
-        self._layer = nn.Sequential(
-            nn.ConvTranspose2d(n_input_noize_z, n_fmaps*8, kernel_size=4, stride=1, padding=0, bias=False),
-            nn.BatchNorm2d(n_fmaps*8),
-            nn.ReLU(inplace=True),
+        # 全結合層 [fully connected layer]
+        # 入力ノイズ z を、6272 = 128 * 7 * 7 の次元まで拡張
+        self._fc_layer = nn.Sequential(
+            nn.Linear(n_input_noize_z, 1024),
+            nn.BatchNorm1d(1024),
+            nn.ReLU(),
+            nn.Linear(1024, 128 * 7 * 7),
+            nn.BatchNorm1d(128 * 7 * 7),
+            nn.ReLU(),
+        ).to( self._device )
 
-            nn.ConvTranspose2d( n_fmaps*8, n_fmaps*4, kernel_size=4, stride=2, padding=1, bias=False ),
-            nn.BatchNorm2d(n_fmaps*4),
-            nn.ReLU(inplace=True),
-
-            nn.ConvTranspose2d( n_fmaps*4, n_fmaps*2, kernel_size=4, stride=2, padding=1, bias=False ),
-            nn.BatchNorm2d(n_fmaps*2),
-            nn.ReLU(inplace=True),
-
-            nn.ConvTranspose2d( n_fmaps*2, n_fmaps, kernel_size=4, stride=2, padding=1, bias=False ),
-            nn.BatchNorm2d(n_fmaps),
-            nn.ReLU(inplace=True),
-
-            nn.ConvTranspose2d( n_fmaps, n_channels, kernel_size=4, stride=2, padding=1, bias=False ),
-            nn.Tanh()
+        # DeConv 処理を行う層
+        # 7 * 7 * 128 → 14 * 14 * 64 → 28 * 28 * 1
+        self._deconv_layer = nn.Sequential(
+            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(),
+            nn.ConvTranspose2d(64, 1, kernel_size=4, stride=2, padding=1),
+            nn.Sigmoid(),
         ).to( self._device )
 
         self.init_weight()
@@ -78,46 +78,52 @@ class Generator( nn.Module ):
         [Returns]
             output : <Tensor> ネットワークからのテンソルの出力
         """
-        output = self._layer(input)
+        x = self._fc_layer(input)
+        x = x.view(-1, 128, 7, 7)
+        output = self._deconv_layer(x)
         return output
 
 
 class Critic( nn.Module ):
     """
     WGAN のクリティック側のネットワーク構成を記述したモデル。
+    ・MNIST データの構造に最適化されている。
 
     [public]
     [protected] 変数名の前にアンダースコア _ を付ける
         _device : <toech.cuda.device> 使用デバイス
-        _layer : <nn.Sequential> クリティックのネットワーク構成
+        _conv_layer : <nn.Sequential> 識別器の Conv 処理を行う層
+        _fc_layer : <nn.Sequential> 識別器の全結合層 
     [private] 変数名の前にダブルアンダースコア __ を付ける（Pythonルール）
     """
     def __init__(
        self,
-       device,
-       n_channels = 3,
-       n_fmaps = 64
+       device
     ):
         super( Critic, self ).__init__()
         self._device = device
         
-        self._layer = nn.Sequential(
-            nn.Conv2d(n_channels, n_fmaps, kernel_size=4, stride=2, padding=1, bias=False),
+        self._conv_layer = nn.Sequential(
+            nn.Conv2d(                  # shape = [batch_size, n_channels, height, width]
+                in_channels = 1,        # インプットのチャンネルの数 
+                out_channels = 64,      # アウトプットのチャンネルの数
+                kernel_size = 4,        # カーネルのサイズ（＝重み行列の行数と列数）     
+                stride = 2,             # ストライド幅
+                padding = 1             #  Zero-padding added to both sides of the input. Default: 0
+            ),
             nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Conv2d(n_fmaps, n_fmaps*2, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(n_fmaps*2),
-            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(128),
+            nn.LeakyReLU(0.2, inplace=True),            
+        ).to( self._device )
 
-            nn.Conv2d(n_fmaps*2, n_fmaps*4, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(n_fmaps*4),
-            nn.LeakyReLU(0.2, inplace=True),
-
-            nn.Conv2d(n_fmaps*4, n_fmaps*8, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.BatchNorm2d(n_fmaps*8),
-            nn.LeakyReLU(0.2, inplace=True),
-
-            nn.Conv2d(n_fmaps*8, 1, kernel_size=4, stride=1, padding=0, bias=False),
+        self._fc_layer = nn.Sequential(
+            nn.Linear(128 * 7 * 7, 1024),
+            nn.BatchNorm1d(1024),
+            nn.LeakyReLU(0.2),
+            nn.Linear(1024, 1),
+            #nn.Sigmoid(),
         ).to( self._device )
 
         self.init_weight()
@@ -131,8 +137,9 @@ class Critic( nn.Module ):
         return
 
     def forward(self, input):
-        # input : torch.Size([batch_size, n_channels, width, height])
-        output = self._layer( input )
+        x = self._conv_layer(input)
+        x = x.view(-1, 128 * 7 * 7)
+        output = self._fc_layer(x)
 
         # ミニバッチ平均
         output = output.mean(0)
@@ -140,9 +147,10 @@ class Critic( nn.Module ):
         return output.view(1)
 
 
-class WassersteinGAN( object ):
+class WassersteinGANforMNIST( object ):
     """
     WGAN [Wasserstein GAN] を表すクラス
+    ・MNISTデータの構造に最適化
     --------------------------------------------
     [public]
 
@@ -152,8 +160,6 @@ class WassersteinGAN( object ):
         _n_epoches : <int> エポック数（学習回数）
         _learnig_rate : <float> 最適化アルゴリズムの学習率
         _batch_size : <int> ミニバッチ学習時のバッチサイズ
-        _n_channels : <int> 入力画像のチャンネル数
-        _n_fmaps : <int> 特徴マップの枚数
         _n_input_noize_z : <int> 入力ノイズ z の次元数
 
         _n_critic : <int> クリティックの更新回数
@@ -184,9 +190,7 @@ class WassersteinGAN( object ):
         n_epoches = 300,
         learing_rate = 0.0001,
         batch_size = 64,
-        n_channels = 3,
-        n_fmaps = 64,
-        n_input_noize_z = 100,
+        n_input_noize_z = 64,
         n_critic = 5,
         w_clamp_lower = - 0.01,
         w_clamp_upper = 0.01
@@ -196,8 +200,6 @@ class WassersteinGAN( object ):
         self._n_epoches = n_epoches
         self._learning_rate = learing_rate
         self._batch_size = batch_size
-        self._n_channels = n_channels
-        self._n_fmaps = n_fmaps
         self._n_input_noize_z = n_input_noize_z
 
         self._n_critic = n_critic
@@ -227,8 +229,6 @@ class WassersteinGAN( object ):
         print( "_n_epoches :", self._n_epoches )
         print( "_learning_rate :", self._learning_rate )
         print( "_batch_size :", self._batch_size )
-        print( "_n_channels :", self._n_channels )
-        print( "_n_fmaps :", self._n_fmaps )
         print( "_n_input_noize_z :", self._n_input_noize_z )
         print( "_n_critic :", self._n_critic )
         print( "_w_clamp_lower :", self._w_clamp_lower )
@@ -275,15 +275,11 @@ class WassersteinGAN( object ):
         """
         self._generator = Generator( 
             self._device, 
-            n_input_noize_z = self._n_input_noize_z,
-            n_channels = self._n_channels,
-            n_fmaps = self._n_fmaps
+            n_input_noize_z = self._n_input_noize_z
         )
 
         self._critic = Critic( 
-            self._device,
-            n_channels = self._n_channels,
-            n_fmaps = self._n_fmaps
+            self._device
         )
 
         return
@@ -324,13 +320,13 @@ class WassersteinGAN( object ):
             params = self._generator.parameters(),
             lr = self._learning_rate
         )
-
         """
         self._C_optimizer = optim.Adam(
             params = self._critic.parameters(),
             lr = self._learning_rate,
             betas = (0.5,0.999)
         )
+
         """
         self._C_optimizer = optim.RMSprop(
             params = self._critic.parameters(),
@@ -402,7 +398,12 @@ class WassersteinGAN( object ):
 
                     # 生成器 G に入力するノイズ z
                     # Generatorの更新の前にノイズを新しく生成しなおす必要があり。
-                    input_noize_z.resize_( self._batch_size, self._n_input_noize_z, 1 , 1 ).normal_(0, 1)
+                    """
+                    input_noize_z = torch.rand( 
+                        size = (self._batch_size, self._n_input_noize_z )
+                    ).to( self._device )
+                    """
+                    input_noize_z.resize_( self._batch_size, self._n_input_noize_z ).normal_(0, 1)
 
                     #----------------------------------------------------
                     # 勾配を 0 に初期化
@@ -455,7 +456,7 @@ class WassersteinGAN( object ):
                     #----------------------------------------------------
                     # 誤差逆伝搬
                     #----------------------------------------------------
-                    loss_C_real.backward( one_tsr )
+                    loss_C_real.backward( one_tsr)
                     loss_C_fake.backward( mone_tsr )
                     #loss_C.backward()
 
@@ -467,13 +468,19 @@ class WassersteinGAN( object ):
                 #====================================================
                 # 生成器 G の fitting 処理
                 #====================================================
-                # クリティック C のネットワークの勾配計算を行わないようにする。
+                # 生成器 G の学習中は、クリティック C のネットワークの勾配計算を行わないようにする。
                 for param in self._critic.parameters():
                     param.requires_grad = False
 
                 # 生成器 G に入力するノイズ z
                 # Generatorの更新の前にノイズを新しく生成しなおす必要があり。
-                input_noize_z.resize_( self._batch_size, self._n_input_noize_z, 1, 1 ).normal_(0, 1)
+                """
+                input_noize_z = torch.rand( 
+                    size = (self._batch_size, self._n_input_noize_z )
+                ).to( self._device )
+                """
+                input_noize_z.resize_( self._batch_size, self._n_input_noize_z ).normal_(0, 1)
+                #input_noize_z = Variable( input_noize_z, volatile = False )
 
                 #----------------------------------------------------
                 # 勾配を 0 に初期化
@@ -549,7 +556,7 @@ class WassersteinGAN( object ):
         self._generator.eval()
 
         # 生成のもとになる乱数を生成
-        input_noize_z = torch.rand( (n_samples, self._n_input_noize_z, 1, 1) ).to( self._device )
+        input_noize_z = torch.rand( (n_samples, self._n_input_noize_z) ).to( self._device )
 
         # 画像を生成
         images = self._generator( input_noize_z )

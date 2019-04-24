@@ -24,42 +24,44 @@ class Generator( nn.Module ):
     [public]
     [protected] 変数名の前にアンダースコア _ を付ける
         _device : <toech.cuda.device> 使用デバイス
-        _fc_layer : <nn.Sequential> 生成器の全結合層 （ノイズデータの次元を拡張）
-        _deconv_layer : <nn.Sequential> 生成器の DeConv 処理を行う層
+        _layer : <nn.Sequential> 生成器のネットワーク構成
     [private] 変数名の前にダブルアンダースコア __ を付ける（Pythonルール）
 
     """
     def __init__(
         self,
         device,
-        n_input_noize_z = 62
+        n_input_noize_z = 100,
+        n_channels = 3,
+        n_fmaps = 64
     ):
         super( Generator, self ).__init__()
         self._device = device
+        
+        self._layer = nn.Sequential(
+            nn.ConvTranspose2d(n_input_noize_z, n_fmaps*8, kernel_size=4, stride=1, padding=0, bias=False),
+            nn.BatchNorm2d(n_fmaps*8),
+            nn.ReLU(inplace=True),
 
-        # 全結合層 [fully connected layer]
-        # 入力ノイズ z を、6272 = 128 * 7 * 7 の次元まで拡張
-        self._fc_layer = nn.Sequential(
-            nn.Linear(n_input_noize_z, 1024),
-            nn.BatchNorm1d(1024),
-            nn.ReLU(),
-            nn.Linear(1024, 128 * 7 * 7),
-            nn.BatchNorm1d(128 * 7 * 7),
-            nn.ReLU(),
-        ).to( self._device )
+            nn.ConvTranspose2d( n_fmaps*8, n_fmaps*4, kernel_size=4, stride=2, padding=1, bias=False ),
+            nn.BatchNorm2d(n_fmaps*4),
+            nn.ReLU(inplace=True),
 
-        # DeConv 処理を行う層
-        # 7 * 7 * 128 → 14 * 14 * 64 → 28 * 28 * 1
-        self._deconv_layer = nn.Sequential(
-            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.ConvTranspose2d(64, 1, kernel_size=4, stride=2, padding=1),
-            nn.Sigmoid(),
+            nn.ConvTranspose2d( n_fmaps*4, n_fmaps*2, kernel_size=4, stride=2, padding=1, bias=False ),
+            nn.BatchNorm2d(n_fmaps*2),
+            nn.ReLU(inplace=True),
+
+            nn.ConvTranspose2d( n_fmaps*2, n_fmaps, kernel_size=4, stride=2, padding=1, bias=False ),
+            nn.BatchNorm2d(n_fmaps),
+            nn.ReLU(inplace=True),
+
+            nn.ConvTranspose2d( n_fmaps, n_channels, kernel_size=4, stride=2, padding=1, bias=False ),
+            nn.Tanh()
         ).to( self._device )
 
         self.init_weight()
         return
+
 
     def init_weight( self ):
         """
@@ -77,9 +79,7 @@ class Generator( nn.Module ):
         [Returns]
             output : <Tensor> ネットワークからのテンソルの出力
         """
-        x = self._fc_layer(input)
-        x = x.view(-1, 128, 7, 7)
-        output = self._deconv_layer(x)
+        output = self._layer(input)
         return output
 
 
@@ -90,38 +90,36 @@ class Discriminator( nn.Module ):
     [public]
     [protected] 変数名の前にアンダースコア _ を付ける
         _device : <toech.cuda.device> 使用デバイス
-        _conv_layer : <nn.Sequential> 識別器の Conv 処理を行う層
-        _fc_layer : <nn.Sequential> 識別器の全結合層 
+        _layer : <nn.Sequential> 識別器のネットワーク構成
     [private] 変数名の前にダブルアンダースコア __ を付ける（Pythonルール）
     """
     def __init__(
        self,
-       device
+       device,
+       n_channels = 3,
+       n_fmaps = 64
     ):
         super( Discriminator, self ).__init__()
         self._device = device
 
-        self._conv_layer = nn.Sequential(
-            nn.Conv2d(                  # shape = [batch_size, n_channels, height, width]
-                in_channels = 1,        # インプットのチャンネルの数 
-                out_channels = 64,      # アウトプットのチャンネルの数
-                kernel_size = 4,        # カーネルのサイズ（＝重み行列の行数と列数）     
-                stride = 2,             # ストライド幅
-                padding = 1             #  Zero-padding added to both sides of the input. Default: 0
-            ),
+        self._layer = nn.Sequential(
+            nn.Conv2d(n_channels, n_fmaps, kernel_size=4, stride=2, padding=1, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(128),
-            nn.LeakyReLU(0.2, inplace=True),            
-        ).to( self._device )
+            nn.Conv2d(n_fmaps, n_fmaps*2, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(n_fmaps*2),
+            nn.LeakyReLU(0.2, inplace=True),
 
-        self._fc_layer = nn.Sequential(
-            nn.Linear(128 * 7 * 7, 1024),
-            nn.BatchNorm1d(1024),
-            nn.LeakyReLU(0.2),
-            nn.Linear(1024, 1),
-            nn.Sigmoid(),
+            nn.Conv2d(n_fmaps*2, n_fmaps*4, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(n_fmaps*4),
+            nn.LeakyReLU(0.2, inplace=True),
+
+            nn.Conv2d(n_fmaps*4, n_fmaps*8, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(n_fmaps*8),
+            nn.LeakyReLU(0.2, inplace=True),
+
+            nn.Conv2d(n_fmaps*8, 1, kernel_size=4, stride=1, padding=0, bias=False),
+            nn.Sigmoid()
         ).to( self._device )
 
         self.init_weight()
@@ -135,9 +133,7 @@ class Discriminator( nn.Module ):
         return
 
     def forward(self, input):
-        x = self._conv_layer(input)
-        x = x.view(-1, 128 * 7 * 7)
-        output = self._fc_layer(x)
+        output = self._layer( input )
         return output
 
 
@@ -153,6 +149,8 @@ class DeepConvolutionalGAN( object ):
         _n_epoches : <int> エポック数（学習回数）
         _learnig_rate : <float> 最適化アルゴリズムの学習率
         _batch_size : <int> ミニバッチ学習時のバッチサイズ
+        _n_channels : <int> 入力画像のチャンネル数
+        _n_fmaps : <int> 特徴マップの枚数
         _n_input_noize_z : <int> 入力ノイズ z の次元数
 
         _generator : <nn.Module> DCGAN の生成器
@@ -177,6 +175,8 @@ class DeepConvolutionalGAN( object ):
         n_epoches = 300,
         learing_rate = 0.0001,
         batch_size = 64,
+        n_channels = 3,
+        n_fmaps = 64,
         n_input_noize_z = 62
     ):
         self._device = device
@@ -184,6 +184,8 @@ class DeepConvolutionalGAN( object ):
         self._n_epoches = n_epoches
         self._learning_rate = learing_rate
         self._batch_size = batch_size
+        self._n_channels = n_channels
+        self._n_fmaps = n_fmaps
         self._n_input_noize_z = n_input_noize_z
 
         self._generator = None
@@ -210,6 +212,8 @@ class DeepConvolutionalGAN( object ):
         print( "_n_epoches :", self._n_epoches )
         print( "_learning_rate :", self._learning_rate )
         print( "_batch_size :", self._batch_size )
+        print( "_n_channels :", self._n_channels )
+        print( "_n_fmaps :", self._n_fmaps )
         print( "_n_input_noize_z :", self._n_input_noize_z )
         print( "_generator :", self._generator )
         print( "_dicriminator :", self._dicriminator )
@@ -251,8 +255,19 @@ class DeepConvolutionalGAN( object ):
         [Args]
         [Returns]
         """
-        self._generator = Generator( self._device, n_input_noize_z = self._n_input_noize_z )
-        self._dicriminator = Discriminator( self._device )
+        self._generator = Generator( 
+            self._device, 
+            n_input_noize_z = self._n_input_noize_z,
+            n_channels = self._n_channels,
+            n_fmaps = self._n_fmaps
+        )
+
+        self._dicriminator = Discriminator( 
+            self._device,
+            n_channels = self._n_channels,
+            n_fmaps = self._n_fmaps
+        )
+
         return
 
     def loss( self ):
@@ -343,7 +358,9 @@ class DeepConvolutionalGAN( object ):
                 #====================================================
                 # 生成器 G に入力するノイズ z (62 : ノイズの次元)
                 # Generatorの更新の前にノイズを新しく生成しなおす必要があり。
-                input_noize_z = torch.rand( size = (self._batch_size, self._n_input_noize_z) ).to( self._device )
+                input_noize_z = torch.rand( 
+                    size = (self._batch_size, self._n_input_noize_z, 1, 1)
+                ).to( self._device )
 
                 #----------------------------------------------------
                 # 勾配を 0 に初期化
@@ -405,7 +422,9 @@ class DeepConvolutionalGAN( object ):
                 #====================================================
                 # 生成器 G に入力するノイズ z (62 : ノイズの次元)
                 # Generatorの更新の前にノイズを新しく生成しなおす必要があり。
-                input_noize_z = torch.rand( size = (self._batch_size, self._n_input_noize_z) ).to( self._device )
+                input_noize_z = torch.rand( 
+                    size = (self._batch_size, self._n_input_noize_z, 1, 1)
+                ).to( self._device )
 
                 #----------------------------------------------------
                 # 勾配を 0 に初期化
@@ -477,11 +496,12 @@ class DeepConvolutionalGAN( object ):
         self._generator.eval()
 
         # 生成のもとになる乱数を生成
-        input_noize_z = torch.rand( (n_samples, self._n_input_noize_z) ).to( self._device )
+        input_noize_z = torch.rand( (n_samples, self._n_input_noize_z, 1, 1) ).to( self._device )
+        #print( input_noize_z )
 
         # 画像を生成
         images = self._generator( input_noize_z )
-        #print( "images.size() :", images.size() )   # torch.Size([64, 1, 28, 28])
+        #print( "images.size() :", images.size() )
 
         if( b_transformed == True ):
             # Tensor → numpy に変換

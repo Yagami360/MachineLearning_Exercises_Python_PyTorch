@@ -17,21 +17,23 @@ from torchvision.utils import save_image
 
 # 自作モジュール
 from WassersteinGAN import WassersteinGAN
-
+from WassersteinGANforMNIST import WassersteinGANforMNIST
 
 #--------------------------------
 # 設定可能な定数
 #--------------------------------
 #DEVICE = "CPU"               # 使用デバイス ("CPU" or "GPU")
 DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
+DATASET = "MNIST"            # データセットの種類（"MNIST" or "CIFAR-10"）
+#DATASET = "CIFAR-10"          # データセットの種類（"MNIST" or "CIFAR-10"）
 DATASET_PATH = "./dataset"    # 学習用データセットへのパス
 NUM_SAVE_STEP = 1             # 自動生成画像の保存間隔（エポック単位）
 
-NUM_EPOCHES = 2               # エポック数（学習回数）
-LEARNING_RATE = 0.00005       # 学習率
+NUM_EPOCHES = 10               # エポック数（学習回数）
+LEARNING_RATE = 0.00005       # 学習率 (Default:0.00005)
 BATCH_SIZE = 64               # ミニバッチサイズ
 IMAGE_SIZE = 64               # 入力画像のサイズ（pixel単位）
-NUM_CHANNELS = 3              # 入力画像のチャンネル数
+NUM_CHANNELS = 1              # 入力画像のチャンネル数
 NUM_FEATURE_MAPS = 64         # 特徴マップの枚数
 NUM_INPUT_NOIZE_Z = 100       # 生成器に入力するノイズ z の次数
 NUM_CRITIC = 5                # クリティックの更新回数
@@ -42,7 +44,7 @@ WEIGHT_CLAMP_UPPER = 0.01     # 重みクリッピングの上限値
 def main():
     """
     Wasserstein による画像の自動生成
-    ・学習用データセットは、MNIST
+    ・学習用データセットは、MNIST / CIFAR-10
     """
     print("Start main()")
     
@@ -96,52 +98,73 @@ def main():
     # データセットを読み込み or 生成
     # データの前処理
     #======================================================================
+    dataset = DATASET
+
     # データをロードした後に行う各種前処理の関数を構成を指定する。
-    transform = transforms.Compose(
-        [
-            transforms.Scale(IMAGE_SIZE),
-            transforms.ToTensor(),   # Tensor に変換
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
-        ]
-    )
-    
+    if( dataset == "MNIST" ):
+        """
+        transform = transforms.Compose(
+            [
+                transforms.ToTensor(),   # Tensor に変換]
+            ]
+        """
+        transform = transforms.Compose(
+            [
+                transforms.Scale(IMAGE_SIZE),
+                transforms.ToTensor(),   # Tensor に変換]
+                transforms.Normalize((0.5,), (0.5,)),   # 1 channel 分
+            ]
+        )
+    elif( dataset == "CIFAR-10" ):
+        transform = transforms.Compose(
+            [
+                transforms.Scale(IMAGE_SIZE),
+                transforms.ToTensor(),   # Tensor に変換
+                transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)),
+            ]
+        )
+    else:
+        print( "Warning: Invalid dataset" )
+
     #---------------------------------------------------------------
     # data と label をセットにした TensorDataSet の作成
     #---------------------------------------------------------------
-    """
-    ds_train = torchvision.datasets.MNIST(
-        root = DATASET_PATH,
-        train = True,
-        transform = transform,      # transforms.Compose(...) で作った前処理の一連の流れ
-        target_transform = None,    
-        download = True
-    )
+    if( dataset == "MNIST" ):
+        ds_train = torchvision.datasets.MNIST(
+            root = DATASET_PATH,
+            train = True,
+            transform = transform,      # transforms.Compose(...) で作った前処理の一連の流れ
+            target_transform = None,    
+            download = True,
+        )
 
-    ds_test = torchvision.datasets.MNIST(
-        root = DATASET_PATH,
-        train = False,
-        transform = transform,
-        target_transform = None,
-        download = True
-    )
-    """
-    ds_train = torchvision.datasets.CIFAR10(
-        root = DATASET_PATH,
-        train = True,
-        transform = transform,      # transforms.Compose(...) で作った前処理の一連の流れ
-        target_transform = None,    
-        download = True
-    )
+        ds_test = torchvision.datasets.MNIST(
+            root = DATASET_PATH,
+            train = False,
+            transform = transform,
+            target_transform = None,
+            download = True
+        )
+    elif( dataset == "CIFAR-10" ):
+        ds_train = torchvision.datasets.CIFAR10(
+            root = DATASET_PATH,
+            train = True,
+            transform = transform,      # transforms.Compose(...) で作った前処理の一連の流れ
+            target_transform = None,    
+            download = True
+        )
 
-    ds_test = torchvision.datasets.CIFAR10(
-        root = DATASET_PATH,
-        train = False,
-        transform = transform,
-        target_transform = None,
-        download = True
-    )
+        ds_test = torchvision.datasets.CIFAR10(
+            root = DATASET_PATH,
+            train = False,
+            transform = transform,
+            target_transform = None,
+            download = True
+        )
+    else:
+        print( "WARNING: Inavlid dataset" )
 
-    print( "ds_train :", ds_train )
+    print( "ds_train :", ds_train ) # MNIST : torch.Size([60000, 28, 28]) , CIFAR-10 : (50000, 32, 32, 3)
     print( "ds_test :", ds_test )
 
     #---------------------------------------------------------------
@@ -162,29 +185,55 @@ def main():
         shuffle = False
     )
     
+    # [MNIST]
     # Number of datapoints: 60000
     # dloader_train.datset
     # dloader_train.sampler = <RandomSampler, len() = 60000>
-    # dloader_train[0] = [<Tensor, len() = 32>, <Tensor, len() = 32>]
-    # dloader_train[1874] = [<Tensor, len() = 32>, <Tensor, len() = 32>]
     print( "dloader_train :", dloader_train )
     print( "dloader_test :", dloader_test )
-
+    
     #======================================================================
     # モデルの構造を定義する。
     #======================================================================
-    model = WassersteinGAN(
-        device = device,
-        n_epoches = NUM_EPOCHES,
-        learing_rate = LEARNING_RATE,
-        batch_size = BATCH_SIZE,
-        n_channels = NUM_CHANNELS,
-        n_fmaps = NUM_FEATURE_MAPS,
-        n_input_noize_z = NUM_INPUT_NOIZE_Z,
-        n_critic = NUM_CRITIC,
-        w_clamp_lower = WEIGHT_CLAMP_LOWER,
-        w_clamp_upper = WEIGHT_CLAMP_UPPER
-    )
+    if( dataset == "MNIST" ):
+        """
+        model = WassersteinGANforMNIST(
+            device = device,
+            n_epoches = NUM_EPOCHES,
+            learing_rate = LEARNING_RATE,
+            batch_size = BATCH_SIZE,
+            n_input_noize_z = NUM_INPUT_NOIZE_Z,
+            n_critic = NUM_CRITIC,
+            w_clamp_lower = WEIGHT_CLAMP_LOWER,
+            w_clamp_upper = WEIGHT_CLAMP_UPPER
+        )
+        """
+        model = WassersteinGAN(
+            device = device,
+            n_epoches = NUM_EPOCHES,
+            learing_rate = LEARNING_RATE,
+            batch_size = BATCH_SIZE,
+            n_channels = NUM_CHANNELS,
+            n_fmaps = NUM_FEATURE_MAPS,
+            n_input_noize_z = NUM_INPUT_NOIZE_Z,
+            n_critic = NUM_CRITIC,
+            w_clamp_lower = WEIGHT_CLAMP_LOWER,
+            w_clamp_upper = WEIGHT_CLAMP_UPPER
+        )
+
+    else:
+        model = WassersteinGAN(
+            device = device,
+            n_epoches = NUM_EPOCHES,
+            learing_rate = LEARNING_RATE,
+            batch_size = BATCH_SIZE,
+            n_channels = NUM_CHANNELS,
+            n_fmaps = NUM_FEATURE_MAPS,
+            n_input_noize_z = NUM_INPUT_NOIZE_Z,
+            n_critic = NUM_CRITIC,
+            w_clamp_lower = WEIGHT_CLAMP_LOWER,
+            w_clamp_upper = WEIGHT_CLAMP_UPPER
+        )
 
     model.print( "after init()" )
 
@@ -258,51 +307,6 @@ def main():
             np.array( [ np.hstack(img) for img in images ] )
         )
     )
-    """
-
-    #-------------------------------------------------------------------
-    # 学習過程での自動生成画像の動画を表示
-    #-------------------------------------------------------------------
-    """ 実装中
-    images_historys = model.images_historys
-
-    fig = plt.figure( figsize = (8,8) )
-    k = 0
-    for i in range(8):
-        for j in range(8):
-            k += 1
-            subplot = fig.add_subplot( 4, 8, k )
-            subplot.set_xticks([])
-            subplot.set_yticks([])
-            subplot.imshow(
-                images[k-1].reshape(28, 28),    # (1,28,28) → (28,28)
-                vmin=0, vmax=1,
-                cmap = plt.cm.gray_r
-            )
-
-    plt.tight_layout()
-    plt.savefig( 
-        "DCGAN_Image_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE ),  
-        dpi = 300, bbox_inches = "tight"
-    )
-    plt.show()
-    """
-
-    #-------------------------------------------------------------------
-    # 潜在空間で動かした場合の、自動生成画像の動画を表示
-    #-------------------------------------------------------------------
-    """ 実装中
-    morphing_inputs = []
-
-    # 球の表面上の回転
-    theta1, theta2 = 0, 0
-    for _ in range(32):     # batch_size
-        theta1 += 2*np.pi / 32
-        theta2 += 2*np.pi / 32
-        morphing_inputs.append(
-            np.cos(theta1) * input_noize[0] \
-            + np.sin(theta1)*( np.cos(theta2)*input_noize[1] + np.sin(theta2)*input_noize[2] )
-        )
     """
 
     print("Finish main()")

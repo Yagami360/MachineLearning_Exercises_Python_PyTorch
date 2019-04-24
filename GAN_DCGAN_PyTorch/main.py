@@ -17,18 +17,23 @@ from torchvision.utils import save_image
 
 # 自作モジュール
 from DeepConvolutionalGAN import DeepConvolutionalGAN
-
+from DeepConvolutionalGANforMNIST import DeepConvolutionalGANforMNIST
 
 #--------------------------------
 # 設定可能な定数
 #--------------------------------
 #DEVICE = "CPU"               # 使用デバイス ("CPU" or "GPU")
 DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
+DATASET = "MNIST"            # データセットの種類（"MNIST" or "CIFAR-10"）
+#DATASET = "CIFAR-10"          # データセットの種類（"MNIST" or "CIFAR-10"）
 DATASET_PATH = "./dataset"    # 学習用データセットへのパス
 NUM_SAVE_STEP = 1             # 自動生成画像の保存間隔（エポック単位）
 
 NUM_EPOCHES = 10              # エポック数（学習回数）
 LEARNING_RATE = 0.0002        # 学習率
+IMAGE_SIZE = 64               # 入力画像のサイズ（pixel単位）
+NUM_CHANNELS = 1              # 入力画像のチャンネル数
+NUM_FEATURE_MAPS = 64         # 特徴マップの枚数
 BATCH_SIZE = 128              # ミニバッチサイズ
 NUM_INPUT_NOIZE_Z = 62        # 生成器に入力するノイズ z の次数
 
@@ -36,7 +41,7 @@ NUM_INPUT_NOIZE_Z = 62        # 生成器に入力するノイズ z の次数
 def main():
     """
     DCGAN による画像の自動生成
-    ・学習用データセットは、MNIST
+    ・学習用データセットは、MNIST / CIFAR-10
     """
     print("Start main()")
     
@@ -52,6 +57,9 @@ def main():
     print( "NUM_EPOCHES : ", NUM_EPOCHES )
     print( "LEARNING_RATE : ", LEARNING_RATE )
     print( "BATCH_SIZE : ", BATCH_SIZE )
+    print( "IMAGE_SIZE : ", IMAGE_SIZE )
+    print( "NUM_CHANNELS : ", NUM_CHANNELS )
+    print( "NUM_FEATURE_MAPS : ", NUM_FEATURE_MAPS )
     print( "NUM_INPUT_NOIZE_Z : ", NUM_INPUT_NOIZE_Z )
 
     #===================================
@@ -63,6 +71,7 @@ def main():
             device = torch.device( "cuda" )
             print( "実行デバイス :", device)
             print( "GPU名 :", torch.cuda.get_device_name(0))
+            print("torch.cuda.current_device() =", torch.cuda.current_device())
         else:
             print( "can't using gpu." )
             device = torch.device( "cpu" )
@@ -83,31 +92,72 @@ def main():
     # データセットを読み込み or 生成
     # データの前処理
     #======================================================================
+    dataset = DATASET
+
     # データをロードした後に行う各種前処理の関数を構成を指定する。
-    transform = transforms.Compose(
-        [
-            transforms.ToTensor()   # Tensor に変換
-        ]
-    )
+    if( dataset == "MNIST" ):
+        transform = transforms.Compose(
+            [
+                transforms.ToTensor(),   # Tensor に変換
+            ]
+        )
+        """
+        transform = transforms.Compose(
+            [
+                transforms.Scale(IMAGE_SIZE),
+                transforms.ToTensor(),   # Tensor に変換
+                transforms.Normalize((0.5,), (0.5,)),
+            ]
+        )
+        """
+    elif( dataset == "CIFAR-10" ):
+        transform = transforms.Compose(
+            [
+                transforms.Scale(IMAGE_SIZE),
+                transforms.ToTensor(),   # Tensor に変換
+                transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)),
+            ]
+        )
+    else:
+        print( "Warning: Invalid dataset" )
     
     #---------------------------------------------------------------
     # data と label をセットにした TensorDataSet の作成
     #---------------------------------------------------------------
-    ds_train = torchvision.datasets.MNIST(
-        root = DATASET_PATH,
-        train = True,
-        transform = transform,      # transforms.Compose(...) で作った前処理の一連の流れ
-        target_transform = None,    
-        download = True
-    )
+    if( dataset == "MNIST" ):
+        ds_train = torchvision.datasets.MNIST(
+            root = DATASET_PATH,
+            train = True,
+            transform = transform,      # transforms.Compose(...) で作った前処理の一連の流れ
+            target_transform = None,    
+            download = True,
+        )
 
-    ds_test = torchvision.datasets.MNIST(
-        root = DATASET_PATH,
-        train = False,
-        transform = transform,
-        target_transform = None,
-        download = True
-    )
+        ds_test = torchvision.datasets.MNIST(
+            root = DATASET_PATH,
+            train = False,
+            transform = transform,
+            target_transform = None,
+            download = True
+        )
+    elif( dataset == "CIFAR-10" ):
+        ds_train = torchvision.datasets.CIFAR10(
+            root = DATASET_PATH,
+            train = True,
+            transform = transform,      # transforms.Compose(...) で作った前処理の一連の流れ
+            target_transform = None,    
+            download = True
+        )
+
+        ds_test = torchvision.datasets.CIFAR10(
+            root = DATASET_PATH,
+            train = False,
+            transform = transform,
+            target_transform = None,
+            download = True
+        )
+    else:
+        print( "WARNING: Inavlid dataset" )
 
     print( "ds_train :", ds_train )
     print( "ds_test :", ds_test )
@@ -133,21 +183,41 @@ def main():
     # Number of datapoints: 60000
     # dloader_train.datset
     # dloader_train.sampler = <RandomSampler, len() = 60000>
-    # dloader_train[0] = [<Tensor, len() = 32>, <Tensor, len() = 32>]
-    # dloader_train[1874] = [<Tensor, len() = 32>, <Tensor, len() = 32>]
     print( "dloader_train :", dloader_train )
     print( "dloader_test :", dloader_test )
 
     #======================================================================
     # モデルの構造を定義する。
     #======================================================================
-    model = DeepConvolutionalGAN(
-        device = device,
-        n_epoches = NUM_EPOCHES,
-        learing_rate = LEARNING_RATE,
-        batch_size = BATCH_SIZE,
-        n_input_noize_z = NUM_INPUT_NOIZE_Z
-    )
+    if( dataset == "MNIST" ):
+        model = DeepConvolutionalGANforMNIST(
+            device = device,
+            n_epoches = NUM_EPOCHES,
+            learing_rate = LEARNING_RATE,
+            batch_size = BATCH_SIZE,
+            n_input_noize_z = NUM_INPUT_NOIZE_Z
+        )
+        """
+        model = DeepConvolutionalGAN(
+            device = device,
+            n_epoches = NUM_EPOCHES,
+            learing_rate = LEARNING_RATE,
+            batch_size = BATCH_SIZE,
+            n_channels = NUM_CHANNELS,
+            n_fmaps = NUM_FEATURE_MAPS,
+            n_input_noize_z = NUM_INPUT_NOIZE_Z
+        )
+        """
+    else:
+        model = DeepConvolutionalGAN(
+            device = device,
+            n_epoches = NUM_EPOCHES,
+            learing_rate = LEARNING_RATE,
+            batch_size = BATCH_SIZE,
+            n_channels = NUM_CHANNELS,
+            n_fmaps = NUM_FEATURE_MAPS,
+            n_input_noize_z = NUM_INPUT_NOIZE_Z
+        )
 
     model.print( "after init()" )
 
