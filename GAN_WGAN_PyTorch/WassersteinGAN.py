@@ -24,38 +24,39 @@ class Generator( nn.Module ):
     [public]
     [protected] 変数名の前にアンダースコア _ を付ける
         _device : <toech.cuda.device> 使用デバイス
-        _fc_layer : <nn.Sequential> 生成器の全結合層 （ノイズデータの次元を拡張）
-        _deconv_layer : <nn.Sequential> 生成器の DeConv 処理を行う層
+        _layer : <nn.Sequential> 生成器のネットワーク構成
     [private] 変数名の前にダブルアンダースコア __ を付ける（Pythonルール）
 
     """
     def __init__(
         self,
         device,
-        n_input_noize_z = 100
+        n_input_noize_z = 100,
+        n_channels = 3,
+        n_fmaps = 64
     ):
         super( Generator, self ).__init__()
         self._device = device
         
-        # 全結合層 [fully connected layer]
-        # 入力ノイズ z を、6272 = 128 * 7 * 7 の次元まで拡張
-        self._fc_layer = nn.Sequential(
-            nn.Linear(n_input_noize_z, 1024),
-            nn.BatchNorm1d(1024),
-            nn.ReLU(),
-            nn.Linear(1024, 128 * 7 * 7),
-            nn.BatchNorm1d(128 * 7 * 7),
-            nn.ReLU(),
-        ).to( self._device )
+        self._layer = nn.Sequential(
+            nn.ConvTranspose2d(n_input_noize_z, n_fmaps*8, kernel_size=4, stride=1, padding=0, bias=False),
+            nn.BatchNorm2d(n_fmaps*8),
+            nn.ReLU(inplace=True),
 
-        # DeConv 処理を行う層
-        # 7 * 7 * 128 → 14 * 14 * 64 → 28 * 28 * 1
-        self._deconv_layer = nn.Sequential(
-            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.ConvTranspose2d(64, 1, kernel_size=4, stride=2, padding=1),
-            # nn.Sigmoid(),
+            nn.ConvTranspose2d( n_fmaps*8, n_fmaps*4, kernel_size=4, stride=2, padding=1, bias=False ),
+            nn.BatchNorm2d(n_fmaps*4),
+            nn.ReLU(inplace=True),
+
+            nn.ConvTranspose2d( n_fmaps*4, n_fmaps*2, kernel_size=4, stride=2, padding=1, bias=False ),
+            nn.BatchNorm2d(n_fmaps*2),
+            nn.ReLU(inplace=True),
+
+            nn.ConvTranspose2d( n_fmaps*2, n_fmaps, kernel_size=4, stride=2, padding=1, bias=False ),
+            nn.BatchNorm2d(n_fmaps),
+            nn.ReLU(inplace=True),
+
+            nn.ConvTranspose2d( n_fmaps, n_channels, kernel_size=4, stride=2, padding=1, bias=False ),
+            nn.Tanh()
         ).to( self._device )
 
         self.init_weight()
@@ -77,9 +78,9 @@ class Generator( nn.Module ):
         [Returns]
             output : <Tensor> ネットワークからのテンソルの出力
         """
-        x = self._fc_layer(input)
-        x = x.view(-1, 128, 7, 7)
-        output = self._deconv_layer(x)
+        input.resize_( input.size(0), input.size(1), 1, 1)
+        output = self._layer(input)
+
         return output
 
 
@@ -90,38 +91,35 @@ class Critic( nn.Module ):
     [public]
     [protected] 変数名の前にアンダースコア _ を付ける
         _device : <toech.cuda.device> 使用デバイス
-        _conv_layer : <nn.Sequential> クリティックの Conv 処理を行う層
-        _fc_layer : <nn.Sequential> クリティックの全結合層 
+        _layer : <nn.Sequential> クリティックネットワーク構成
     [private] 変数名の前にダブルアンダースコア __ を付ける（Pythonルール）
     """
     def __init__(
        self,
-       device
+       device,
+       n_channels = 3,
+       n_fmaps = 64
     ):
         super( Critic, self ).__init__()
         self._device = device
-
-        self._conv_layer = nn.Sequential(
-            nn.Conv2d(                  # shape = [batch_size, n_channels, height, width]
-                in_channels = 1,        # インプットのチャンネルの数 
-                out_channels = 64,      # アウトプットのチャンネルの数
-                kernel_size = 4,        # カーネルのサイズ（＝重み行列の行数と列数）     
-                stride = 2,             # ストライド幅
-                padding = 1             #  Zero-padding added to both sides of the input. Default: 0
-            ),
+        
+        self._layer = nn.Sequential(
+            nn.Conv2d(n_channels, n_fmaps, kernel_size=4, stride=2, padding=1, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(128),
-            nn.LeakyReLU(0.2, inplace=True),            
-        ).to( self._device )
+            nn.Conv2d(n_fmaps, n_fmaps*2, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(n_fmaps*2),
+            nn.LeakyReLU(0.2, inplace=True),
 
-        self._fc_layer = nn.Sequential(
-            nn.Linear(128 * 7 * 7, 1024),
-            nn.BatchNorm1d(1024),
-            nn.LeakyReLU(0.2),
-            nn.Linear(1024, 1),
-            nn.Sigmoid(),
+            nn.Conv2d(n_fmaps*2, n_fmaps*4, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(n_fmaps*4),
+            nn.LeakyReLU(0.2, inplace=True),
+
+            nn.Conv2d(n_fmaps*4, n_fmaps*8, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(n_fmaps*8),
+            nn.LeakyReLU(0.2, inplace=True),
+
+            nn.Conv2d(n_fmaps*8, 1, kernel_size=4, stride=1, padding=0, bias=False),
         ).to( self._device )
 
         self.init_weight()
@@ -135,10 +133,13 @@ class Critic( nn.Module ):
         return
 
     def forward(self, input):
-        x = self._conv_layer(input)
-        x = x.view(-1, 128 * 7 * 7)
-        output = self._fc_layer(x)
-        return output
+        # input : torch.Size([batch_size, n_channels, width, height])
+        output = self._layer( input )
+
+        # ミニバッチ平均
+        output = output.mean(0)
+
+        return output.view(1)
 
 
 class WassersteinGAN( object ):
@@ -183,6 +184,8 @@ class WassersteinGAN( object ):
         n_epoches = 300,
         learing_rate = 0.0001,
         batch_size = 64,
+        n_channels = 3,
+        n_fmaps = 64,
         n_input_noize_z = 100,
         n_critic = 5,
         w_clamp_lower = - 0.01,
@@ -193,6 +196,8 @@ class WassersteinGAN( object ):
         self._n_epoches = n_epoches
         self._learning_rate = learing_rate
         self._batch_size = batch_size
+        self._n_channels = n_channels
+        self._n_fmaps = n_fmaps
         self._n_input_noize_z = n_input_noize_z
 
         self._n_critic = n_critic
@@ -207,7 +212,6 @@ class WassersteinGAN( object ):
         self._loss_G_historys = []
         self._loss_C_historys = []
         self._images_historys = []
-        self._f_historys = []
 
         self.model()
         self.loss()
@@ -223,6 +227,8 @@ class WassersteinGAN( object ):
         print( "_n_epoches :", self._n_epoches )
         print( "_learning_rate :", self._learning_rate )
         print( "_batch_size :", self._batch_size )
+        print( "_n_channels :", self._n_channels )
+        print( "_n_fmaps :", self._n_fmaps )
         print( "_n_input_noize_z :", self._n_input_noize_z )
         print( "_n_critic :", self._n_critic )
         print( "_w_clamp_lower :", self._w_clamp_lower )
@@ -259,10 +265,6 @@ class WassersteinGAN( object ):
     def images_historys( self ):
         return self._images_historys
 
-    @property
-    def f_historys( self ):
-        return self._f_historys
-
 
     def model( self ):
         """
@@ -271,8 +273,19 @@ class WassersteinGAN( object ):
         [Args]
         [Returns]
         """
-        self._generator = Generator( self._device, n_input_noize_z = self._n_input_noize_z )
-        self._critic = Critic( self._device )
+        self._generator = Generator( 
+            self._device, 
+            n_input_noize_z = self._n_input_noize_z,
+            n_channels = self._n_channels,
+            n_fmaps = self._n_fmaps
+        )
+
+        self._critic = Critic( 
+            self._device,
+            n_channels = self._n_channels,
+            n_fmaps = self._n_fmaps
+        )
+
         return
 
     def loss( self ):
@@ -284,7 +297,7 @@ class WassersteinGAN( object ):
         # Binary Cross Entropy
         # L(x,y) = - { y*log(x) + (1-y)*log(1-x) }
         # x,y の設定は、後の fit() 内で行う。
-        self._loss_fn = nn.BCELoss()
+        #self._loss_fn = nn.BCELoss()
 
         return
 
@@ -399,10 +412,9 @@ class WassersteinGAN( object ):
                     # 学習用データをモデルに流し込む
                     # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
                     #----------------------------------------------------
-                    # f = C(x) : 本物画像 x = image を入力したときのクリティックの出力 (リプシッツ連続な関数 f)
-                    C_x = self._critic( images )    # torch.Size([batch_size, 1])
-                    self._f_historys.append( torch.mean( C_x ) / self._batch_size )
-                    #print( "C_x.size() :", C_x.size() )   # torch.Size([128, 1])
+                    # E[C(x)] : 本物画像 x = image を入力したときのクリティックの出力 （平均化処理済み）
+                    C_x = self._critic( images )
+                    #print( "C_x.size() :", C_x.size() )
                     #print( "C_x :", C_x )
 
                     # G(z) : 生成器から出力される偽物画像
@@ -410,7 +422,7 @@ class WassersteinGAN( object ):
                     #print( "G_z.size() :", G_z.size() )     # torch.Size([128, 1, 28, 28])
                     #print( "G_z :", G_z )
 
-                    # f = C( G(z) ) : 偽物画像を入力したときの識別器の出力 (リプシッツ連続な関数 f)
+                    # E[ C( G(z) ) ] : 偽物画像を入力したときの識別器の出力 (平均化処理済み)
                     C_G_z = self._critic( G_z )
                     #print( "C_G_z.size() :", C_G_z.size() )
                     #print( "C_G_z :", C_G_z )
@@ -422,17 +434,16 @@ class WassersteinGAN( object ):
                     # loss は Pytorch の Variable として帰ってくるので、これをloss.data[0]で数値として見る必要があり
                     #----------------------------------------------------
                     # E_x[ C(x) ]
-                    #loss_C_real = self._loss_fn( C_x, ones_tsr )
-                    loss_C_real = torch.mean( C_x ) / self._batch_size
+                    #loss_C_real = torch.mean( C_x )
+                    loss_C_real = C_x
                     #print( "loss_C_real : ", loss_C_real.item() )
 
                     # E_z[ C(G(z) ]
-                    #loss_C_fake = self._loss_fn( C_G_z, zeros_tsr )
-                    loss_C_fake = torch.mean( C_G_z ) / self._batch_size
+                    #loss_C_fake = torch.mean( C_G_z )
+                    loss_C_fake = C_G_z
                     #print( "loss_C_fake : ", loss_C_fake.item() )
 
                     # クリティック C の損失関数 = E_x[ C(x) ] + E_z[ C(G(z) ]
-                    #loss_C = loss_C_real + loss_C_fake
                     loss_C = loss_C_real - loss_C_fake
                     #print( "loss_C : ", loss_C.item() )
 
@@ -472,7 +483,7 @@ class WassersteinGAN( object ):
                 #print( "G_z.size() :", G_z.size() )
                 #print( "G_z :", G_z )
 
-                # C( G(z) ) : 偽物画像を入力したときのクリティックの出力
+                # E[C( G(z) )] : 偽物画像を入力したときのクリティックの出力（平均化処理済み）
                 C_G_z = self._critic( G_z )
                 #print( "C_G_z.size() :", C_G_z.size() )
 
@@ -480,15 +491,15 @@ class WassersteinGAN( object ):
                 # 損失関数を計算する
                 #----------------------------------------------------
                 # L_G = E_z[ C(G(z) ]
-                #loss_G = self._loss_fn( C_G_z, ones_tsr )
-                loss_G = torch.mean( C_G_z ) / self._batch_size
+                #loss_G = torch.mean( C_G_z )
+                loss_G = C_G_z
                 #print( "loss_G :", loss_G )
 
                 #----------------------------------------------------
                 # 誤差逆伝搬
                 #----------------------------------------------------
                 #loss_G.backward()
-                loss_G.backward( zeros_tsr )
+                loss_G.backward( zeros_tsr )    # -log() トリック？
 
                 #----------------------------------------------------
                 # backward() で計算した勾配を元に、設定した optimizer に従って、重みを更新
@@ -511,7 +522,6 @@ class WassersteinGAN( object ):
                     tensor = images, 
                     filename = "WGAN_Image_epoches{}_iters{}.png".format( epoch, iterations )
                 )
-
 
         print("Finished Training Loop.")
         return

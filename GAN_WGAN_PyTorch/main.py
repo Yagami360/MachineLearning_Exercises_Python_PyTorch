@@ -27,9 +27,12 @@ DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
 DATASET_PATH = "./dataset"    # 学習用データセットへのパス
 NUM_SAVE_STEP = 1             # 自動生成画像の保存間隔（エポック単位）
 
-NUM_EPOCHES = 2              # エポック数（学習回数）
+NUM_EPOCHES = 2               # エポック数（学習回数）
 LEARNING_RATE = 0.00005       # 学習率
 BATCH_SIZE = 64               # ミニバッチサイズ
+IMAGE_SIZE = 64               # 入力画像のサイズ（pixel単位）
+NUM_CHANNELS = 3              # 入力画像のチャンネル数
+NUM_FEATURE_MAPS = 64         # 特徴マップの枚数
 NUM_INPUT_NOIZE_Z = 100       # 生成器に入力するノイズ z の次数
 NUM_CRITIC = 5                # クリティックの更新回数
 WEIGHT_CLAMP_LOWER = - 0.01   # 重みクリッピングの下限値
@@ -55,6 +58,9 @@ def main():
     print( "NUM_EPOCHES : ", NUM_EPOCHES )
     print( "LEARNING_RATE : ", LEARNING_RATE )
     print( "BATCH_SIZE : ", BATCH_SIZE )
+    print( "IMAGE_SIZE : ", IMAGE_SIZE )
+    print( "NUM_CHANNELS : ", NUM_CHANNELS )
+    print( "NUM_FEATURE_MAPS : ", NUM_FEATURE_MAPS )
     print( "NUM_INPUT_NOIZE_Z : ", NUM_INPUT_NOIZE_Z )
     print( "NUM_CRITIC : ", NUM_CRITIC )
     print( "WEIGHT_CLAMP_LOWER : ", WEIGHT_CLAMP_LOWER )
@@ -93,13 +99,16 @@ def main():
     # データをロードした後に行う各種前処理の関数を構成を指定する。
     transform = transforms.Compose(
         [
-            transforms.ToTensor()   # Tensor に変換
+            transforms.Scale(IMAGE_SIZE),
+            transforms.ToTensor(),   # Tensor に変換
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
         ]
     )
     
     #---------------------------------------------------------------
     # data と label をセットにした TensorDataSet の作成
     #---------------------------------------------------------------
+    """
     ds_train = torchvision.datasets.MNIST(
         root = DATASET_PATH,
         train = True,
@@ -109,6 +118,22 @@ def main():
     )
 
     ds_test = torchvision.datasets.MNIST(
+        root = DATASET_PATH,
+        train = False,
+        transform = transform,
+        target_transform = None,
+        download = True
+    )
+    """
+    ds_train = torchvision.datasets.CIFAR10(
+        root = DATASET_PATH,
+        train = True,
+        transform = transform,      # transforms.Compose(...) で作った前処理の一連の流れ
+        target_transform = None,    
+        download = True
+    )
+
+    ds_test = torchvision.datasets.CIFAR10(
         root = DATASET_PATH,
         train = False,
         transform = transform,
@@ -153,6 +178,8 @@ def main():
         n_epoches = NUM_EPOCHES,
         learing_rate = LEARNING_RATE,
         batch_size = BATCH_SIZE,
+        n_channels = NUM_CHANNELS,
+        n_fmaps = NUM_FEATURE_MAPS,
         n_input_noize_z = NUM_INPUT_NOIZE_Z,
         n_critic = NUM_CRITIC,
         w_clamp_lower = WEIGHT_CLAMP_LOWER,
@@ -187,14 +214,14 @@ def main():
     plt.clf()
     plt.plot(
         range( 0, len(model.loss_G_history) ), model.loss_G_history,
-        label = "loss_G",
+        label = "loss : Generator",
         linestyle = '-',
         linewidth = 0.2,
         color = 'red'
     )
     plt.plot(
         range( 0, len(model.loss_C_history) ), model.loss_C_history,
-        label = "loss_D",
+        label = "loss : Critic",
         linestyle = '-',
         linewidth = 0.2,
         color = 'blue'
@@ -208,28 +235,6 @@ def main():
     plt.tight_layout()
     plt.savefig(
         "WGAN_Loss_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE ),  
-        dpi = 300, bbox_inches = "tight"
-    )
-    plt.show()
-
-    #-----------------------------------
-    # クリティックの出力（＝リプシッツ連続な関数 f ）の plot
-    #-----------------------------------
-    plt.clf()
-    plt.plot(
-        range( 0, len(model.f_historys) ), model.f_historys,
-        label = "Lipschitz function : f",
-        linestyle = '-',
-        linewidth = 0.2,
-        color = 'blue'
-    )
-    plt.legend( loc = 'best' )
-    #plt.ylim( [0, 1.05] )
-    plt.xlabel( "iterations" )
-    plt.grid()
-    plt.tight_layout()
-    plt.savefig(
-        "LipschitzFunction_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE ),  
         dpi = 300, bbox_inches = "tight"
     )
     plt.show()
