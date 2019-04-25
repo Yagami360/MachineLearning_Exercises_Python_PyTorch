@@ -74,24 +74,40 @@ WEIGHT_CLAMP_UPPER = 0.01     # 重みクリッピングの上限値
 
 
 #### ☆ 損失関数のグラフ（実行条件１）
-<br>
+![WGAN_Loss_epoches10_lr5e-05_batchsize64](https://user-images.githubusercontent.com/25688193/56708937-9a4d0580-6759-11e9-860f-b29dabffc242.png)<br>
+> DCGAN よりは安定しているが、乱高下があり、論文中のグラフと異なる？
 
 #### ☆ 生成器から生成された自動生成画像（実行条件１）
 
 - エポック数 : 1 / イテレーション回数：937<br>
-![WGAN_Image_epoches0_iters937](https://user-images.githubusercontent.com/25688193/56650043-3971ee80-66c1-11e9-9788-e21a045fd1f6.png)<br>
+![WGAN_Image_epoches0_iters937](https://user-images.githubusercontent.com/25688193/56708938-9a4d0580-6759-11e9-84e0-4d7b516e376c.png)<br>
 
 - エポック数 : 2 / イテレーション回数：1874<br>
-![WGAN_Image_epoches1_iters1874](https://user-images.githubusercontent.com/25688193/56650044-3971ee80-66c1-11e9-9d79-9bf412420c55.png)<br>
+![WGAN_Image_epoches1_iters1874](https://user-images.githubusercontent.com/25688193/56708939-9ae59c00-6759-11e9-9268-f301394230c3.png)<br>
 
 - エポック数 : 3 / イテレーション回数 : 2811<br>
-![WGAN_Image_epoches2_iters2811](https://user-images.githubusercontent.com/25688193/56650046-3a0a8500-66c1-11e9-92b2-664689014d73.png)<br>
+![WGAN_Image_epoches2_iters2811](https://user-images.githubusercontent.com/25688193/56708940-9ae59c00-6759-11e9-8d06-6c023ca62058.png)<br>
 
-- エポック数 : 4 / イテレーション回数 : 3749<br>
-![WGAN_Image_epoches3_iters3748](https://user-images.githubusercontent.com/25688193/56650704-8d310780-66c2-11e9-8dc0-5b2fe87fb867.png)<br>
+- エポック数 : 4 / イテレーション回数 : 3748<br>
+![WGAN_Image_epoches3_iters3748](https://user-images.githubusercontent.com/25688193/56708941-9b7e3280-6759-11e9-8c45-7212b12b502b.png)<br>
 
-- エポック数 : 10 / イテレーション回数 : xxx<br>
-<br>
+- エポック数 : 5 / イテレーション回数 : 4685<br>
+![WGAN_Image_epoches4_iters4685](https://user-images.githubusercontent.com/25688193/56708943-9b7e3280-6759-11e9-944e-9de7c21cb518.png)
+
+- エポック数 : 6 / イテレーション回数 : 5622<br>
+![WGAN_Image_epoches5_iters5622](https://user-images.githubusercontent.com/25688193/56708944-9b7e3280-6759-11e9-9e4f-ca79a3252946.png)<br>
+
+- エポック数 : 7 / イテレーション回数 : 6559<br>
+![WGAN_Image_epoches6_iters6559](https://user-images.githubusercontent.com/25688193/56708945-9c16c900-6759-11e9-9fd1-97a23363a9ba.png)<br>
+
+- エポック数 : 8 / イテレーション回数 : 7496<br>
+![WGAN_Image_epoches7_iters7496](https://user-images.githubusercontent.com/25688193/56708946-9c16c900-6759-11e9-96e9-a3d39d171de5.png)<br>
+
+- エポック数 : 9 / イテレーション回数 : 8433<br>
+![WGAN_Image_epoches8_iters8433](https://user-images.githubusercontent.com/25688193/56708947-9caf5f80-6759-11e9-8247-00c64730b52c.png)<br>
+
+- エポック数 : 10 / イテレーション回数 : 9370<br>
+![WGAN_Image_epoches9_iters9370](https://user-images.githubusercontent.com/25688193/56708936-99b46f00-6759-11e9-8cbe-4a63420d714a.png)<br>
 
 
 ## ■ デバッグ情報
