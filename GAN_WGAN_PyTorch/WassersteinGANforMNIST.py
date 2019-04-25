@@ -344,10 +344,6 @@ class WassersteinGANforMNIST( object ):
             n_sava_step : <int> 学習途中での生成画像の保存間隔（エポック単位）
         [Returns]
         """
-        # 1 と -1 の Tensor : 誤差逆伝搬の基準に使用する。
-        one_tsr =  torch.FloatTensor([1]).to( self._device )
-        mone_tsr = one_tsr * -1
-
         # 入力ノイズ z
         input_noize_z = torch.FloatTensor( self._batch_size, self._n_input_noize_z ).to( self._device )
 
@@ -459,9 +455,7 @@ class WassersteinGANforMNIST( object ):
                     #----------------------------------------------------
                     # 誤差逆伝搬
                     #----------------------------------------------------
-                    loss_C_real.backward( one_tsr )
-                    loss_C_fake.backward( mone_tsr )
-                    #loss_C.backward()
+                    loss_C.backward()
 
                     #----------------------------------------------------
                     # backward() で計算した勾配を元に、設定した optimizer に従って、重みを更新
@@ -515,8 +509,7 @@ class WassersteinGANforMNIST( object ):
                 #----------------------------------------------------
                 # 誤差逆伝搬
                 #----------------------------------------------------
-                #loss_G.backward()
-                loss_G.backward( one_tsr )
+                loss_G.backward()
 
                 #----------------------------------------------------
                 # backward() で計算した勾配を元に、設定した optimizer に従って、重みを更新

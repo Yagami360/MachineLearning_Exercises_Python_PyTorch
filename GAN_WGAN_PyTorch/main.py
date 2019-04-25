@@ -107,6 +107,7 @@ def main():
             [
                 transforms.ToTensor(),   # Tensor に変換]
             ]
+        )
         """
         transform = transforms.Compose(
             [
@@ -115,6 +116,7 @@ def main():
                 transforms.Normalize((0.5,), (0.5,)),   # 1 channel 分
             ]
         )
+
     elif( dataset == "CIFAR-10" ):
         transform = transforms.Compose(
             [
