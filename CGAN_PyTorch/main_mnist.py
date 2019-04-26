@@ -16,33 +16,29 @@ import torchvision.transforms as transforms
 from torchvision.utils import save_image
 
 # 自作モジュール
-from ConditionalDCGAN import ConditionalDCGAN
-
+from ConditionalDCGANforMNIST import ConditionalDCGANforMNIST
 
 #--------------------------------
 # 設定可能な定数
 #--------------------------------
 #DEVICE = "CPU"               # 使用デバイス ("CPU" or "GPU")
 DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
-DATASET = "MNIST"             # データセットの種類（"MNIST" or "CIFAR-10"）
-#DATASET = "CIFAR-10"         # データセットの種類（"MNIST" or "CIFAR-10"）
+DATASET = "MNIST"            # データセットの種類（"MNIST" or "CIFAR-10"）
 DATASET_PATH = "./dataset"    # 学習用データセットへのパス
 NUM_SAVE_STEP = 1             # 自動生成画像の保存間隔（エポック単位）
 
-NUM_EPOCHES = 5              # エポック数（学習回数）
-LEARNING_RATE = 0.00005       # 学習率
-IMAGE_SIZE = 64               # 入力画像のサイズ（pixel単位）
-NUM_CHANNELS = 1              # 入力画像のチャンネル数
+NUM_EPOCHES = 10              # エポック数（学習回数）
+LEARNING_RATE = 0.0002        # 学習率
 NUM_FEATURE_MAPS = 64         # 特徴マップの枚数
 BATCH_SIZE = 128              # ミニバッチサイズ
-NUM_INPUT_NOIZE_Z = 100       # 生成器に入力するノイズ z の次数
-NUM_CLASSES = 10              # クラスラベル y の次元数
+NUM_INPUT_NOIZE_Z = 62        # 生成器に入力するノイズ z の次数
 
 
 def main():
     """
     CGAN（DCGANベース）による画像の自動生成
-    ・学習用データセットは、MNIST / CIFAR-10
+    ・学習用データセットは、MNIST
+    ・MNIST に最適化されたネットワークで学習
     """
     print("Start main()")
     
@@ -58,11 +54,8 @@ def main():
     print( "NUM_EPOCHES : ", NUM_EPOCHES )
     print( "LEARNING_RATE : ", LEARNING_RATE )
     print( "BATCH_SIZE : ", BATCH_SIZE )
-    print( "IMAGE_SIZE : ", IMAGE_SIZE )
-    print( "NUM_CHANNELS : ", NUM_CHANNELS )
     print( "NUM_FEATURE_MAPS : ", NUM_FEATURE_MAPS )
     print( "NUM_INPUT_NOIZE_Z : ", NUM_INPUT_NOIZE_Z )
-    print( "NUM_CLASSES : ", NUM_CLASSES )
 
     #===================================
     # 実行 Device の設定
@@ -97,66 +90,33 @@ def main():
     dataset = DATASET
 
     # データをロードした後に行う各種前処理の関数を構成を指定する。
-    if( dataset == "MNIST" ):
-        transform = transforms.Compose(
-            [
-                transforms.Resize(IMAGE_SIZE),
-                transforms.ToTensor(),   # Tensor に変換
-                transforms.Normalize((0.5,), (0.5,)),
-            ]
-        )
-
-    elif( dataset == "CIFAR-10" ):
-        transform = transforms.Compose(
-            [
-                transforms.Resize(IMAGE_SIZE),
-                transforms.ToTensor(),   # Tensor に変換
-                transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)),
-            ]
-        )
-    else:
-        print( "Warning: Invalid dataset" )
+    transform = transforms.Compose(
+        [
+            transforms.ToTensor(),   # Tensor に変換
+        ]
+    )
     
     #---------------------------------------------------------------
     # data と label をセットにした TensorDataSet の作成
     #---------------------------------------------------------------
-    if( dataset == "MNIST" ):
-        ds_train = torchvision.datasets.MNIST(
-            root = DATASET_PATH,
-            train = True,
-            transform = transform,      # transforms.Compose(...) で作った前処理の一連の流れ
-            target_transform = None,    
-            download = True,
-        )
+    ds_train = torchvision.datasets.MNIST(
+        root = DATASET_PATH,
+        train = True,
+        transform = transform,      # transforms.Compose(...) で作った前処理の一連の流れ
+        target_transform = None,    
+        download = True,
+    )
 
-        ds_test = torchvision.datasets.MNIST(
-            root = DATASET_PATH,
-            train = False,
-            transform = transform,
-            target_transform = None,
-            download = True
-        )
-    elif( dataset == "CIFAR-10" ):
-        ds_train = torchvision.datasets.CIFAR10(
-            root = DATASET_PATH,
-            train = True,
-            transform = transform,      # transforms.Compose(...) で作った前処理の一連の流れ
-            target_transform = None,    
-            download = True
-        )
+    ds_test = torchvision.datasets.MNIST(
+        root = DATASET_PATH,
+        train = False,
+        transform = transform,
+        target_transform = None,
+        download = True
+    )
 
-        ds_test = torchvision.datasets.CIFAR10(
-            root = DATASET_PATH,
-            train = False,
-            transform = transform,
-            target_transform = None,
-            download = True
-        )
-    else:
-        print( "WARNING: Inavlid dataset" )
-
-    print( "ds_train :", ds_train )
-    print( "ds_test :", ds_test )
+    #print( "ds_train :", ds_train )
+    #print( "ds_test :", ds_test )
 
     #---------------------------------------------------------------
     # TensorDataset → DataLoader への変換
@@ -179,25 +139,21 @@ def main():
     # Number of datapoints: 60000
     # dloader_train.datset
     # dloader_train.sampler = <RandomSampler, len() = 60000>
-    print( "dloader_train :", dloader_train )
-    print( "dloader_test :", dloader_test )
+    #print( "dloader_train :", dloader_train )
+    #print( "dloader_test :", dloader_test )
 
     #======================================================================
     # モデルの構造を定義する。
     #======================================================================
-    model = ConditionalDCGAN(
-        device = device,
-        n_epoches = NUM_EPOCHES,
-        learing_rate = LEARNING_RATE,
-        batch_size = BATCH_SIZE,
-        n_channels = NUM_CHANNELS,
-        n_fmaps = NUM_FEATURE_MAPS,
-        n_input_noize_z = NUM_INPUT_NOIZE_Z,
-        n_classes = NUM_CLASSES
+    model = ConditionalDCGANforMNIST(
+            device = device,
+            n_epoches = NUM_EPOCHES,
+            learing_rate = LEARNING_RATE,
+            batch_size = BATCH_SIZE,
+            n_input_noize_z = NUM_INPUT_NOIZE_Z
     )
 
     model.print( "after init()" )
-
     #print( "model.device() :", model.device )
 
     #---------------------------------------------------------------
@@ -244,7 +200,7 @@ def main():
     plt.grid()
     plt.tight_layout()
     plt.savefig(
-        "CGAN_Loss_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE ),  
+        "CGANforMNIST_Loss_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE ),  
         dpi = 300, bbox_inches = "tight"
     )
     plt.show()
@@ -258,13 +214,13 @@ def main():
 
     save_image( 
         tensor = images, 
-        filename = "CGAN_Image_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE )
+        filename = "CGANforMNIST_Image_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE )
     )
 
     """
     images = model.generate_images( n_samples = 64, b_transformed = True )
     scipy.misc.imsave( 
-        "CGAN_Image_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE ),
+        "CGANforMNIST_Image_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE ),
         np.vstack(
             np.array( [ np.hstack(img) for img in images ] )
         )

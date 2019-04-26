@@ -45,8 +45,7 @@ NUM_INPUT_NOIZE_Z = 62        # 生成器に入力するノイズ z の次数
 
 ## ■ コード説明＆実行結果
 
-### ◎ コードの実行結果
-
+### ◎ コードの実行結果：`main.py`
 |パラメータ名|値（実行条件１）|値（実行条件２）|
 |---|---|---|
 |学習用データセット：`DATASET`|"MNIST"|"CIFAR-10"|
@@ -62,6 +61,25 @@ NUM_INPUT_NOIZE_Z = 62        # 生成器に入力するノイズ z の次数
 |入力画像のチャンネル数：`NUM_CHANNELS`|1|3|
 |特徴マップの枚数：`NUM_FEATURE_MAPS`|64|64|
 
+#### ☆ 損失関数のグラフ（実行条件１）
+
+#### ☆ 生成器から生成された自動生成画像（実行条件１）
+
+
+### ◎ コードの実行結果：`main_mnist.py`
+
+|パラメータ名|値（実行条件１）|
+|---|---|
+|学習用データセット：`DATASET`|"MNIST"|
+|使用デバイス：`DEVICE`|GPU|
+|シード値|`random.seed(8)`<br>`np.random.seed(8)`<br>`torch.manual_seed(8)`|
+|エポック数：`NUM_EPOCHES`|10|
+|バッチサイズ：`BATCH_SIZE`|128|
+|最適化アルゴリズム|Adam|
+|学習率：`LEARNING_RATE`|0.0002|
+|減衰率 beta1|0.5|
+|生成器に入力するノイズ z の次数：`NUM_INPUT_NOIZE_Z`|62|
+|特徴マップの枚数：`NUM_FEATURE_MAPS`|64|
 
 #### ☆ 損失関数のグラフ（実行条件１）
 ![DCGAN_Loss_epoches10_lr0 0002_batchsize128](https://user-images.githubusercontent.com/25688193/55666851-430cf100-588f-11e9-99f9-ad31f1dd0034.png)<br>

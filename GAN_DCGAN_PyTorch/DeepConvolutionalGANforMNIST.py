@@ -456,7 +456,7 @@ class DeepConvolutionalGANforMNIST( object ):
 
                 save_image( 
                     tensor = images, 
-                    filename = "DCGAN_Image_epoches{}_iters{}.png".format( epoch, iterations )
+                    filename = "DCGANforMNIST_Image_epoches{}_iters{}.png".format( epoch, iterations )
                 )
 
         print("Finished Training Loop.")

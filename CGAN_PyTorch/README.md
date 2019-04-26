@@ -7,6 +7,8 @@ Conditional GAN（CGAN）の PyTorch での実装。<br>
 1. [動作環境](#動作環境)
 1. [使用法](#使用法)
 1. [コード説明＆実行結果](#コード説明＆実行結果)
+    1. `main.py`
+    1. `main_mnist.py`
 1. [背景理論](https://github.com/Yagami360/My_NoteBook/blob/master/%E6%83%85%E5%A0%B1%E5%B7%A5%E5%AD%A6/%E6%83%85%E5%A0%B1%E5%B7%A5%E5%AD%A6_%E6%A9%9F%E6%A2%B0%E5%AD%A6%E7%BF%92_%E7%94%9F%E6%88%90%E3%83%A2%E3%83%87%E3%83%AB.md#ConditionalGAN%EF%BC%88CGAN%EF%BC%89)
 
 ## ■ 動作環境
@@ -48,7 +50,7 @@ NUM_CLASSES = 10              # クラスラベル y の次元数
 
 ## ■ コード説明＆実行結果
 
-### ◎ コードの実行結果
+### ◎ コードの実行結果：`main.py`
 
 |パラメータ名|値（実行条件１）|値（実行条件２）|
 |---|---|---|
@@ -65,6 +67,22 @@ NUM_CLASSES = 10              # クラスラベル y の次元数
 |入力画像のチャンネル数：`NUM_CHANNELS`|1|3|
 |特徴マップの枚数：`NUM_FEATURE_MAPS`|64|64|
 |クラスラベルの個数：`NUM_CLASSES`|10|x|
+
+
+### ◎ コードの実行結果：`main_mnist.py`
+
+|パラメータ名|値（実行条件１）|
+|---|---|
+|学習用データセット：`DATASET`|"MNIST"|
+|使用デバイス：`DEVICE`|GPU|
+|シード値|`random.seed(8)`<br>`np.random.seed(8)`<br>`torch.manual_seed(8)`|
+|エポック数：`NUM_EPOCHES`|10|
+|バッチサイズ：`BATCH_SIZE`|128|
+|最適化アルゴリズム|Adam|
+|学習率：`LEARNING_RATE`|0.0002|
+|減衰率 beta1|0.5|
+|生成器に入力するノイズ z の次数：`NUM_INPUT_NOIZE_Z`|62|
+|特徴マップの枚数：`NUM_FEATURE_MAPS`|64|
 
 
 #### ☆ 損失関数のグラフ（実行条件１）

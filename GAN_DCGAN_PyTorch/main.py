@@ -17,7 +17,7 @@ from torchvision.utils import save_image
 
 # 自作モジュール
 from DeepConvolutionalGAN import DeepConvolutionalGAN
-from DeepConvolutionalGANforMNIST import DeepConvolutionalGANforMNIST
+
 
 #--------------------------------
 # 設定可能な定数
@@ -30,12 +30,12 @@ DATASET_PATH = "./dataset"    # 学習用データセットへのパス
 NUM_SAVE_STEP = 1             # 自動生成画像の保存間隔（エポック単位）
 
 NUM_EPOCHES = 10              # エポック数（学習回数）
-LEARNING_RATE = 0.0002        # 学習率
+LEARNING_RATE = 0.00005       # 学習率
 IMAGE_SIZE = 64               # 入力画像のサイズ（pixel単位）
 NUM_CHANNELS = 1              # 入力画像のチャンネル数
 NUM_FEATURE_MAPS = 64         # 特徴マップの枚数
 BATCH_SIZE = 128              # ミニバッチサイズ
-NUM_INPUT_NOIZE_Z = 62        # 生成器に入力するノイズ z の次数
+NUM_INPUT_NOIZE_Z = 100       # 生成器に入力するノイズ z の次数
 
 
 def main():
@@ -98,18 +98,12 @@ def main():
     if( dataset == "MNIST" ):
         transform = transforms.Compose(
             [
-                transforms.ToTensor(),   # Tensor に変換
-            ]
-        )
-        """
-        transform = transforms.Compose(
-            [
                 transforms.Resize(IMAGE_SIZE),
                 transforms.ToTensor(),   # Tensor に変換
                 transforms.Normalize((0.5,), (0.5,)),
             ]
         )
-        """
+        
     elif( dataset == "CIFAR-10" ):
         transform = transforms.Compose(
             [
@@ -159,8 +153,8 @@ def main():
     else:
         print( "WARNING: Inavlid dataset" )
 
-    print( "ds_train :", ds_train )
-    print( "ds_test :", ds_test )
+    #print( "ds_train :", ds_train )
+    #print( "ds_test :", ds_test )
 
     #---------------------------------------------------------------
     # TensorDataset → DataLoader への変換
@@ -183,41 +177,21 @@ def main():
     # Number of datapoints: 60000
     # dloader_train.datset
     # dloader_train.sampler = <RandomSampler, len() = 60000>
-    print( "dloader_train :", dloader_train )
-    print( "dloader_test :", dloader_test )
+    #print( "dloader_train :", dloader_train )
+    #print( "dloader_test :", dloader_test )
 
     #======================================================================
     # モデルの構造を定義する。
     #======================================================================
-    if( dataset == "MNIST" ):
-        model = DeepConvolutionalGANforMNIST(
-            device = device,
-            n_epoches = NUM_EPOCHES,
-            learing_rate = LEARNING_RATE,
-            batch_size = BATCH_SIZE,
-            n_input_noize_z = NUM_INPUT_NOIZE_Z
-        )
-        """
-        model = DeepConvolutionalGAN(
-            device = device,
-            n_epoches = NUM_EPOCHES,
-            learing_rate = LEARNING_RATE,
-            batch_size = BATCH_SIZE,
-            n_channels = NUM_CHANNELS,
-            n_fmaps = NUM_FEATURE_MAPS,
-            n_input_noize_z = NUM_INPUT_NOIZE_Z
-        )
-        """
-    else:
-        model = DeepConvolutionalGAN(
-            device = device,
-            n_epoches = NUM_EPOCHES,
-            learing_rate = LEARNING_RATE,
-            batch_size = BATCH_SIZE,
-            n_channels = NUM_CHANNELS,
-            n_fmaps = NUM_FEATURE_MAPS,
-            n_input_noize_z = NUM_INPUT_NOIZE_Z
-        )
+    model = DeepConvolutionalGAN(
+        device = device,
+        n_epoches = NUM_EPOCHES,
+        learing_rate = LEARNING_RATE,
+        batch_size = BATCH_SIZE,
+        n_channels = NUM_CHANNELS,
+        n_fmaps = NUM_FEATURE_MAPS,
+        n_input_noize_z = NUM_INPUT_NOIZE_Z
+    )
 
     model.print( "after init()" )
 

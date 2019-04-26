@@ -41,12 +41,6 @@ class Generator( nn.Module ):
         super( Generator, self ).__init__()
         self._device = device
         
-        #self._z_dconv = nn.ConvTranspose2d( n_input_noize_z, n_fmaps*8, kernel_size=4, stride=1, padding=0, bias=False ).to( self._device )
-        #self._z_bnorm = nn.BatchNorm2d(n_fmaps*8)
-
-        #self._y_dconv = nn.ConvTranspose2d( n_classes, n_fmaps*8, kernel_size=4, stride=1, padding=0, bias=False ).to( self._device )
-        #self._y_bnorm = nn.BatchNorm2d(n_fmaps*8)
-
         self._layer = nn.Sequential(
             nn.ConvTranspose2d( n_input_noize_z + n_classes, n_fmaps*8, kernel_size=4, stride=1, padding=0, bias=False ),
             nn.BatchNorm2d(n_fmaps*8),
@@ -89,12 +83,6 @@ class Generator( nn.Module ):
         [Returns]
             output : <Tensor> ネットワークからのテンソルの出力
         """
-        """
-        z = self._z_bnorm( self._z_dconv(z) )
-        y = self._y_bnorm( self._y_dconv(y) )
-        z = torch.cat([z, y], 1)
-        output = self._layer(z)
-        """
         output = torch.cat([z, y], dim=1)
         output = self._layer(output)
         return output
@@ -120,9 +108,6 @@ class Discriminator( nn.Module ):
     ):
         super( Discriminator, self ).__init__()
         self._device = device
-
-        #self._x_conv = nn.Conv2d( n_channels, n_fmaps, kernel_size=4, stride=2, padding=1, bias=False ).to( self._device )
-        #self._y_conv = nn.Conv2d( n_classes, n_fmaps, kernel_size=4, stride=2, padding=1, bias=False ).to( self._device )
 
         self._layer = nn.Sequential(
             nn.Conv2d( n_channels + n_classes, n_fmaps, kernel_size=4, stride=2, padding=1, bias=False ),
@@ -160,12 +145,6 @@ class Discriminator( nn.Module ):
             x : <Tensor> 画像データ
             y : <Tensor> ラベル情報
         """
-        """
-        x = F.leaky_relu( self._x_conv(x), 0.2 )
-        y = F.leaky_relu( self._x_conv(y), 0.2 )
-        x = torch.cat( [x, y], 1 )
-        output = self._layer( x )
-        """
         output = torch.cat( [x, y], dim=1 )
         output = self._layer( output )
         return output
@@ -202,6 +181,8 @@ class ConditionalDCGAN( object ):
 
         _images_historys : <list> 生成画像のリスト
 
+        _fixed_input_noize_z : <Tensor> 固定した値の入力ノイズ z（学習後の画像生成の入力ノイズとして利用）
+
     [private] 変数名の前にダブルアンダースコア __ を付ける（Pythonルール）
 
     """
@@ -214,7 +195,8 @@ class ConditionalDCGAN( object ):
         n_channels = 3,
         n_fmaps = 64,
         n_input_noize_z = 100,
-        n_classes = 10
+        n_classes = 10,
+        n_samples = 64
     ):
         self._device = device
 
@@ -238,6 +220,7 @@ class ConditionalDCGAN( object ):
         self.loss()
         self.optimizer()
         
+        self._fixed_input_noize_z = torch.rand( (n_samples, self._n_input_noize_z, 1, 1) ).to( self._device )
 
         return
 
@@ -286,6 +269,9 @@ class ConditionalDCGAN( object ):
     def images_historys( self ):
         return self._images_historys
 
+    def set_fixed_input_noize_z( self, n_samples ):
+        self._fixed_input_noize_z = torch.rand( (n_samples, self._n_input_noize_z, 1, 1) ).to( self._device )
+        return
 
     def model( self ):
         """
@@ -536,12 +522,12 @@ class ConditionalDCGAN( object ):
             #----------------------------------------------------
             # 特定のエポックでGeneratorから画像を保存
             if( epoch % n_sava_step == 0 ):
-                images = self.generate_images( n_samples = 64, b_transformed = False )
+                images = self.generate_fixed_images( b_transformed = False )
                 self._images_historys.append( images )
                 save_image( tensor = images, filename = "CGAN_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
 
                 for i in range( self._n_classes ):
-                    images_i = self.generate_images_with_lable( n_samples = 64, y_label = i, b_transformed = False )
+                    images_i = self.generate_fixed_images_with_lable( n_samples = 64, y_label = i, b_transformed = False )
                     save_image( tensor = images_i, filename = "CGAN_Image{}_epoches{}_iters{}.png".format( i, epoch, iterations ) )
 
         print("Finished Training Loop.")
@@ -603,11 +589,71 @@ class ConditionalDCGAN( object ):
 
         # 生成器に入力するクラスラベル y
         eye_tsr = torch.eye( self._n_classes ).to( self._device )
-        y_fake_label = torch.full( (n_samples,), y_label ).to( self._device )
+        y_fake_label = torch.full( (n_samples,), y_label ).long().to( self._device )
         y_fake_one_hot = eye_tsr[y_fake_label].view( -1, self._n_classes, 1, 1 ).to( self._device )
 
         # 画像を生成
         images = self._generator( input_noize_z, y_fake_one_hot )
+        #print( "images.size() :", images.size() )
+
+        if( b_transformed == True ):
+            # Tensor → numpy に変換
+            images = images.cpu().detach().numpy()
+
+        return images
+
+
+    def generate_fixed_images( self, n_samples = 64, b_transformed = False ):
+        """
+        CGAN の Generator から、固定された画像データを自動生成する。
+        [Args]
+            n_samples : <int> 生成する画像の枚数
+            b_transformed : <bool> 画像のフォーマットを Tensor から変換するか否か
+        [Returns]
+            images : <Tensor> / shape = [n_samples, n_channels, height, width]
+                生成された画像データのリスト
+                行成分は生成する画像の数 n_samples
+        """
+        # 生成器を推論モードに切り替える。
+        self._generator.eval()
+
+        # 生成器に入力するクラスラベル y
+        eye_tsr = torch.eye( self._n_classes ).to( self._device )
+        y_fake_label = torch.randint( self._n_classes, (n_samples,), dtype = torch.long ).to( self._device )
+        y_fake_one_hot = eye_tsr[y_fake_label].view( -1, self._n_classes, 1, 1 ).to( self._device )
+
+        # 画像を生成
+        images = self._generator( self._fixed_input_noize_z, y_fake_one_hot )
+        #print( "images.size() :", images.size() )
+
+        if( b_transformed == True ):
+            # Tensor → numpy に変換
+            images = images.cpu().detach().numpy()
+
+        return images
+
+    def generate_fixed_images_with_lable( self, n_samples = 64, y_label = 0, b_transformed = False ):
+        """
+        引数で指定したラベルの固定された画像を自動生成する。
+        [Args]
+            n_samples : <int> 生成する画像の枚数
+            y_label : <int> 生成したい画像のクラスラベル
+            b_transformed : <bool> 画像のフォーマットを Tensor から変換するか否か
+        [Returns]
+            images : <Tensor> / shape = [n_samples, n_channels, height, width]
+                生成された画像データのリスト
+                行成分は生成する画像の数 n_samples
+        """
+        # 生成器を推論モードに切り替える。
+        self._generator.eval()
+
+        # 生成器に入力するクラスラベル y
+        eye_tsr = torch.eye( self._n_classes ).to( self._device )
+        y_fake_label = torch.full( (n_samples,), y_label ).long().to( self._device )
+        y_fake_one_hot = eye_tsr[y_fake_label].view( -1, self._n_classes, 1, 1 ).to( self._device )
+
+        # 画像を生成
+        images = self._generator( self._fixed_input_noize_z, y_fake_one_hot )
         #print( "images.size() :", images.size() )
 
         if( b_transformed == True ):
