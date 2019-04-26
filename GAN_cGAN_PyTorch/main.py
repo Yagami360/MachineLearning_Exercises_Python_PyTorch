@@ -29,7 +29,7 @@ DATASET = "MNIST"             # データセットの種類（"MNIST" or "CIFAR-
 DATASET_PATH = "./dataset"    # 学習用データセットへのパス
 NUM_SAVE_STEP = 1             # 自動生成画像の保存間隔（エポック単位）
 
-NUM_EPOCHES = 5              # エポック数（学習回数）
+NUM_EPOCHES = 50              # エポック数（学習回数）
 LEARNING_RATE = 0.00005       # 学習率
 IMAGE_SIZE = 64               # 入力画像のサイズ（pixel単位）
 NUM_CHANNELS = 1              # 入力画像のチャンネル数
@@ -41,7 +41,7 @@ NUM_CLASSES = 10              # クラスラベル y の次元数
 
 def main():
     """
-    CGAN（DCGANベース）による画像の自動生成
+    cGAN（DCGANベース）による画像の自動生成
     ・学習用データセットは、MNIST / CIFAR-10
     """
     print("Start main()")
@@ -244,7 +244,7 @@ def main():
     plt.grid()
     plt.tight_layout()
     plt.savefig(
-        "CGAN_Loss_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE ),  
+        "cGAN_Loss_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE ),  
         dpi = 300, bbox_inches = "tight"
     )
     plt.show()
@@ -258,7 +258,7 @@ def main():
 
     save_image( 
         tensor = images, 
-        filename = "CGAN_Image_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE )
+        filename = "cGAN_Image_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE )
     )
 
     """

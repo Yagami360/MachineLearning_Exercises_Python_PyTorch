@@ -23,7 +23,6 @@ from ConditionalDCGANforMNIST import ConditionalDCGANforMNIST
 #--------------------------------
 #DEVICE = "CPU"               # 使用デバイス ("CPU" or "GPU")
 DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
-DATASET = "MNIST"            # データセットの種類（"MNIST" or "CIFAR-10"）
 DATASET_PATH = "./dataset"    # 学習用データセットへのパス
 NUM_SAVE_STEP = 1             # 自動生成画像の保存間隔（エポック単位）
 
@@ -36,7 +35,7 @@ NUM_INPUT_NOIZE_Z = 62        # 生成器に入力するノイズ z の次数
 
 def main():
     """
-    CGAN（DCGANベース）による画像の自動生成
+    cGAN（DCGANベース）による画像の自動生成
     ・学習用データセットは、MNIST
     ・MNIST に最適化されたネットワークで学習
     """
@@ -87,8 +86,6 @@ def main():
     # データセットを読み込み or 生成
     # データの前処理
     #======================================================================
-    dataset = DATASET
-
     # データをロードした後に行う各種前処理の関数を構成を指定する。
     transform = transforms.Compose(
         [
@@ -200,7 +197,7 @@ def main():
     plt.grid()
     plt.tight_layout()
     plt.savefig(
-        "CGANforMNIST_Loss_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE ),  
+        "cGANforMNIST_Loss_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE ),  
         dpi = 300, bbox_inches = "tight"
     )
     plt.show()
@@ -214,7 +211,7 @@ def main():
 
     save_image( 
         tensor = images, 
-        filename = "CGANforMNIST_Image_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE )
+        filename = "cGANforMNIST_Image_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE )
     )
 
     """

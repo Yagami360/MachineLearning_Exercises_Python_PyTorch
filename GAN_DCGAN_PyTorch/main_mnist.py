@@ -23,7 +23,6 @@ from DeepConvolutionalGANforMNIST import DeepConvolutionalGANforMNIST
 #--------------------------------
 #DEVICE = "CPU"               # 使用デバイス ("CPU" or "GPU")
 DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
-DATASET = "MNIST"            # データセットの種類（"MNIST" or "CIFAR-10"）
 DATASET_PATH = "./dataset"    # 学習用データセットへのパス
 NUM_SAVE_STEP = 1             # 自動生成画像の保存間隔（エポック単位）
 
@@ -86,8 +85,6 @@ def main():
     # データセットを読み込み or 生成
     # データの前処理
     #======================================================================
-    dataset = DATASET
-
     # データをロードした後に行う各種前処理の関数を構成を指定する。
     transform = transforms.Compose(
         [

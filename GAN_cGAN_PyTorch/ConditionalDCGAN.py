@@ -14,54 +14,57 @@ from tqdm import tqdm
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.nn.functional as F
 from torchvision.utils import save_image
 
 
 class Generator( nn.Module ):
     """
-    CGAN の生成器 G [Generator] 側のネットワーク構成を記述したモデル。
-    ・MNIST のデータ構造に最適化されている。
+    cGAN の生成器 G [Generator] 側のネットワーク構成を記述したモデル。
+    ・ネットワーク構成は DCGAN ベース
+
     [public]
     [protected] 変数名の前にアンダースコア _ を付ける
         _device : <toech.cuda.device> 使用デバイス
-        _fc_layer : <nn.Sequential> 生成器の全結合層 （ノイズデータの次元を拡張）
-        _deconv_layer : <nn.Sequential> 生成器の DeConv 処理を行う層
+        _layer : <nn.Sequential> 生成器のネットワーク構成
     [private] 変数名の前にダブルアンダースコア __ を付ける（Pythonルール）
 
     """
     def __init__(
         self,
         device,
-        n_input_noize_z = 62
+        n_input_noize_z = 100,
+        n_channels = 3,
+        n_classes = 10,
+        n_fmaps = 64
     ):
         super( Generator, self ).__init__()
         self._device = device
+        
+        self._layer = nn.Sequential(
+            nn.ConvTranspose2d( n_input_noize_z + n_classes, n_fmaps*8, kernel_size=4, stride=1, padding=0, bias=False ),
+            nn.BatchNorm2d(n_fmaps*8),
+            nn.ReLU(inplace=True),
 
-        n_classes = 10
+            nn.ConvTranspose2d( n_fmaps*8, n_fmaps*4, kernel_size=4, stride=2, padding=1, bias=False ),
+            nn.BatchNorm2d(n_fmaps*4),
+            nn.ReLU(inplace=True),
 
-        # 全結合層 [fully connected layer]
-        # 入力ノイズ z を、6272 = 128 * 7 * 7 の次元まで拡張
-        self._fc_layer = nn.Sequential(
-            nn.Linear( n_input_noize_z + n_classes, 1024),
-            nn.BatchNorm1d(1024),
-            nn.ReLU(),
-            nn.Linear(1024, 128 * 7 * 7),
-            nn.BatchNorm1d(128 * 7 * 7),
-            nn.ReLU(),
-        ).to( self._device )
+            nn.ConvTranspose2d( n_fmaps*4, n_fmaps*2, kernel_size=4, stride=2, padding=1, bias=False ),
+            nn.BatchNorm2d(n_fmaps*2),
+            nn.ReLU(inplace=True),
 
-        # DeConv 処理を行う層
-        # 7 * 7 * 128 → 14 * 14 * 64 → 28 * 28 * 1
-        self._deconv_layer = nn.Sequential(
-            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.ConvTranspose2d(64, 1, kernel_size=4, stride=2, padding=1),
-            nn.Sigmoid(),
+            nn.ConvTranspose2d( n_fmaps*2, n_fmaps, kernel_size=4, stride=2, padding=1, bias=False ),
+            nn.BatchNorm2d(n_fmaps),
+            nn.ReLU(inplace=True),
+
+            nn.ConvTranspose2d( n_fmaps, n_channels, kernel_size=4, stride=2, padding=1, bias=False ),
+            nn.Tanh()
         ).to( self._device )
 
         self.init_weight()
         return
+
 
     def init_weight( self ):
         """
@@ -80,54 +83,50 @@ class Generator( nn.Module ):
         [Returns]
             output : <Tensor> ネットワークからのテンソルの出力
         """
-        output = torch.cat( [z, y], dim = 1 )
-        output = self._fc_layer(output)
-        output = output.view(-1, 128, 7, 7)
-        output = self._deconv_layer(output)
+        output = torch.cat([z, y], dim=1)
+        output = self._layer(output)
         return output
 
 
 class Discriminator( nn.Module ):
     """
-    CGAN の識別器 D [Generator] 側のネットワーク構成を記述したモデル。
-    ・MNIST のデータ構造に最適化されている。
+    cGAN の識別器 D [Generator] 側のネットワーク構成を記述したモデル。
+    ・ネットワーク構成は DCGAN ベース
 
     [public]
     [protected] 変数名の前にアンダースコア _ を付ける
         _device : <toech.cuda.device> 使用デバイス
-        _conv_layer : <nn.Sequential> 識別器の Conv 処理を行う層
-        _fc_layer : <nn.Sequential> 識別器の全結合層 
+        _layer : <nn.Sequential> 識別器のネットワーク構成
     [private] 変数名の前にダブルアンダースコア __ を付ける（Pythonルール）
     """
     def __init__(
        self,
-       device
+       device,
+       n_channels = 3,
+       n_classes = 10,
+       n_fmaps = 64
     ):
         super( Discriminator, self ).__init__()
         self._device = device
 
-        n_classes = 10
-        self._conv_layer = nn.Sequential(
-            nn.Conv2d(                  # shape = [batch_size, n_channels, height, width]
-                in_channels = 1 + n_classes,        # インプットのチャンネルの数 
-                out_channels = 64,      # アウトプットのチャンネルの数
-                kernel_size = 4,        # カーネルのサイズ（＝重み行列の行数と列数）     
-                stride = 2,             # ストライド幅
-                padding = 1             #  Zero-padding added to both sides of the input. Default: 0
-            ),
+        self._layer = nn.Sequential(
+            nn.Conv2d( n_channels + n_classes, n_fmaps, kernel_size=4, stride=2, padding=1, bias=False ),
             nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(128),
-            nn.LeakyReLU(0.2, inplace=True),            
-        ).to( self._device )
+            nn.Conv2d(n_fmaps, n_fmaps*2, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(n_fmaps*2),
+            nn.LeakyReLU(0.2, inplace=True),
 
-        self._fc_layer = nn.Sequential(
-            nn.Linear(128 * 7 * 7, 1024),
-            nn.BatchNorm1d(1024),
-            nn.LeakyReLU(0.2),
-            nn.Linear(1024, 1),
-            nn.Sigmoid(),
+            nn.Conv2d(n_fmaps*2, n_fmaps*4, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(n_fmaps*4),
+            nn.LeakyReLU(0.2, inplace=True),
+
+            nn.Conv2d(n_fmaps*4, n_fmaps*8, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(n_fmaps*8),
+            nn.LeakyReLU(0.2, inplace=True),
+
+            nn.Conv2d(n_fmaps*8, 1, kernel_size=4, stride=1, padding=0, bias=False),
+            nn.Sigmoid()
         ).to( self._device )
 
         self.init_weight()
@@ -141,18 +140,20 @@ class Discriminator( nn.Module ):
         return
 
     def forward(self, x, y):
+        """
+        [Args]
+            x : <Tensor> 画像データ
+            y : <Tensor> ラベル情報
+        """
         output = torch.cat( [x, y], dim=1 )
-        output = self._conv_layer(output)
-        output = output.view(-1, 128 * 7 * 7)
-        output = self._fc_layer(output)
+        output = self._layer( output )
         return output
 
 
-class ConditionalDCGANforMNIST( object ):
+class ConditionalDCGAN( object ):
     """
-    Conditional GAN（CGAN）を表すクラス
-    ・ネットワーク構成は、DCGAN ベース
-    ・MNIST のデータ構造に最適化されている。
+    Conditional GAN（cGAN）を表すクラス
+    ・ネットワーク構成は DCGAN ベース
     --------------------------------------------
     [public]
 
@@ -162,12 +163,15 @@ class ConditionalDCGANforMNIST( object ):
         _n_epoches : <int> エポック数（学習回数）
         _learnig_rate : <float> 最適化アルゴリズムの学習率
         _batch_size : <int> ミニバッチ学習時のバッチサイズ
+        _n_channels : <int> 入力画像のチャンネル数
+        _n_fmaps : <int> 特徴マップの枚数
         _n_input_noize_z : <int> 入力ノイズ z の次元数
+        _n_classes : <int> クラスラベルの次元数
 
         _generator : <nn.Module> DCGAN の生成器
         _discriminator : <nn.Module> DCGAN の識別器
 
-        _loss_fn : <> 損失関数
+        _loss_fn : 損失関数
 
         _G_optimizer : <torch.optim.Optimizer> 生成器の最適化アルゴリズム
         _D_optimizer : <torch.optim.Optimizer> 識別器の最適化アルゴリズム
@@ -177,16 +181,21 @@ class ConditionalDCGANforMNIST( object ):
 
         _images_historys : <list> 生成画像のリスト
 
+        _fixed_input_noize_z : <Tensor> 固定した値の入力ノイズ z（学習後の画像生成の入力ノイズとして利用）
+
     [private] 変数名の前にダブルアンダースコア __ を付ける（Pythonルール）
 
     """
     def __init__(
         self,
         device,
-        n_epoches = 300,
+        n_epoches = 50,
         learing_rate = 0.0001,
         batch_size = 64,
-        n_input_noize_z = 62,
+        n_channels = 3,
+        n_fmaps = 64,
+        n_input_noize_z = 100,
+        n_classes = 10,
         n_samples = 64
     ):
         self._device = device
@@ -194,8 +203,10 @@ class ConditionalDCGANforMNIST( object ):
         self._n_epoches = n_epoches
         self._learning_rate = learing_rate
         self._batch_size = batch_size
+        self._n_channels = n_channels
+        self._n_fmaps = n_fmaps
         self._n_input_noize_z = n_input_noize_z
-        self._n_classes = 10
+        self._n_classes = n_classes
 
         self._generator = None
         self._dicriminator = None
@@ -209,18 +220,21 @@ class ConditionalDCGANforMNIST( object ):
         self.loss()
         self.optimizer()
         
-        self._fixed_input_noize_z = torch.rand( (n_samples, self._n_input_noize_z) ).to( self._device )
+        self._fixed_input_noize_z = torch.rand( (n_samples, self._n_input_noize_z, 1, 1) ).to( self._device )
+
         return
 
     def print( self, str = "" ):
         print( "----------------------------------" )
-        print( "ConditionalDCGANfroMNIST" )
+        print( "ConditionalDCGAN" )
         print( self )
         print( str )
         print( "_device :", self._device )
         print( "_n_epoches :", self._n_epoches )
         print( "_learning_rate :", self._learning_rate )
         print( "_batch_size :", self._batch_size )
+        print( "_n_channels :", self._n_channels )
+        print( "_n_fmaps :", self._n_fmaps )
         print( "_n_input_noize_z :", self._n_input_noize_z )
         print( "_n_classes :", self._n_classes )
         print( "_generator :", self._generator )
@@ -263,8 +277,21 @@ class ConditionalDCGANforMNIST( object ):
         [Args]
         [Returns]
         """
-        self._generator = Generator( self._device, n_input_noize_z = self._n_input_noize_z )
-        self._dicriminator = Discriminator( self._device )
+        self._generator = Generator( 
+            self._device, 
+            n_input_noize_z = self._n_input_noize_z,
+            n_channels = self._n_channels,
+            n_classes = self._n_classes,
+            n_fmaps = self._n_fmaps
+        )
+
+        self._dicriminator = Discriminator( 
+            self._device,
+            n_channels = self._n_channels,
+            n_classes = self._n_classes,
+            n_fmaps = self._n_fmaps
+        )
+
         return
 
     def loss( self ):
@@ -366,14 +393,14 @@ class ConditionalDCGANforMNIST( object ):
                 #====================================================
                 # 識別器 D の fitting 処理
                 #====================================================
-                # 生成器 G に入力するノイズ z (62 : ノイズの次元)
-                # Generatorの更新の前にノイズを新しく生成しなおす必要があり。
-                input_noize_z = torch.rand( size = (self._batch_size, self._n_input_noize_z) ).to( self._device )
+                # 生成器 G に入力するノイズ z 
+                # 識別器と生成器の更新の前にノイズを新しく生成しなおす必要があり。
+                input_noize_z = torch.rand( (self._batch_size, self._n_input_noize_z, 1, 1) ).to( self._device )
 
                 # 生成器に入力するクラスラベル y（＝偽のラベル情報）
                 # 識別器と生成器の更新の前にノイズを新しく生成しなおす。
                 y_fake_label = torch.randint( self._n_classes, (self._batch_size,), dtype = torch.long ).to( self._device )
-                y_fake_one_hot = eye_tsr[y_fake_label].view( -1, self._n_classes ).to( self._device )
+                y_fake_one_hot = eye_tsr[y_fake_label].view( -1, self._n_classes, 1, 1 ).to( self._device )     # shape= [batch_size, n_classes,1,1]
 
                 #----------------------------------------------------
                 # 勾配を 0 に初期化
@@ -434,13 +461,13 @@ class ConditionalDCGANforMNIST( object ):
                 # 生成器 G の fitting 処理
                 #====================================================
                 # 生成器 G に入力するノイズ z
-                # Generatorの更新の前にノイズを新しく生成しなおす必要があり。
-                input_noize_z = torch.rand( size = (self._batch_size, self._n_input_noize_z) ).to( self._device )
+                # 生成器の更新の前にも。ノイズを新しく生成しなおす必要があり。
+                input_noize_z = torch.rand( (self._batch_size, self._n_input_noize_z, 1, 1) ).to( self._device )
 
                 # 生成器に入力するクラスラベル y（＝偽のラベル情報）
                 # 生成器の更新の前にも、ノイズを新しく生成しなおす。
                 y_fake_label = torch.randint( self._n_classes, (self._batch_size,), dtype = torch.long ).to( self._device )
-                y_fake_one_hot = eye_tsr[y_fake_label].view( -1, self._n_classes ).to( self._device )
+                y_fake_one_hot = eye_tsr[y_fake_label].view( -1, self._n_classes, 1, 1 ).to( self._device )     # shape= [batch_size, n_classes,1,1]
 
                 #----------------------------------------------------
                 # 勾配を 0 に初期化
@@ -486,12 +513,11 @@ class ConditionalDCGANforMNIST( object ):
             if( epoch % n_sava_step == 0 ):
                 images = self.generate_fixed_images( b_transformed = False )
                 self._images_historys.append( images )
-                save_image( tensor = images, filename = "CGANforMNIST_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
+                save_image( tensor = images, filename = "cGAN_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
 
                 for i in range( self._n_classes ):
-                    images_i = self.generate_fixed_images_with_lable( y_label = i, b_transformed = False )
-                    save_image( tensor = images_i, filename = "CGANforMNIST_Image{}_epoches{}_iters{}.png".format( i, epoch, iterations ) )
-
+                    images_i = self.generate_fixed_images_with_lable( n_samples = 64, y_label = i, b_transformed = False )
+                    save_image( tensor = images_i, filename = "cGAN_Image{}_epoches{}_iters{}.png".format( i, epoch, iterations ) )
 
         print("Finished Training Loop.")
         return
@@ -499,11 +525,11 @@ class ConditionalDCGANforMNIST( object ):
 
     def generate_images( self, n_samples = 64, b_transformed = False ):
         """
-        GAN の Generator から、画像データを自動生成する。
-        [Input]
+        cGAN の Generator から、画像データを自動生成する。
+        [Args]
             n_samples : <int> 生成する画像の枚数
             b_transformed : <bool> 画像のフォーマットを Tensor から変換するか否か
-        [Output]
+        [Returns]
             images : <Tensor> / shape = [n_samples, n_channels, height, width]
                 生成された画像データのリスト
                 行成分は生成する画像の数 n_samples
@@ -511,17 +537,18 @@ class ConditionalDCGANforMNIST( object ):
         # 生成器を推論モードに切り替える。
         self._generator.eval()
 
-        # 生成のもとになる乱数を生成
-        input_noize_z = torch.rand( (n_samples, self._n_input_noize_z) ).to( self._device )
+        # 生成器に入力する入力ノイズ z
+        input_noize_z = torch.rand( (n_samples, self._n_input_noize_z, 1, 1) ).to( self._device )
+        #print( input_noize_z )
 
         # 生成器に入力するクラスラベル y
         eye_tsr = torch.eye( self._n_classes ).to( self._device )
         y_fake_label = torch.randint( self._n_classes, (n_samples,), dtype = torch.long ).to( self._device )
-        y_fake_one_hot = eye_tsr[y_fake_label].view( -1, self._n_classes ).to( self._device )
+        y_fake_one_hot = eye_tsr[y_fake_label].view( -1, self._n_classes, 1, 1 ).to( self._device )
 
         # 画像を生成
         images = self._generator( input_noize_z, y_fake_one_hot )
-        #print( "images.size() :", images.size() )   # torch.Size([64, 1, 28, 28])
+        #print( "images.size() :", images.size() )
 
         if( b_transformed == True ):
             # Tensor → numpy に変換
@@ -545,17 +572,18 @@ class ConditionalDCGANforMNIST( object ):
         # 生成器を推論モードに切り替える。
         self._generator.eval()
 
-        # 生成のもとになる乱数を生成
-        input_noize_z = torch.rand( (n_samples, self._n_input_noize_z) ).to( self._device )
+        # 生成器に入力する入力ノイズ z
+        input_noize_z = torch.rand( (n_samples, self._n_input_noize_z, 1, 1) ).to( self._device )
+        #print( input_noize_z )
 
         # 生成器に入力するクラスラベル y
         eye_tsr = torch.eye( self._n_classes ).to( self._device )
         y_fake_label = torch.full( (n_samples,), y_label ).long().to( self._device )
-        y_fake_one_hot = eye_tsr[y_fake_label].view( -1, self._n_classes ).to( self._device )
+        y_fake_one_hot = eye_tsr[y_fake_label].view( -1, self._n_classes, 1, 1 ).to( self._device )
 
         # 画像を生成
         images = self._generator( input_noize_z, y_fake_one_hot )
-        #print( "images.size() :", images.size() )   # torch.Size([64, 1, 28, 28])
+        #print( "images.size() :", images.size() )
 
         if( b_transformed == True ):
             # Tensor → numpy に変換
@@ -563,9 +591,10 @@ class ConditionalDCGANforMNIST( object ):
 
         return images
 
+
     def generate_fixed_images( self, n_samples = 64, b_transformed = False ):
         """
-        CGAN の Generator から、固定された画像データを自動生成する。
+        cGAN の Generator から、固定された画像データを自動生成する。
         [Args]
             n_samples : <int> 生成する画像の枚数
             b_transformed : <bool> 画像のフォーマットを Tensor から変換するか否か
@@ -580,7 +609,7 @@ class ConditionalDCGANforMNIST( object ):
         # 生成器に入力するクラスラベル y
         eye_tsr = torch.eye( self._n_classes ).to( self._device )
         y_fake_label = torch.randint( self._n_classes, (n_samples,), dtype = torch.long ).to( self._device )
-        y_fake_one_hot = eye_tsr[y_fake_label].view( -1, self._n_classes ).to( self._device )
+        y_fake_one_hot = eye_tsr[y_fake_label].view( -1, self._n_classes, 1, 1 ).to( self._device )
 
         # 画像を生成
         images = self._generator( self._fixed_input_noize_z, y_fake_one_hot )
@@ -594,7 +623,7 @@ class ConditionalDCGANforMNIST( object ):
 
     def generate_fixed_images_with_lable( self, n_samples = 64, y_label = 0, b_transformed = False ):
         """
-        引数で指定したラベルの画像を自動生成する。
+        引数で指定したラベルの固定された画像を自動生成する。
         [Args]
             n_samples : <int> 生成する画像の枚数
             y_label : <int> 生成したい画像のクラスラベル
@@ -610,7 +639,7 @@ class ConditionalDCGANforMNIST( object ):
         # 生成器に入力するクラスラベル y
         eye_tsr = torch.eye( self._n_classes ).to( self._device )
         y_fake_label = torch.full( (n_samples,), y_label ).long().to( self._device )
-        y_fake_one_hot = eye_tsr[y_fake_label].view( -1, self._n_classes ).to( self._device )
+        y_fake_one_hot = eye_tsr[y_fake_label].view( -1, self._n_classes, 1, 1 ).to( self._device )
 
         # 画像を生成
         images = self._generator( self._fixed_input_noize_z, y_fake_one_hot )

@@ -29,7 +29,7 @@ DATASET = "MNIST"            # データセットの種類（"MNIST" or "CIFAR-1
 DATASET_PATH = "./dataset"    # 学習用データセットへのパス
 NUM_SAVE_STEP = 1             # 自動生成画像の保存間隔（エポック単位）
 
-NUM_EPOCHES = 10              # エポック数（学習回数）
+NUM_EPOCHES = 50              # エポック数（学習回数）
 LEARNING_RATE = 0.00005       # 学習率
 IMAGE_SIZE = 64               # 入力画像のサイズ（pixel単位）
 NUM_CHANNELS = 1              # 入力画像のチャンネル数

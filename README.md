@@ -18,8 +18,9 @@ Pytorch の練習コード集。<br>
 
 1. [./Processing_PyTorch](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/Processing_PyTorch)
 1. GAN
-    1. [./GAN_DCGAN_PyTorch](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_DCGAN_PyTorch)
-    1. [./GAN_WGAN_PyTorch](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_WGAN_PyTorch)
+    1. [Deep Convolutional GAN（DCGAN）](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_DCGAN_PyTorch)
+    1. [Conditional GAN（cGAN）](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/CGAN_PyTorch)
+    1. [Wasserstein GAN（WGAN）](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_WGAN_PyTorch)
 
 
 ## ■ 参考文献＆サイト

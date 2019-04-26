@@ -179,7 +179,8 @@ class DeepConvolutionalGANforMNIST( object ):
         n_epoches = 300,
         learing_rate = 0.0001,
         batch_size = 64,
-        n_input_noize_z = 62
+        n_input_noize_z = 62,
+        n_samples = 64
     ):
         self._device = device
 
@@ -200,7 +201,7 @@ class DeepConvolutionalGANforMNIST( object ):
         self.loss()
         self.optimizer()
         
-
+        self._fixed_input_noize_z = torch.rand( (n_samples, self._n_input_noize_z) ).to( self._device )
         return
 
     def print( self, str = "" ):
@@ -451,13 +452,9 @@ class DeepConvolutionalGANforMNIST( object ):
             #----------------------------------------------------
             # 特定のエポックでGeneratorから画像を保存
             if( epoch % n_sava_step == 0 ):
-                images = self.generate_images( n_samples = 64, b_transformed = False )
+                images = self.generate_fixed_images( b_transformed = False )
                 self._images_historys.append( images )
-
-                save_image( 
-                    tensor = images, 
-                    filename = "DCGANforMNIST_Image_epoches{}_iters{}.png".format( epoch, iterations )
-                )
+                save_image( tensor = images, filename = "DCGANforMNIST_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
 
         print("Finished Training Loop.")
         return
@@ -483,6 +480,29 @@ class DeepConvolutionalGANforMNIST( object ):
         # 画像を生成
         images = self._generator( input_noize_z )
         #print( "images.size() :", images.size() )   # torch.Size([64, 1, 28, 28])
+
+        if( b_transformed == True ):
+            # Tensor → numpy に変換
+            images = images.cpu().detach().numpy()
+
+        return images
+
+    def generate_fixed_images( self, b_transformed = False ):
+        """
+        GAN の Generator から、固定された画像データを自動生成する。
+        [Args]
+            b_transformed : <bool> 画像のフォーマットを Tensor から変換するか否か
+        [Returns]
+            images : <Tensor> / shape = [n_samples, n_channels, height, width]
+                生成された画像データのリスト
+                行成分は生成する画像の数 n_samples
+        """
+        # 生成器を推論モードに切り替える。
+        self._generator.eval()
+
+        # 画像を生成
+        images = self._generator( self._fixed_input_noize_z )
+        #print( "images.size() :", images.size() )
 
         if( b_transformed == True ):
             # Tensor → numpy に変換
