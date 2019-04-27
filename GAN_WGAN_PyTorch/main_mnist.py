@@ -16,7 +16,7 @@ import torchvision.transforms as transforms
 from torchvision.utils import save_image
 
 # 自作モジュール
-from DeepConvolutionalGANforMNIST import DeepConvolutionalGANforMNIST
+from WassersteinGANforMNIST import WassersteinGANforMNIST
 
 #--------------------------------
 # 設定可能な定数
@@ -27,15 +27,18 @@ DATASET_PATH = "./dataset"    # 学習用データセットへのパス
 NUM_SAVE_STEP = 1             # 自動生成画像の保存間隔（エポック単位）
 
 NUM_EPOCHES = 10              # エポック数（学習回数）
-LEARNING_RATE = 0.0002        # 学習率
+LEARNING_RATE = 0.0002        # 学習率 (Default:0.00005)
+BATCH_SIZE = 64               # ミニバッチサイズ
 NUM_FEATURE_MAPS = 64         # 特徴マップの枚数
-BATCH_SIZE = 128              # ミニバッチサイズ
 NUM_INPUT_NOIZE_Z = 62        # 生成器に入力するノイズ z の次数
+NUM_CRITIC = 5                # クリティックの更新回数
+WEIGHT_CLAMP_LOWER = - 0.01   # 重みクリッピングの下限値
+WEIGHT_CLAMP_UPPER = 0.01     # 重みクリッピングの上限値
 
 
 def main():
     """
-    DCGAN による画像の自動生成
+    Wasserstein による画像の自動生成
     ・学習用データセットは、MNIST
     ・MNIST に最適化されたネットワークで学習
     """
@@ -55,6 +58,9 @@ def main():
     print( "BATCH_SIZE : ", BATCH_SIZE )
     print( "NUM_FEATURE_MAPS : ", NUM_FEATURE_MAPS )
     print( "NUM_INPUT_NOIZE_Z : ", NUM_INPUT_NOIZE_Z )
+    print( "NUM_CRITIC : ", NUM_CRITIC )
+    print( "WEIGHT_CLAMP_LOWER : ", WEIGHT_CLAMP_LOWER )
+    print( "WEIGHT_CLAMP_UPPER : ", WEIGHT_CLAMP_UPPER )
 
     #===================================
     # 実行 Device の設定
@@ -73,7 +79,7 @@ def main():
     else:
         device = torch.device( "cpu" )
         print( "実行デバイス :", device)
-        
+
     print( "----------------------------------------------" )
 
     # seed 値の固定
@@ -92,7 +98,7 @@ def main():
             transforms.ToTensor(),   # Tensor に変換
         ]
     )
-    
+
     #---------------------------------------------------------------
     # data と label をセットにした TensorDataSet の作成
     #---------------------------------------------------------------
@@ -133,25 +139,28 @@ def main():
         shuffle = False
     )
     
+    # [MNIST]
     # Number of datapoints: 60000
     # dloader_train.datset
     # dloader_train.sampler = <RandomSampler, len() = 60000>
     #print( "dloader_train :", dloader_train )
     #print( "dloader_test :", dloader_test )
-
+    
     #======================================================================
     # モデルの構造を定義する。
     #======================================================================
-    model = DeepConvolutionalGANforMNIST(
+    model = WassersteinGANforMNIST(
         device = device,
         n_epoches = NUM_EPOCHES,
         learing_rate = LEARNING_RATE,
         batch_size = BATCH_SIZE,
-        n_input_noize_z = NUM_INPUT_NOIZE_Z
+        n_input_noize_z = NUM_INPUT_NOIZE_Z,
+        n_critic = NUM_CRITIC,
+        w_clamp_lower = WEIGHT_CLAMP_LOWER,
+        w_clamp_upper = WEIGHT_CLAMP_UPPER
     )
 
     model.print( "after init()" )
-    #print( "model.device() :", model.device )
 
     #---------------------------------------------------------------
     # 損失関数を設定
@@ -177,14 +186,14 @@ def main():
     plt.clf()
     plt.plot(
         range( 0, len(model.loss_G_history) ), model.loss_G_history,
-        label = "loss_G",
+        label = "loss : Generator",
         linestyle = '-',
         linewidth = 0.2,
         color = 'red'
     )
     plt.plot(
-        range( 0, len(model.loss_D_history) ), model.loss_D_history,
-        label = "loss_D",
+        range( 0, len(model.loss_C_history) ), model.loss_C_history,
+        label = "loss : Critic",
         linestyle = '-',
         linewidth = 0.2,
         color = 'blue'
@@ -197,11 +206,10 @@ def main():
     plt.grid()
     plt.tight_layout()
     plt.savefig(
-        "DCGANforMNIST_Loss_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE ),  
+        "WGANforMNIST_Loss_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE ),  
         dpi = 300, bbox_inches = "tight"
     )
     plt.show()
-
 
     #-------------------------------------------------------------------
     # 学習済み DCGAN に対し、自動生成画像を表示
@@ -211,62 +219,17 @@ def main():
 
     save_image( 
         tensor = images, 
-        filename = "DCGANforMNIST_Image_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE )
+        filename = "WGANforMNIST_Image_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE )
     )
 
     """
     images = model.generate_images( n_samples = 64, b_transformed = True )
     scipy.misc.imsave( 
-        "DCGANforMNIST_Image_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE ),
+        "WGANforMNIST_Image_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE ),
         np.vstack(
             np.array( [ np.hstack(img) for img in images ] )
         )
     )
-    """
-
-    #-------------------------------------------------------------------
-    # 学習過程での自動生成画像の動画を表示
-    #-------------------------------------------------------------------
-    """ 実装中
-    images_historys = model.images_historys
-
-    fig = plt.figure( figsize = (8,8) )
-    k = 0
-    for i in range(8):
-        for j in range(8):
-            k += 1
-            subplot = fig.add_subplot( 4, 8, k )
-            subplot.set_xticks([])
-            subplot.set_yticks([])
-            subplot.imshow(
-                images[k-1].reshape(28, 28),    # (1,28,28) → (28,28)
-                vmin=0, vmax=1,
-                cmap = plt.cm.gray_r
-            )
-
-    plt.tight_layout()
-    plt.savefig( 
-        "DCGAN_Image_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE ),  
-        dpi = 300, bbox_inches = "tight"
-    )
-    plt.show()
-    """
-
-    #-------------------------------------------------------------------
-    # 潜在空間で動かした場合の、自動生成画像の動画を表示
-    #-------------------------------------------------------------------
-    """ 実装中
-    morphing_inputs = []
-
-    # 球の表面上の回転
-    theta1, theta2 = 0, 0
-    for _ in range(32):     # batch_size
-        theta1 += 2*np.pi / 32
-        theta2 += 2*np.pi / 32
-        morphing_inputs.append(
-            np.cos(theta1) * input_noize[0] \
-            + np.sin(theta1)*( np.cos(theta2)*input_noize[1] + np.sin(theta2)*input_noize[2] )
-        )
     """
 
     print("Finish main()")

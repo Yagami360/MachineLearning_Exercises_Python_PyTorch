@@ -26,8 +26,8 @@ DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
 DATASET_PATH = "./dataset"    # 学習用データセットへのパス
 NUM_SAVE_STEP = 1             # 自動生成画像の保存間隔（エポック単位）
 
-NUM_EPOCHES = 10              # エポック数（学習回数）
-LEARNING_RATE = 0.0002        # 学習率
+NUM_EPOCHES = 20              # エポック数（学習回数）
+LEARNING_RATE = 0.00005       # 学習率
 NUM_FEATURE_MAPS = 64         # 特徴マップの枚数
 BATCH_SIZE = 128              # ミニバッチサイズ
 NUM_INPUT_NOIZE_Z = 62        # 生成器に入力するノイズ z の次数

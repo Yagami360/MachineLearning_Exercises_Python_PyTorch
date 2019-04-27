@@ -17,7 +17,7 @@ from torchvision.utils import save_image
 
 # 自作モジュール
 from WassersteinGAN import WassersteinGAN
-from WassersteinGANforMNIST import WassersteinGANforMNIST
+
 
 #--------------------------------
 # 設定可能な定数
@@ -102,13 +102,6 @@ def main():
 
     # データをロードした後に行う各種前処理の関数を構成を指定する。
     if( dataset == "MNIST" ):
-        """
-        transform = transforms.Compose(
-            [
-                transforms.ToTensor(),   # Tensor に変換]
-            ]
-        )
-        """
         transform = transforms.Compose(
             [
                 transforms.Resize(IMAGE_SIZE),
@@ -166,8 +159,8 @@ def main():
     else:
         print( "WARNING: Inavlid dataset" )
 
-    print( "ds_train :", ds_train ) # MNIST : torch.Size([60000, 28, 28]) , CIFAR-10 : (50000, 32, 32, 3)
-    print( "ds_test :", ds_test )
+    #print( "ds_train :", ds_train ) # MNIST : torch.Size([60000, 28, 28]) , CIFAR-10 : (50000, 32, 32, 3)
+    #print( "ds_test :", ds_test )
 
     #---------------------------------------------------------------
     # TensorDataset → DataLoader への変換
@@ -191,55 +184,26 @@ def main():
     # Number of datapoints: 60000
     # dloader_train.datset
     # dloader_train.sampler = <RandomSampler, len() = 60000>
-    print( "dloader_train :", dloader_train )
-    print( "dloader_test :", dloader_test )
+    #print( "dloader_train :", dloader_train )
+    #print( "dloader_test :", dloader_test )
     
     #======================================================================
     # モデルの構造を定義する。
     #======================================================================
-    if( dataset == "MNIST" ):
-        """
-        model = WassersteinGANforMNIST(
-            device = device,
-            n_epoches = NUM_EPOCHES,
-            learing_rate = LEARNING_RATE,
-            batch_size = BATCH_SIZE,
-            n_input_noize_z = NUM_INPUT_NOIZE_Z,
-            n_critic = NUM_CRITIC,
-            w_clamp_lower = WEIGHT_CLAMP_LOWER,
-            w_clamp_upper = WEIGHT_CLAMP_UPPER
-        )
-        """
-        model = WassersteinGAN(
-            device = device,
-            n_epoches = NUM_EPOCHES,
-            learing_rate = LEARNING_RATE,
-            batch_size = BATCH_SIZE,
-            n_channels = NUM_CHANNELS,
-            n_fmaps = NUM_FEATURE_MAPS,
-            n_input_noize_z = NUM_INPUT_NOIZE_Z,
-            n_critic = NUM_CRITIC,
-            w_clamp_lower = WEIGHT_CLAMP_LOWER,
-            w_clamp_upper = WEIGHT_CLAMP_UPPER
-        )
-
-    else:
-        model = WassersteinGAN(
-            device = device,
-            n_epoches = NUM_EPOCHES,
-            learing_rate = LEARNING_RATE,
-            batch_size = BATCH_SIZE,
-            n_channels = NUM_CHANNELS,
-            n_fmaps = NUM_FEATURE_MAPS,
-            n_input_noize_z = NUM_INPUT_NOIZE_Z,
-            n_critic = NUM_CRITIC,
-            w_clamp_lower = WEIGHT_CLAMP_LOWER,
-            w_clamp_upper = WEIGHT_CLAMP_UPPER
-        )
+    model = WassersteinGAN(
+        device = device,
+        n_epoches = NUM_EPOCHES,
+        learing_rate = LEARNING_RATE,
+        batch_size = BATCH_SIZE,
+        n_channels = NUM_CHANNELS,
+        n_fmaps = NUM_FEATURE_MAPS,
+        n_input_noize_z = NUM_INPUT_NOIZE_Z,
+        n_critic = NUM_CRITIC,
+        w_clamp_lower = WEIGHT_CLAMP_LOWER,
+        w_clamp_upper = WEIGHT_CLAMP_UPPER
+    )
 
     model.print( "after init()" )
-
-    #print( "model.device() :", model.device )
 
     #---------------------------------------------------------------
     # 損失関数を設定
@@ -304,7 +268,7 @@ def main():
     """
     images = model.generate_images( n_samples = 64, b_transformed = True )
     scipy.misc.imsave( 
-        "DCGAN_Image_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE ),
+        "WGAN_Image_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE ),
         np.vstack(
             np.array( [ np.hstack(img) for img in images ] )
         )
