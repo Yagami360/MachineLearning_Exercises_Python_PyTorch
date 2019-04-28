@@ -17,6 +17,7 @@ from torchvision.utils import save_image
 
 # 自作モジュール
 from ConditionalDCGAN import ConditionalDCGAN
+from ConditionalLSGAN import ConditionalLSGAN
 
 
 #--------------------------------
@@ -29,7 +30,10 @@ DATASET = "MNIST"             # データセットの種類（"MNIST" or "CIFAR-
 DATASET_PATH = "./dataset"    # 学習用データセットへのパス
 NUM_SAVE_STEP = 1             # 自動生成画像の保存間隔（エポック単位）
 
-NUM_EPOCHES = 50              # エポック数（学習回数）
+#GAN_BASELINE = "DCGAN"       # GAN のベースラインアルゴリズム（"DCGAN" or "LSGAN"）
+GAN_BASELINE = "LSGAN"        # GAN のベースラインアルゴリズム（"DCGAN" or "LSGAN"）
+
+NUM_EPOCHES = 10              # エポック数（学習回数）
 LEARNING_RATE = 0.00005       # 学習率
 IMAGE_SIZE = 64               # 入力画像のサイズ（pixel単位）
 NUM_CHANNELS = 1              # 入力画像のチャンネル数
@@ -55,6 +59,7 @@ def main():
     print( "----------------------------------------------" )
     print( "開始時間：", datetime.now() )
     print( "DEVICE : ", DEVICE )
+    print( "GAN_BASELINE : ", GAN_BASELINE )
     print( "NUM_EPOCHES : ", NUM_EPOCHES )
     print( "LEARNING_RATE : ", LEARNING_RATE )
     print( "BATCH_SIZE : ", BATCH_SIZE )
@@ -94,10 +99,8 @@ def main():
     # データセットを読み込み or 生成
     # データの前処理
     #======================================================================
-    dataset = DATASET
-
     # データをロードした後に行う各種前処理の関数を構成を指定する。
-    if( dataset == "MNIST" ):
+    if( DATASET == "MNIST" ):
         transform = transforms.Compose(
             [
                 transforms.Resize(IMAGE_SIZE),
@@ -106,7 +109,7 @@ def main():
             ]
         )
 
-    elif( dataset == "CIFAR-10" ):
+    elif( DATASET == "CIFAR-10" ):
         transform = transforms.Compose(
             [
                 transforms.Resize(IMAGE_SIZE),
@@ -120,7 +123,7 @@ def main():
     #---------------------------------------------------------------
     # data と label をセットにした TensorDataSet の作成
     #---------------------------------------------------------------
-    if( dataset == "MNIST" ):
+    if( DATASET == "MNIST" ):
         ds_train = torchvision.datasets.MNIST(
             root = DATASET_PATH,
             train = True,
@@ -136,7 +139,7 @@ def main():
             target_transform = None,
             download = True
         )
-    elif( dataset == "CIFAR-10" ):
+    elif( DATASET == "CIFAR-10" ):
         ds_train = torchvision.datasets.CIFAR10(
             root = DATASET_PATH,
             train = True,
@@ -155,8 +158,8 @@ def main():
     else:
         print( "WARNING: Inavlid dataset" )
 
-    print( "ds_train :", ds_train )
-    print( "ds_test :", ds_test )
+    #print( "ds_train :", ds_train )
+    #print( "ds_test :", ds_test )
 
     #---------------------------------------------------------------
     # TensorDataset → DataLoader への変換
@@ -179,26 +182,38 @@ def main():
     # Number of datapoints: 60000
     # dloader_train.datset
     # dloader_train.sampler = <RandomSampler, len() = 60000>
-    print( "dloader_train :", dloader_train )
-    print( "dloader_test :", dloader_test )
+    #print( "dloader_train :", dloader_train )
+    #print( "dloader_test :", dloader_test )
 
     #======================================================================
     # モデルの構造を定義する。
     #======================================================================
-    model = ConditionalDCGAN(
-        device = device,
-        n_epoches = NUM_EPOCHES,
-        learing_rate = LEARNING_RATE,
-        batch_size = BATCH_SIZE,
-        n_channels = NUM_CHANNELS,
-        n_fmaps = NUM_FEATURE_MAPS,
-        n_input_noize_z = NUM_INPUT_NOIZE_Z,
-        n_classes = NUM_CLASSES
-    )
+    if( GAN_BASELINE == "DCGAN" ):
+        model = ConditionalDCGAN(
+            device = device,
+            n_epoches = NUM_EPOCHES,
+            learing_rate = LEARNING_RATE,
+            batch_size = BATCH_SIZE,
+            n_channels = NUM_CHANNELS,
+            n_fmaps = NUM_FEATURE_MAPS,
+            n_input_noize_z = NUM_INPUT_NOIZE_Z,
+            n_classes = NUM_CLASSES
+        )
+    elif( GAN_BASELINE == "LSGAN" ):
+        model = ConditionalLSGAN(
+            device = device,
+            n_epoches = NUM_EPOCHES,
+            learing_rate = LEARNING_RATE,
+            batch_size = BATCH_SIZE,
+            n_channels = NUM_CHANNELS,
+            n_fmaps = NUM_FEATURE_MAPS,
+            n_input_noize_z = NUM_INPUT_NOIZE_Z,
+            n_classes = NUM_CLASSES
+        )
+    else:
+        print( "WARNING: Inavlid gan baseline" )
 
     model.print( "after init()" )
-
-    #print( "model.device() :", model.device )
 
     #---------------------------------------------------------------
     # 損失関数を設定

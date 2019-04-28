@@ -17,6 +17,22 @@ import torch.optim as optim
 import torch.nn.functional as F
 from torchvision.utils import save_image
 
+def weights_init( model ):
+    for m in model.modules():
+        if isinstance(m, nn.Conv2d):
+            m.weight.data.normal_(0, 0.02)
+            m.bias.data.zero_()
+        elif isinstance(m, nn.ConvTranspose2d):
+            m.weight.data.normal_(0, 0.02)
+            m.bias.data.zero_()
+        elif isinstance(m, nn.Linear):
+            m.weight.data.normal_(0, 0.02)
+            m.bias.data.zero_()
+        elif isinstance(m, nn.BatchNorm2d):
+            m.weight.data.normal_(1.0, 0.02)
+            m.bias.data.zero_()
+    return
+
 
 class Generator( nn.Module ):
     """
@@ -42,34 +58,27 @@ class Generator( nn.Module ):
         self._device = device
         
         self._layer = nn.Sequential(
-            nn.ConvTranspose2d( n_input_noize_z + n_classes, n_fmaps*8, kernel_size=4, stride=1, padding=0, bias=False ),
+            nn.ConvTranspose2d( n_input_noize_z + n_classes, n_fmaps*8, kernel_size=4, stride=1, padding=0 ),
             nn.BatchNorm2d(n_fmaps*8),
             nn.ReLU(inplace=True),
 
-            nn.ConvTranspose2d( n_fmaps*8, n_fmaps*4, kernel_size=4, stride=2, padding=1, bias=False ),
+            nn.ConvTranspose2d( n_fmaps*8, n_fmaps*4, kernel_size=4, stride=2, padding=1 ),
             nn.BatchNorm2d(n_fmaps*4),
             nn.ReLU(inplace=True),
 
-            nn.ConvTranspose2d( n_fmaps*4, n_fmaps*2, kernel_size=4, stride=2, padding=1, bias=False ),
+            nn.ConvTranspose2d( n_fmaps*4, n_fmaps*2, kernel_size=4, stride=2, padding=1 ),
             nn.BatchNorm2d(n_fmaps*2),
             nn.ReLU(inplace=True),
 
-            nn.ConvTranspose2d( n_fmaps*2, n_fmaps, kernel_size=4, stride=2, padding=1, bias=False ),
+            nn.ConvTranspose2d( n_fmaps*2, n_fmaps, kernel_size=4, stride=2, padding=1 ),
             nn.BatchNorm2d(n_fmaps),
             nn.ReLU(inplace=True),
 
-            nn.ConvTranspose2d( n_fmaps, n_channels, kernel_size=4, stride=2, padding=1, bias=False ),
+            nn.ConvTranspose2d( n_fmaps, n_channels, kernel_size=4, stride=2, padding=1 ),
             nn.Tanh()
         ).to( self._device )
 
-        self.init_weight()
-        return
-
-
-    def init_weight( self ):
-        """
-        独自の重みの初期化処理
-        """
+        weights_init( self )
         return
 
     def forward( self, z, y ):
@@ -110,33 +119,26 @@ class Discriminator( nn.Module ):
         self._device = device
 
         self._layer = nn.Sequential(
-            nn.Conv2d( n_channels + n_classes, n_fmaps, kernel_size=4, stride=2, padding=1, bias=False ),
+            nn.Conv2d( n_channels + n_classes, n_fmaps, kernel_size=4, stride=2, padding=1 ),
             nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Conv2d(n_fmaps, n_fmaps*2, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.Conv2d(n_fmaps, n_fmaps*2, kernel_size=4, stride=2, padding=1 ),
             nn.BatchNorm2d(n_fmaps*2),
             nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Conv2d(n_fmaps*2, n_fmaps*4, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.Conv2d(n_fmaps*2, n_fmaps*4, kernel_size=4, stride=2, padding=1 ),
             nn.BatchNorm2d(n_fmaps*4),
             nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Conv2d(n_fmaps*4, n_fmaps*8, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.Conv2d(n_fmaps*4, n_fmaps*8, kernel_size=4, stride=2, padding=1 ),
             nn.BatchNorm2d(n_fmaps*8),
             nn.LeakyReLU(0.2, inplace=True),
 
-            nn.Conv2d(n_fmaps*8, 1, kernel_size=4, stride=1, padding=0, bias=False),
+            nn.Conv2d(n_fmaps*8, 1, kernel_size=4, stride=1, padding=0 ),
             nn.Sigmoid()
         ).to( self._device )
 
-        self.init_weight()
-
-        return
-
-    def init_weight( self ):
-        """
-        独自の重みの初期化処理
-        """
+        weights_init( self )
         return
 
     def forward(self, x, y):
@@ -147,6 +149,7 @@ class Discriminator( nn.Module ):
         """
         output = torch.cat( [x, y], dim=1 )
         output = self._layer( output )
+        output = output.squeeze()
         return output
 
 
@@ -462,12 +465,12 @@ class ConditionalDCGAN( object ):
                 #====================================================
                 # 生成器 G に入力するノイズ z
                 # 生成器の更新の前にも。ノイズを新しく生成しなおす必要があり。
-                input_noize_z = torch.rand( (self._batch_size, self._n_input_noize_z, 1, 1) ).to( self._device )
+                #input_noize_z = torch.rand( (self._batch_size, self._n_input_noize_z, 1, 1) ).to( self._device )
 
                 # 生成器に入力するクラスラベル y（＝偽のラベル情報）
                 # 生成器の更新の前にも、ノイズを新しく生成しなおす。
-                y_fake_label = torch.randint( self._n_classes, (self._batch_size,), dtype = torch.long ).to( self._device )
-                y_fake_one_hot = eye_tsr[y_fake_label].view( -1, self._n_classes, 1, 1 ).to( self._device )     # shape= [batch_size, n_classes,1,1]
+                #y_fake_label = torch.randint( self._n_classes, (self._batch_size,), dtype = torch.long ).to( self._device )
+                #y_fake_one_hot = eye_tsr[y_fake_label].view( -1, self._n_classes, 1, 1 ).to( self._device )     # shape= [batch_size, n_classes,1,1]
 
                 #----------------------------------------------------
                 # 勾配を 0 に初期化

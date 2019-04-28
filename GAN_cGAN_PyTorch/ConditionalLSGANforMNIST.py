@@ -16,6 +16,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torchvision.utils import save_image
 
+
 def weights_init( model ):
     for m in model.modules():
         if isinstance(m, nn.Conv2d):
@@ -137,11 +138,13 @@ class Discriminator( nn.Module ):
             nn.BatchNorm1d(1024),
             nn.LeakyReLU(0.2),
             nn.Linear(1024, 1),
-            nn.Sigmoid(),
+            #nn.Sigmoid(),
         ).to( self._device )
 
         weights_init( self )
+
         return
+
 
     def forward(self, x, y):
         output = torch.cat( [x, y], dim=1 )
@@ -149,13 +152,14 @@ class Discriminator( nn.Module ):
         output = output.view(-1, 128 * 7 * 7)
         output = self._fc_layer(output)
         output = output.squeeze()
+        #output = output.mean()
         return output
 
 
-class ConditionalDCGANforMNIST( object ):
+class ConditionalLSGANforMNIST( object ):
     """
     Conditional GAN（cGAN）を表すクラス
-    ・ネットワーク構成は、DCGAN ベース
+    ・ネットワーク構成と損失関数は、LSGAN ベース
     ・MNIST のデータ構造に最適化されている。
     --------------------------------------------
     [public]
@@ -218,7 +222,7 @@ class ConditionalDCGANforMNIST( object ):
 
     def print( self, str = "" ):
         print( "----------------------------------" )
-        print( "ConditionalDCGANfroMNIST" )
+        print( "ConditionalLSGANfroMNIST" )
         print( self )
         print( str )
         print( "_device :", self._device )
@@ -277,11 +281,8 @@ class ConditionalDCGANforMNIST( object ):
         [Args]
         [Returns]
         """
-        # Binary Cross Entropy
-        # L(x,y) = - { y*log(x) + (1-y)*log(1-x) }
-        # x,y の設定は、後の fit() 内で行う。
-        self._loss_fn = nn.BCELoss()
-
+        # L2
+        self._loss_fn = nn.MSELoss()
         return
 
     def optimizer( self ):
@@ -490,11 +491,11 @@ class ConditionalDCGANforMNIST( object ):
             if( epoch % n_sava_step == 0 ):
                 images = self.generate_fixed_images( b_transformed = False )
                 self._images_historys.append( images )
-                save_image( tensor = images, filename = "cGANforMNIST_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
+                save_image( tensor = images, filename = "cLSGANforMNIST_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
 
                 for i in range( self._n_classes ):
                     images_i = self.generate_fixed_images_with_lable( y_label = i, b_transformed = False )
-                    save_image( tensor = images_i, filename = "cGANforMNIST_Image{}_epoches{}_iters{}.png".format( i, epoch, iterations ) )
+                    save_image( tensor = images_i, filename = "cLSGANforMNIST_Image{}_epoches{}_iters{}.png".format( i, epoch, iterations ) )
 
 
         print("Finished Training Loop.")

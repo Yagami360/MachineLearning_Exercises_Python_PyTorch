@@ -17,6 +17,8 @@ from torchvision.utils import save_image
 
 # 自作モジュール
 from ConditionalDCGANforMNIST import ConditionalDCGANforMNIST
+from ConditionalLSGANforMNIST import ConditionalLSGANforMNIST
+
 
 #--------------------------------
 # 設定可能な定数
@@ -26,7 +28,10 @@ DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
 DATASET_PATH = "./dataset"    # 学習用データセットへのパス
 NUM_SAVE_STEP = 1             # 自動生成画像の保存間隔（エポック単位）
 
-NUM_EPOCHES = 20              # エポック数（学習回数）
+#GAN_BASELINE = "DCGAN"       # GAN のベースラインアルゴリズム（"DCGAN" or "LSGAN"）
+GAN_BASELINE = "LSGAN"        # GAN のベースラインアルゴリズム（"DCGAN" or "LSGAN"）
+
+NUM_EPOCHES = 10              # エポック数（学習回数）
 LEARNING_RATE = 0.00005       # 学習率
 NUM_FEATURE_MAPS = 64         # 特徴マップの枚数
 BATCH_SIZE = 128              # ミニバッチサイズ
@@ -50,6 +55,7 @@ def main():
     print( "----------------------------------------------" )
     print( "開始時間：", datetime.now() )
     print( "DEVICE : ", DEVICE )
+    print( "GAN_BASELINE : ", GAN_BASELINE )
     print( "NUM_EPOCHES : ", NUM_EPOCHES )
     print( "LEARNING_RATE : ", LEARNING_RATE )
     print( "BATCH_SIZE : ", BATCH_SIZE )
@@ -142,14 +148,25 @@ def main():
     #======================================================================
     # モデルの構造を定義する。
     #======================================================================
-    model = ConditionalDCGANforMNIST(
-            device = device,
-            n_epoches = NUM_EPOCHES,
-            learing_rate = LEARNING_RATE,
-            batch_size = BATCH_SIZE,
-            n_input_noize_z = NUM_INPUT_NOIZE_Z
-    )
-
+    if( GAN_BASELINE == "DCGAN" ):
+        model = ConditionalDCGANforMNIST(
+                device = device,
+                n_epoches = NUM_EPOCHES,
+                learing_rate = LEARNING_RATE,
+                batch_size = BATCH_SIZE,
+                n_input_noize_z = NUM_INPUT_NOIZE_Z
+        )
+    elif( GAN_BASELINE == "LSGAN" ):
+        model = ConditionalLSGANforMNIST(
+                device = device,
+                n_epoches = NUM_EPOCHES,
+                learing_rate = LEARNING_RATE,
+                batch_size = BATCH_SIZE,
+                n_input_noize_z = NUM_INPUT_NOIZE_Z
+        )
+    else:
+        print( "Invalid gan baseline" )
+        
     model.print( "after init()" )
     #print( "model.device() :", model.device )
 
