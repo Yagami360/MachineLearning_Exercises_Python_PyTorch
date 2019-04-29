@@ -30,8 +30,8 @@ DATASET = "MNIST"             # データセットの種類（"MNIST" or "CIFAR-
 DATASET_PATH = "./dataset"    # 学習用データセットへのパス
 NUM_SAVE_STEP = 1             # 自動生成画像の保存間隔（エポック単位）
 
-#GAN_BASELINE = "DCGAN"       # GAN のベースラインアルゴリズム（"DCGAN" or "LSGAN"）
-GAN_BASELINE = "LSGAN"        # GAN のベースラインアルゴリズム（"DCGAN" or "LSGAN"）
+GAN_BASELINE = "DCGAN"       # GAN のベースラインアルゴリズム（"DCGAN" or "LSGAN"）
+#GAN_BASELINE = "LSGAN"        # GAN のベースラインアルゴリズム（"DCGAN" or "LSGAN"）
 
 NUM_EPOCHES = 10              # エポック数（学習回数）
 LEARNING_RATE = 0.00005       # 学習率
@@ -45,7 +45,7 @@ NUM_CLASSES = 10              # クラスラベル y の次元数
 
 def main():
     """
-    cGAN（DCGANベース）による画像の自動生成
+    cGAN（DCGAN or LSGANベース）による画像の自動生成
     ・学習用データセットは、MNIST / CIFAR-10
     """
     print("Start main()")
@@ -279,7 +279,7 @@ def main():
     """
     images = model.generate_images( n_samples = 64, b_transformed = True )
     scipy.misc.imsave( 
-        "CGAN_Image_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE ),
+        "cGAN_Image_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE ),
         np.vstack(
             np.array( [ np.hstack(img) for img in images ] )
         )

@@ -50,6 +50,7 @@ WEIGHT_CLAMP_LOWER = - 0.01   # 重みクリッピングの下限値
 WEIGHT_CLAMP_UPPER = 0.01     # 重みクリッピングの上限値
 ```
 
+<!--
 ```python
 [main_mnist.py]
 #DEVICE = "CPU"               # 使用デバイス ("CPU" or "GPU")
@@ -66,7 +67,7 @@ NUM_CRITIC = 5                # クリティックの更新回数
 WEIGHT_CLAMP_LOWER = - 0.01   # 重みクリッピングの下限値
 WEIGHT_CLAMP_UPPER = 0.01     # 重みクリッピングの上限値
 ```
-
+-->
 
 <a id="コード説明＆実行結果"></a>
 
@@ -133,6 +134,7 @@ WEIGHT_CLAMP_UPPER = 0.01     # 重みクリッピングの上限値
 
 ---
 
+<!--
 ### ◎ コードの実行結果：`main_mnist.py`
 
 |パラメータ名|値（実行条件１）|
@@ -184,8 +186,7 @@ WEIGHT_CLAMP_UPPER = 0.01     # 重みクリッピングの上限値
 
 - エポック数 : 10 / イテレーション回数 : 9370<br>
 ![WGANforMNIST_Image_epoches9_iters9370](https://user-images.githubusercontent.com/25688193/56844067-5555da00-68e5-11e9-9bd9-d010db367729.png)<br>
-
----
+-->
 
 
 ## ■ デバッグ情報

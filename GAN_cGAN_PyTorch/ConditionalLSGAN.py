@@ -392,9 +392,6 @@ class ConditionalLSGAN( object ):
                 y_real_one_hot = eye_tsr[y_real_label].view( -1, self._n_classes, 1, 1 ).to( self._device )
                 y_real_image_label = y_real_one_hot.expand( self._batch_size, self._n_classes, images.shape[2], images.shape[3] ).to( self._device )
 
-                #import matplotlib.pyplot as plt
-                #plt.imshow( y_real_image_label[0,0,:,:] )
-                #plt.show()
                 #====================================================
                 # 識別器 D の fitting 処理
                 #====================================================
@@ -406,6 +403,7 @@ class ConditionalLSGAN( object ):
                 # 識別器と生成器の更新の前にノイズを新しく生成しなおす。
                 y_fake_label = torch.randint( self._n_classes, (self._batch_size,), dtype = torch.long ).to( self._device )
                 y_fake_one_hot = eye_tsr[y_fake_label].view( -1, self._n_classes, 1, 1 ).to( self._device )     # shape= [batch_size, n_classes,1,1]
+                y_fake_image_label = y_fake_one_hot.expand( self._batch_size, self._n_classes, images.shape[2], images.shape[3] ).to( self._device )
 
                 #----------------------------------------------------
                 # 勾配を 0 に初期化
@@ -428,7 +426,7 @@ class ConditionalLSGAN( object ):
                 #print( "G_z :", G_z )
 
                 # D( G(z) ) : 偽物画像を入力したときの識別器の出力 (0.0 ~ 1.0)
-                D_G_z = self._dicriminator( G_z, y_real_image_label )
+                D_G_z = self._dicriminator( G_z.detach(), y_fake_image_label.detach() )
                 #print( "D_G_z.size() :", D_G_z.size() )
                 #print( "D_G_z :", D_G_z )
 
@@ -467,12 +465,13 @@ class ConditionalLSGAN( object ):
                 #====================================================
                 # 生成器 G に入力するノイズ z
                 # 生成器の更新の前にも。ノイズを新しく生成しなおす必要があり。
-                #input_noize_z = torch.rand( (self._batch_size, self._n_input_noize_z, 1, 1) ).to( self._device )
+                input_noize_z = torch.rand( (self._batch_size, self._n_input_noize_z, 1, 1) ).to( self._device )
 
                 # 生成器に入力するクラスラベル y（＝偽のラベル情報）
                 # 生成器の更新の前にも、ノイズを新しく生成しなおす。
-                #y_fake_label = torch.randint( self._n_classes, (self._batch_size,), dtype = torch.long ).to( self._device )
-                #y_fake_one_hot = eye_tsr[y_fake_label].view( -1, self._n_classes, 1, 1 ).to( self._device )     # shape= [batch_size, n_classes,1,1]
+                y_fake_label = torch.randint( self._n_classes, (self._batch_size,), dtype = torch.long ).to( self._device )
+                y_fake_one_hot = eye_tsr[y_fake_label].view( -1, self._n_classes, 1, 1 ).to( self._device )     # shape= [batch_size, n_classes,1,1]
+                y_fake_image_label = y_fake_one_hot.expand( self._batch_size, self._n_classes, images.shape[2], images.shape[3] ).to( self._device )
 
                 #----------------------------------------------------
                 # 勾配を 0 に初期化
@@ -490,7 +489,7 @@ class ConditionalLSGAN( object ):
                 #print( "G_z :", G_z )
 
                 # D( G(z) ) : 偽物画像を入力したときの識別器の出力 (0.0 ~ 1.0)
-                D_G_z = self._dicriminator( G_z, y_real_image_label )
+                D_G_z = self._dicriminator( G_z, y_fake_image_label )
                 #print( "D_G_z.size() :", D_G_z.size() )
 
                 #----------------------------------------------------
