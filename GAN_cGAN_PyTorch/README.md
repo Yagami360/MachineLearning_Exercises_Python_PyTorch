@@ -63,7 +63,7 @@ NUM_CLASSES = 10              # クラスラベル y の次元数
 |エポック数：`NUM_EPOCHES`|10|←|
 |バッチサイズ：`BATCH_SIZE`|128|←|
 |最適化アルゴリズム|Adam|←|
-|学習率：`LEARNING_RATE`|0.0002|←|
+|学習率：`LEARNING_RATE`|0.00005|←|
 |減衰率 beta1|0.5|←|
 |生成器に入力するノイズ z の次数：`NUM_INPUT_NOIZE_Z`|100|100|
 |入力画像のサイズ：`IMAGE_SIZE`|64|64|
@@ -72,9 +72,86 @@ NUM_CLASSES = 10              # クラスラベル y の次元数
 |クラスラベルの個数：`NUM_CLASSES`|10|10|x|
 
 #### ☆ 損失関数のグラフ（実行条件１）：`main.py`
+
+- 学習率：0.0002
 ![cGAN_Loss_epoches10_lr0 0002_batchsize128](https://user-images.githubusercontent.com/25688193/56874668-81ed2b80-6a76-11e9-925d-f6e02e8cda5d.png)<br>
 
+- 学習率：0.00005
+![cGAN_Loss_epoches10_lr5e-05_batchsize128](https://user-images.githubusercontent.com/25688193/56875412-bd3e2900-6a7b-11e9-894a-4ed09480bfcb.png)<br>
+
+
 #### ☆ 生成器から生成された自動生成画像（実行条件１）：`main.py`
+
+##### 学習率：0.00005
+
+- エポック数 : 1 / イテレーション回数：468<br>
+![cDCGAN_Image_epoches0_iters468](https://user-images.githubusercontent.com/25688193/56875710-8bc65d00-6a7d-11e9-847e-a91e5ec79b93.png)<br>
+    - 数字０（クラスラベル０）<br>
+        ![cDCGAN_Image0_epoches0_iters468](https://user-images.githubusercontent.com/25688193/56875821-1909b180-6a7e-11e9-82ce-62a636af6ea8.png)<br>
+    - 数字１（クラスラベル１）<br>
+        ![cDCGAN_Image1_epoches0_iters468](https://user-images.githubusercontent.com/25688193/56875825-19a24800-6a7e-11e9-920c-af5a1a63cd52.png)<br>
+    - 数字２（クラスラベル２）<br>
+        ![cDCGAN_Image2_epoches0_iters468](https://user-images.githubusercontent.com/25688193/56875828-1ad37500-6a7e-11e9-88ab-7a6d03fc6ab8.png)<br>
+    - 数字３（クラスラベル３）<br>
+        ![cDCGAN_Image3_epoches0_iters468](https://user-images.githubusercontent.com/25688193/56875833-1eff9280-6a7e-11e9-9098-1ec34941e708.png)<br>
+
+- エポック数 : 2 / イテレーション回数：936<br>
+![cDCGAN_Image_epoches1_iters936](https://user-images.githubusercontent.com/25688193/56875711-8c5ef380-6a7d-11e9-87b9-26e117374e8e.png)<br>
+    - 数字０（クラスラベル０）<br>
+        ![cDCGAN_Image0_epoches1_iters936](https://user-images.githubusercontent.com/25688193/56875823-1909b180-6a7e-11e9-8159-18200c88ead3.png)<br>
+    - 数字１（クラスラベル１）<br>
+        ![cDCGAN_Image1_epoches1_iters936](https://user-images.githubusercontent.com/25688193/56875826-1a3ade80-6a7e-11e9-983d-8c2fe003d91d.png)<br>
+    - 数字２（クラスラベル２）<br>
+        ![cDCGAN_Image2_epoches1_iters936](https://user-images.githubusercontent.com/25688193/56875831-1d35cf00-6a7e-11e9-90ba-fd04e1851d4f.png)<br>
+    - 数字３（クラスラベル３）<br>
+        ![cDCGAN_Image3_epoches1_iters936](https://user-images.githubusercontent.com/25688193/56875834-1f982900-6a7e-11e9-991b-6b6b5c2ba28d.png)<br>
+
+- エポック数 : 3 / イテレーション回数：1404<br>
+![cDCGAN_Image_epoches2_iters1404](https://user-images.githubusercontent.com/25688193/56875712-8c5ef380-6a7d-11e9-9968-3818b8962fca.png)<br>
+
+- エポック数 : 4 / イテレーション回数：1872<br>
+![cDCGAN_Image_epoches3_iters1872](https://user-images.githubusercontent.com/25688193/56875713-8c5ef380-6a7d-11e9-98fd-4fd0fc91e1ff.png)<br>
+
+- エポック数 : 5 / イテレーション回数 : 2340<br>
+![cDCGAN_Image_epoches4_iters2340](https://user-images.githubusercontent.com/25688193/56875714-8cf78a00-6a7d-11e9-83f3-865c738a9b0b.png)<br>
+
+- エポック数 : 6 / イテレーション回数 : 2808<br>
+![cDCGAN_Image_epoches5_iters2808](https://user-images.githubusercontent.com/25688193/56875715-8d902080-6a7d-11e9-8a4c-5d8146a60409.png)<br>
+
+- エポック数 : 7 / イテレーション回数 : 3276<br>
+![cDCGAN_Image_epoches6_iters3276](https://user-images.githubusercontent.com/25688193/56875716-8d902080-6a7d-11e9-96b0-ac452d8b406c.png)<br>
+
+- エポック数 : 8 / イテレーション回数 : 3744<br>
+![cDCGAN_Image_epoches7_iters3744](https://user-images.githubusercontent.com/25688193/56875718-8ec14d80-6a7d-11e9-88c7-b230e708e743.png)<br>
+
+- エポック数 : 9 / イテレーション回数 : 4212<br>
+![cDCGAN_Image_epoches8_iters4212](https://user-images.githubusercontent.com/25688193/56875719-8ec14d80-6a7d-11e9-9754-544240a097ed.png)<br>
+
+- エポック数 : 10 / イテレーション回数 : 4680<br>
+![cDCGAN_Image_epoches9_iters4680](https://user-images.githubusercontent.com/25688193/56875708-8bc65d00-6a7d-11e9-8483-f6b92f240bda.png)<br>
+    - 数字０（クラスラベル０）<br>
+        ![cDCGAN_Image0_epoches9_iters4680](https://user-images.githubusercontent.com/25688193/56875824-19a24800-6a7e-11e9-997e-eecaa8ad8250.png)<br>
+    - 数字１（クラスラベル１）<br>
+        ![cDCGAN_Image1_epoches9_iters4680](https://user-images.githubusercontent.com/25688193/56875827-1ad37500-6a7e-11e9-896d-bc0473937aa5.png)<br>
+    - 数字２（クラスラベル２）<br>
+        ![cDCGAN_Image2_epoches9_iters4680](https://user-images.githubusercontent.com/25688193/56875832-1e66fc00-6a7e-11e9-86e1-c31983a3c943.png)<br>
+    - 数字３（クラスラベル３）<br>
+        ![cDCGAN_Image3_epoches9_iters4680](https://user-images.githubusercontent.com/25688193/56875909-aea54100-6a7e-11e9-8b51-3ad5f4a97287.png)<br>
+    - 数字４（クラスラベル４）<br>
+        ![cDCGAN_Image4_epoches9_iters4680](https://user-images.githubusercontent.com/25688193/56875910-aea54100-6a7e-11e9-8e03-3baee665c7da.png)<br>
+    - 数字５（クラスラベル５）<br>
+        ![cDCGAN_Image5_epoches9_iters4680](https://user-images.githubusercontent.com/25688193/56875911-aea54100-6a7e-11e9-82b3-da478a62f157.png)<br>
+    - 数字６（クラスラベル６）<br>
+        ![cDCGAN_Image6_epoches9_iters4680](https://user-images.githubusercontent.com/25688193/56875912-af3dd780-6a7e-11e9-80f9-22392cd7ff87.png)<br>
+    - 数字７（クラスラベル７）<br>
+        ![cDCGAN_Image7_epoches9_iters4680](https://user-images.githubusercontent.com/25688193/56875915-af3dd780-6a7e-11e9-98c7-6c0ca8381c3a.png)<br>
+    - 数字８（クラスラベル８）<br>
+        ![cDCGAN_Image8_epoches9_iters4680](https://user-images.githubusercontent.com/25688193/56875916-afd66e00-6a7e-11e9-9532-9e0e69ee296e.png)<br>
+    - 数字９（クラスラベル９）<br>
+        ![cDCGAN_Image9_epoches9_iters4680](https://user-images.githubusercontent.com/25688193/56875918-afd66e00-6a7e-11e9-9004-bf187b732322.png)<br>
+
+
+##### 学習率：0.0002
 
 - エポック数 : 1 / イテレーション回数：468<br>
 ![cDCGAN_Image_epoches0_iters468](https://user-images.githubusercontent.com/25688193/56874420-b7911500-6a74-11e9-8559-133cddd19f3a.png)<br>
