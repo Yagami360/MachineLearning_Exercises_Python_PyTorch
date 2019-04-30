@@ -15,6 +15,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+from torchvision.utils import save_image
 
 
 class UNet( nn.Module ):
@@ -31,7 +32,7 @@ class UNet( nn.Module ):
         device,
         in_dim = 3,
         out_dim = 3,
-        n_channels = 64
+        n_fmaps = 64
     ):
         super( UNet, self ).__init__()
         self._device = device
@@ -56,33 +57,33 @@ class UNet( nn.Module ):
             return model
 
         # Encoder（ダウンサンプリング）
-        self._conv1 = conv_block( in_dim, out_dim )
-        self._pool1 = nn.MaxPool2d( kernel_size=2, stride=2, padding=0 )
-        self._conv2 = conv_block( n_channels*1, n_channels*2 )
-        self._pool1 = nn.MaxPool2d( kernel_size=2, stride=2, padding=0 )
-        self._conv2 = conv_block( n_channels*2, n_channels*4 )
-        self._pool1 = nn.MaxPool2d( kernel_size=2, stride=2, padding=0 )
-        self._conv2 = conv_block( n_channels*4, n_channels*8 )
-        self._pool1 = nn.MaxPool2d( kernel_size=2, stride=2, padding=0 )
+        self._conv1 = conv_block( in_dim, n_fmaps ).to( self._device )
+        self._pool1 = nn.MaxPool2d( kernel_size=2, stride=2, padding=0 ).to( self._device )
+        self._conv2 = conv_block( n_fmaps*1, n_fmaps*2 ).to( self._device )
+        self._pool2 = nn.MaxPool2d( kernel_size=2, stride=2, padding=0 ).to( self._device )
+        self._conv3 = conv_block( n_fmaps*2, n_fmaps*4 ).to( self._device )
+        self._pool3 = nn.MaxPool2d( kernel_size=2, stride=2, padding=0 ).to( self._device )
+        self._conv4 = conv_block( n_fmaps*4, n_fmaps*8 ).to( self._device )
+        self._pool4 = nn.MaxPool2d( kernel_size=2, stride=2, padding=0 ).to( self._device )
 
         #
-        self._bridge=conv_block( n_channels*8, n_channels*16 )
+        self._bridge=conv_block( n_fmaps*8, n_fmaps*16 ).to( self._device )
 
         # Decoder（アップサンプリング）
-        self._dconv1 = dconv_block( n_channels*16, n_channels*8 )
-        self._up1 = conv_block( n_channels*16, n_channels*8 )
-        self._dconv2 = dconv_block( n_channels*8, n_channels*4 )
-        self._up2 = conv_block( n_channels*8, n_channels*4 )
-        self._dconv3 = dconv_block( n_channels*4,n_channels*2 )
-        self._up3 = conv_block( n_channels*4, n_channels*2 )
-        self._dconv4 = dconv_block( n_channels*2, n_channels*1 )
-        self._up4 = conv_block( n_channels*2, n_channels*1 )
+        self._dconv1 = dconv_block( n_fmaps*16, n_fmaps*8 ).to( self._device )
+        self._up1 = conv_block( n_fmaps*16, n_fmaps*8 ).to( self._device )
+        self._dconv2 = dconv_block( n_fmaps*8, n_fmaps*4 ).to( self._device )
+        self._up2 = conv_block( n_fmaps*8, n_fmaps*4 ).to( self._device )
+        self._dconv3 = dconv_block( n_fmaps*4, n_fmaps*2 ).to( self._device )
+        self._up3 = conv_block( n_fmaps*4, n_fmaps*2 ).to( self._device )
+        self._dconv4 = dconv_block( n_fmaps*2, n_fmaps*1 ).to( self._device )
+        self._up4 = conv_block( n_fmaps*2, n_fmaps*1 ).to( self._device )
 
         # 出力層
         self._out_layer = nn.Sequential(
-		    nn.Conv2d( n_channels, out_dim, 3, 1, 1 ),
+		    nn.Conv2d( n_fmaps, out_dim, 3, 1, 1 ),
 		    nn.Tanh(),
-		)
+		).to( self._device )
 
         return
 
@@ -105,20 +106,20 @@ class UNet( nn.Module ):
         bridge = self._bridge( pool4 )
 
         # Decoder（アップサンプリング）& skip connection
-        trans1 = self._dconv1(bridge)
-        concat1 = torch.cat( [trans1,down4], dim=1 )
+        dconv1 = self._dconv1(bridge)
+        concat1 = torch.cat( [dconv1,conv4], dim=1 )
         up1 = self._up1(concat1)
 
-        trans2 = self._dconv2(up1)
-        concat2 = torch.cat( [trans2,down3], dim=1 )
+        dconv2 = self._dconv2(up1)
+        concat2 = torch.cat( [dconv2,conv3], dim=1 )
 
         up2 = self._up2(concat2)
-        trans3 = self._dconv3(up2)
-        concat3 = torch.cat( [trans3,down2], dim=1 )
+        dconv3 = self._dconv3(up2)
+        concat3 = torch.cat( [dconv3,conv2], dim=1 )
 
         up3 = self._up3(concat3)
-        trans4 = self._dconv4(up3)
-        concat4 = torch.cat( [trans4,down1], dim=1 )
+        dconv4 = self._dconv4(up3)
+        concat4 = torch.cat( [dconv4,conv1], dim=1 )
 
         up4 = self._up4(concat4)
 
@@ -139,7 +140,6 @@ class SemanticSegmentationwithUNet( object ):
         _n_epoches : <int> エポック数（学習回数）
         _learnig_rate : <float> 最適化アルゴリズムの学習率
         _batch_size : <int> ミニバッチ学習時のバッチサイズ
-        _n_channels : <int> 入力画像のチャンネル数
         _n_fmaps : <int> 特徴マップの枚数
 
         _model : <nn.Module> UNet のネットワーク構成
@@ -153,12 +153,14 @@ class SemanticSegmentationwithUNet( object ):
         device,
         n_epoches = 50,
         learing_rate = 0.0001,
-        batch_size = 64
+        batch_size = 64,
+        n_fmaps = 64
     ):
         self._device = device
         self._n_epoches = n_epoches
         self._learning_rate = learing_rate
         self._batch_size = batch_size
+        self._n_fmaps = n_fmaps
 
         self._model = None
         self._loss_fn = None
@@ -179,6 +181,7 @@ class SemanticSegmentationwithUNet( object ):
         print( "_n_epoches :", self._n_epoches )
         print( "_learning_rate :", self._learning_rate )
         print( "_batch_size :", self._batch_size )
+        print( "_n_fmaps :", self._n_fmaps )
 
         print( "_model :", self._model )
         print( "_loss_fn :", self._loss_fn )
@@ -197,7 +200,9 @@ class SemanticSegmentationwithUNet( object ):
         [Returns]
         """
         self._model = UNet(
-            device = self._device
+            device = self._device,
+            in_dim = 3, out_dim = 3,
+            n_fmaps = self._n_fmaps
         )
         return
 
@@ -207,7 +212,7 @@ class SemanticSegmentationwithUNet( object ):
         [Args]
         [Returns]
         """
-        self._loss_fn = nn.BCELoss()
+        self._loss_fn = nn.MSELoss()
         return
 
     def optimizer( self ):
@@ -257,7 +262,56 @@ class SemanticSegmentationwithUNet( object ):
                 iterations += 1
 
                 # ミニバッチデータを GPU へ転送
-                images = images.to( self._device )
+                # shape = torch.Size([64, 3, 256, 512])
+                #images = images.to( self._device )
+
+                # 学習用データには、左側に衛星画像、右側に地図画像が入っているので、chunk で切り分ける
+                # torch.chunk() : 渡したTensorを指定した個数に切り分ける。
+                satel_image, map_image = torch.chunk( images, chunks=2, dim=3 )
+                #satel_image = satel_image.to( self._device )
+                #map_image = map_image.to( self._device )
+                #satel_image.requires_grad_()
+                #map_image.requires_grad_()
+
+                #----------------------------------------------------
+                # 勾配を 0 に初期化
+                # （この初期化処理が必要なのは、勾配がイテレーション毎に加算される仕様のため）
+                #----------------------------------------------------
+                self._optimizer.zero_grad()
+
+                #----------------------------------------------------
+                # 学習用データをモデルに流し込む
+                # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
+                #----------------------------------------------------
+                output = self._model( satel_image )
+                #print( "output.size() :", output.size() )   # torch.Size([1, 3, 256, 256])
+
+                #----------------------------------------------------
+                # 損失関数を計算する
+                # 出力と教師データを損失関数に設定し、誤差 loss を計算
+                # この設定は、損失関数を __call__ をオーバライト
+                # loss は Pytorch の Variable として帰ってくるので、これをloss.data[0]で数値として見る必要があり
+                #----------------------------------------------------
+                loss = self._loss_fn( output, map_image )
+                print( "loss :", loss.item() )
+                self._loss_historys.append( loss.item() )
+
+                #----------------------------------------------------
+                # 誤差逆伝搬
+                #----------------------------------------------------
+                loss.backward()
+
+                #----------------------------------------------------
+                # backward() で計算した勾配を元に、設定した optimizer に従って、重みを更新
+                #----------------------------------------------------
+                self._optimizer.step()
+
+            #----------------------------------------------------
+            # 学習過程での自動生成画像
+            #----------------------------------------------------
+            # 特定のエポックでGeneratorから画像を保存
+            if( epoch % n_sava_step == 0 ):
+                save_image( tensor = output.cpu(), filename = "UNet_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
 
         print("Finished Training Loop.")
         return

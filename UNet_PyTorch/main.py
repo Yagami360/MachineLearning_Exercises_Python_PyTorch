@@ -21,16 +21,15 @@ from UNet import SemanticSegmentationwithUNet
 #--------------------------------
 # 設定可能な定数
 #--------------------------------
-#DEVICE = "CPU"               # 使用デバイス ("CPU" or "GPU")
-DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
-DATASET = ""
-DATASET_PATH = "./dataset"    # 学習用データセットへのパス
+DEVICE = "CPU"               # 使用デバイス ("CPU" or "GPU")
+#DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
+DATASET_PATH = "./maps"       # 学習用データセットへのパス
 NUM_SAVE_STEP = 1             # 自動生成画像の保存間隔（エポック単位）
 
-NUM_EPOCHES = 10               # エポック数（学習回数）
-LEARNING_RATE = 0.00005       # 学習率 (Default:0.00005)
-BATCH_SIZE = 64               # ミニバッチサイズ
-IMAGE_SIZE = 64               # 入力画像のサイズ（pixel単位）
+NUM_EPOCHES = 10              # エポック数（学習回数）
+LEARNING_RATE = 0.0002        # 学習率 (Default:0.0002)
+BATCH_SIZE = 1                # ミニバッチサイズ
+IMAGE_SIZE = 256              # 入力画像のサイズ（pixel単位）
 NUM_CHANNELS = 1              # 入力画像のチャンネル数
 NUM_FEATURE_MAPS = 64         # 特徴マップの枚数
 
@@ -55,7 +54,7 @@ def main():
     print( "LEARNING_RATE : ", LEARNING_RATE )
     print( "BATCH_SIZE : ", BATCH_SIZE )
     print( "IMAGE_SIZE : ", IMAGE_SIZE )
-    print( "NUM_CHANNELS : ", NUM_CHANNELS )
+    print( "NUM_FEATURE_MAPS : ", NUM_FEATURE_MAPS )
 
     #===================================
     # 実行 Device の設定
@@ -88,66 +87,24 @@ def main():
     # データの前処理
     #======================================================================
     # データをロードした後に行う各種前処理の関数を構成を指定する。
-    if( DATASET == "MNIST" ):
-        transform = transforms.Compose(
-            [
-                transforms.Resize(IMAGE_SIZE),
-                transforms.ToTensor(),   # Tensor に変換]
-                transforms.Normalize((0.5,), (0.5,)),   # 1 channel 分
-            ]
-        )
-
-    elif( DATASET == "CIFAR-10" ):
-        transform = transforms.Compose(
-            [
-                transforms.Resize(IMAGE_SIZE),
-                transforms.ToTensor(),   # Tensor に変換
-                transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)),
-            ]
-        )
-    else:
-        print( "Warning: Invalid dataset" )
+    transform = transforms.Compose(
+        [
+            transforms.Resize(IMAGE_SIZE),
+            transforms.CenterCrop( size = (IMAGE_SIZE, IMAGE_SIZE*2) ),
+            transforms.ToTensor(),   # Tensor に変換]
+            #transforms.Normalize((0.5,), (0.5,)),   # 1 channel 分
+        ]
+    )
 
     #---------------------------------------------------------------
     # data と label をセットにした TensorDataSet の作成
     #---------------------------------------------------------------
-    if( DATASET == "MNIST" ):
-        ds_train = torchvision.datasets.MNIST(
-            root = DATASET_PATH,
-            train = True,
-            transform = transform,      # transforms.Compose(...) で作った前処理の一連の流れ
-            target_transform = None,    
-            download = True,
-        )
-
-        ds_test = torchvision.datasets.MNIST(
-            root = DATASET_PATH,
-            train = False,
-            transform = transform,
-            target_transform = None,
-            download = True
-        )
-    elif( DATASET == "CIFAR-10" ):
-        ds_train = torchvision.datasets.CIFAR10(
-            root = DATASET_PATH,
-            train = True,
-            transform = transform,      # transforms.Compose(...) で作った前処理の一連の流れ
-            target_transform = None,    
-            download = True
-        )
-
-        ds_test = torchvision.datasets.CIFAR10(
-            root = DATASET_PATH,
-            train = False,
-            transform = transform,
-            target_transform = None,
-            download = True
-        )
-    else:
-        print( "WARNING: Inavlid dataset" )
-
-    #print( "ds_train :", ds_train ) # MNIST : torch.Size([60000, 28, 28]) , CIFAR-10 : (50000, 32, 32, 3)
-    #print( "ds_test :", ds_test )
+    dataset = torchvision.datasets.ImageFolder(
+        root = DATASET_PATH,
+        transform = transform,
+        target_transform = None
+    )
+    print( "dataset :", dataset )
 
     #---------------------------------------------------------------
     # TensorDataset → DataLoader への変換
@@ -155,25 +112,12 @@ def main():
     # DataLoader クラスは、dataset と sampler クラスを持つ。
     # sampler クラスには、ランダムサンプリングや重点サンプリングなどがある
     #---------------------------------------------------------------
-    """
-    dloader_train = DataLoader(
-        dataset = ds_train,
+    dloader = DataLoader(
+        dataset = dataset,
         batch_size = BATCH_SIZE,
         shuffle = True
     )
-
-    dloader_test = DataLoader(
-        dataset = ds_test,
-        batch_size = BATCH_SIZE,
-        shuffle = False
-    )
-    """
-    # [MNIST]
-    # Number of datapoints: 60000
-    # dloader_train.datset
-    # dloader_train.sampler = <RandomSampler, len() = 60000>
-    #print( "dloader_train :", dloader_train )
-    #print( "dloader_test :", dloader_test )
+    print( "dloader :", dloader )
     
     #======================================================================
     # モデルの構造を定義する。
@@ -182,7 +126,8 @@ def main():
         device = device,
         n_epoches = NUM_EPOCHES,
         learing_rate = LEARNING_RATE,
-        batch_size = BATCH_SIZE
+        batch_size = BATCH_SIZE,
+        n_fmaps = NUM_FEATURE_MAPS
     )
 
     model.print( "after init()" )
@@ -200,7 +145,7 @@ def main():
     #======================================================================
     # モデルの学習フェイズ
     #======================================================================
-    #model.fit( dloader = dloader_train, n_sava_step = NUM_SAVE_STEP )
+    model.fit( dloader = dloader, n_sava_step = NUM_SAVE_STEP )
 
     #===================================
     # 学習結果の描写処理
@@ -208,18 +153,16 @@ def main():
     #-----------------------------------
     # 損失関数の plot
     #-----------------------------------
-    """
     plt.clf()
     plt.plot(
-        range( 0, len(model.loss_G_history) ), model.loss_G_history,
-        label = "loss : Generator",
+        range( 0, len(model.loss_history) ), model.loss_history,
         linestyle = '-',
         linewidth = 0.2,
         color = 'red'
     )
     plt.title( "loss" )
     plt.legend( loc = 'best' )
-    #plt.xlim( 0, len(model.loss_G_history) )
+    #plt.xlim( 0, len(model.loss_history) )
     #plt.ylim( [0, 1.05] )
     plt.xlabel( "iterations" )
     plt.grid()
@@ -229,7 +172,6 @@ def main():
         dpi = 300, bbox_inches = "tight"
     )
     plt.show()
-    """
 
     print("Finish main()")
     print( "終了時間：", datetime.now() )
