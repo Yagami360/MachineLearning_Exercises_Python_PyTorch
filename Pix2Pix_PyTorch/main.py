@@ -23,12 +23,12 @@ DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
 DATASET_PATH = "./maps_custom"    # 学習用データセットへのパス
 NUM_SAVE_STEP = 1             # 自動生成画像の保存間隔（エポック単位）
 
-NUM_EPOCHES = 2               # エポック数（学習回数）
+NUM_EPOCHES = 10              # エポック数（学習回数）
 LEARNING_RATE = 0.0002        # 学習率
+BATCH_SIZE = 1                # ミニバッチサイズ
 IMAGE_SIZE = 256              # 入力画像のサイズ（pixel単位）
 NUM_CHANNELS = 3              # 入力画像のチャンネル数
 NUM_FEATURE_MAPS = 64         # 特徴マップの枚数
-BATCH_SIZE = 32               # ミニバッチサイズ
 
 
 def main():
@@ -124,7 +124,9 @@ def main():
         learing_rate = LEARNING_RATE,
         batch_size = BATCH_SIZE,
         n_channels = NUM_CHANNELS,
-        n_fmaps = NUM_FEATURE_MAPS
+        n_fmaps = NUM_FEATURE_MAPS,
+        image_width = IMAGE_SIZE,
+        image_height = IMAGE_SIZE
     )
     model.print( "after init()" )
 
@@ -172,15 +174,10 @@ def main():
     plt.grid()
     plt.tight_layout()
     plt.savefig(
-        "Pix2Pix_Loss_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE ),  
+        "Pix2Pix_Loss_epoches{}_lr{}.png".format( NUM_EPOCHES, LEARNING_RATE ),  
         dpi = 300, bbox_inches = "tight"
     )
     plt.show()
-
-    #-------------------------------------------------------------------
-    # 学習済み GAN に対し、自動生成画像を表示
-    #-------------------------------------------------------------------
-    pass
 
     print("Finish main()")
     print( "終了時間：", datetime.now() )

@@ -1,5 +1,10 @@
 # UNet_PyTorch
+UNet の PyTorch での実装<br>
 UNet によるセマンティックセグメンテーションを利用して、衛星画像から地図を生成する。<br>
+
+- 参考コード
+    - [GitHub/GunhoChoi/Kind-PyTorch-Tutorial12_Semantic_Segmentation/](https://github.com/GunhoChoi/Kind-PyTorch-Tutorial/tree/master/12_Semantic_Segmentation)
+
 
 ## ■ 項目 [Contents]
 1. [動作環境](#動作環境)
@@ -18,6 +23,8 @@ UNet によるセマンティックセグメンテーションを利用して、
 ## ■ 使用法
 
 - データのダウンロード
+    - GPU で駆動させるときは、消費 VRAM を抑えるために、ダウンロードした学習用データの一部を削除して学習しています。
+
 ```python
 wget https://people.eecs.berkeley.edu/~tinghuiz/projects/pix2pix/datasets/maps.tar.gz
 tar -xzvf maps.tar.gz

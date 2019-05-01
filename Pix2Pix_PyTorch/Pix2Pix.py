@@ -50,7 +50,8 @@ class Generator( nn.Module ):
         device,
         n_in_channels = 3,
         n_out_channels = 3,
-        n_fmaps = 64
+        n_fmaps = 64,
+        dropout = 0.5
     ):
         """
         [Args]
@@ -61,7 +62,7 @@ class Generator( nn.Module ):
         super( Generator, self ).__init__()
         self._device = device
 
-        def conv_block( in_dim, out_dim ):
+        def conv_block( in_dim, out_dim, dropout = 0.0 ):
             model = nn.Sequential(
                 nn.Conv2d( in_dim, out_dim, kernel_size=3, stride=1, padding=1 ),
                 nn.BatchNorm2d( out_dim ),
@@ -69,14 +70,17 @@ class Generator( nn.Module ):
 
                 nn.Conv2d( out_dim, out_dim, kernel_size=3, stride=1, padding=1 ),
                 nn.BatchNorm2d( out_dim ),
+
+                nn.Dropout( dropout )
             )
             return model
 
-        def dconv_block( in_dim, out_dim ):
+        def dconv_block( in_dim, out_dim, dropout = 0.0 ):
             model = nn.Sequential(
                 nn.ConvTranspose2d( in_dim, out_dim, kernel_size=3, stride=2, padding=1,output_padding=1 ),
                 nn.BatchNorm2d(out_dim),
-                nn.LeakyReLU( 0.2, inplace=True )
+                nn.LeakyReLU( 0.2, inplace=True ),
+                nn.Dropout( dropout )
             )
             return model
 
@@ -85,19 +89,19 @@ class Generator( nn.Module ):
         self._pool1 = nn.MaxPool2d( kernel_size=2, stride=2, padding=0 ).to( self._device )
         self._conv2 = conv_block( n_fmaps*1, n_fmaps*2 ).to( self._device )
         self._pool2 = nn.MaxPool2d( kernel_size=2, stride=2, padding=0 ).to( self._device )
-        self._conv3 = conv_block( n_fmaps*2, n_fmaps*4 ).to( self._device )
+        self._conv3 = conv_block( n_fmaps*2, n_fmaps*4, dropout ).to( self._device )
         self._pool3 = nn.MaxPool2d( kernel_size=2, stride=2, padding=0 ).to( self._device )
-        self._conv4 = conv_block( n_fmaps*4, n_fmaps*8 ).to( self._device )
+        self._conv4 = conv_block( n_fmaps*4, n_fmaps*8, dropout ).to( self._device )
         self._pool4 = nn.MaxPool2d( kernel_size=2, stride=2, padding=0 ).to( self._device )
 
         #
         self._bridge=conv_block( n_fmaps*8, n_fmaps*16 ).to( self._device )
 
         # Decoder（アップサンプリング）
-        self._dconv1 = dconv_block( n_fmaps*16, n_fmaps*8 ).to( self._device )
-        self._up1 = conv_block( n_fmaps*16, n_fmaps*8 ).to( self._device )
-        self._dconv2 = dconv_block( n_fmaps*8, n_fmaps*4 ).to( self._device )
-        self._up2 = conv_block( n_fmaps*8, n_fmaps*4 ).to( self._device )
+        self._dconv1 = dconv_block( n_fmaps*16, n_fmaps*8, dropout ).to( self._device )
+        self._up1 = conv_block( n_fmaps*16, n_fmaps*8, dropout ).to( self._device )
+        self._dconv2 = dconv_block( n_fmaps*8, n_fmaps*4, dropout ).to( self._device )
+        self._up2 = conv_block( n_fmaps*8, n_fmaps*4, dropout ).to( self._device )
         self._dconv3 = dconv_block( n_fmaps*4, n_fmaps*2 ).to( self._device )
         self._up3 = conv_block( n_fmaps*4, n_fmaps*2 ).to( self._device )
         self._dconv4 = dconv_block( n_fmaps*2, n_fmaps*1 ).to( self._device )
@@ -169,27 +173,6 @@ class Discriminator( nn.Module ):
         super( Discriminator, self ).__init__()
         self._device = device
 
-        """
-        self._layer = nn.Sequential(
-            nn.Conv2d( n_in_channels * 2, n_fmaps, kernel_size=4, stride=2, padding=1 ),
-            nn.LeakyReLU(0.2, inplace=True),
-
-            nn.Conv2d(n_fmaps, n_fmaps*2, kernel_size=4, stride=2, padding=1 ),
-            nn.BatchNorm2d(n_fmaps*2),
-            nn.LeakyReLU(0.2, inplace=True),
-
-            nn.Conv2d(n_fmaps*2, n_fmaps*4, kernel_size=4, stride=2, padding=1 ),
-            nn.BatchNorm2d(n_fmaps*4),
-            nn.LeakyReLU(0.2, inplace=True),
-
-            nn.Conv2d(n_fmaps*4, n_fmaps*8, kernel_size=4, stride=2, padding=1 ),
-            nn.BatchNorm2d(n_fmaps*8),
-            nn.LeakyReLU(0.2, inplace=True),
-
-            nn.Conv2d(n_fmaps*8, 1, kernel_size=4, stride=1, padding=0 ),
-            nn.Sigmoid()
-        ).to( self._device )
-        """
         def discriminator_block( in_filters, out_filters, normalization = True ):
             """Returns downsampling layers of each discriminator block"""
             layers = [nn.Conv2d(in_filters, out_filters, 4, stride=2, padding=1)]
@@ -205,7 +188,7 @@ class Discriminator( nn.Module ):
             *discriminator_block( n_fmaps*4, n_fmaps*8 ),
             nn.ZeroPad2d((1, 0, 1, 0)),
             nn.Conv2d( n_fmaps*8, 1, 4, padding=1, bias=False )
-        )
+        ).to( self._device )
 
         #weights_init( self )
         return
@@ -235,6 +218,8 @@ class Pix2PixModel( object ):
         _batch_size : <int> ミニバッチ学習時のバッチサイズ
         _n_channels : <int> 入力画像のチャンネル数
         _n_fmaps : <int> 特徴マップの枚数
+        _image_width : <int> 画像の幅サイズ
+        _image_height : <int> 画像の縦サイズ
 
         _generator : <nn.Module> 生成器
         _discriminator : <nn.Module> 識別器
@@ -255,7 +240,8 @@ class Pix2PixModel( object ):
         batch_size = 64,
         n_channels = 3,
         n_fmaps = 64,
-        n_samples = 64
+        image_width = 256,
+        image_height = 256
     ):
         self._device = device
 
@@ -264,6 +250,8 @@ class Pix2PixModel( object ):
         self._batch_size = batch_size
         self._n_channels = n_channels
         self._n_fmaps = n_fmaps
+        self._image_width = image_width
+        self._image_height = image_height
 
         self._generator = None
         self._dicriminator = None
@@ -291,6 +279,8 @@ class Pix2PixModel( object ):
         print( "_batch_size :", self._batch_size )
         print( "_n_channels :", self._n_channels )
         print( "_n_fmaps :", self._n_fmaps )
+        print( "_image_width :", self._image_width )
+        print( "_image_height :", self._image_height )
         print( "_generator :", self._generator )
         print( "_dicriminator :", self._dicriminator )
         print( "_loss_fn_cGAN :", self._loss_fn_cGAN )
@@ -335,7 +325,8 @@ class Pix2PixModel( object ):
             self._device, 
             n_in_channels = self._n_channels,
             n_out_channels = self._n_channels,
-            n_fmaps = self._n_fmaps
+            n_fmaps = self._n_fmaps,
+            dropout = 0.5
         )
 
         self._dicriminator = Discriminator( 
@@ -352,10 +343,8 @@ class Pix2PixModel( object ):
         [Args]
         [Returns]
         """
-        # Binary Cross Entropy
-        # L(x,y) = - { y*log(x) + (1-y)*log(1-x) }
-        # x,y の設定は、後の fit() 内で行う。
-        self._loss_fn_cGAN = nn.BCELoss()
+        # MSELoss
+        self._loss_fn_cGAN = nn.MSELoss()
 
         # L1正則化項
         self._loss_fn_pixelwise = torch.nn.L1Loss()
@@ -399,8 +388,9 @@ class Pix2PixModel( object ):
         """
         # 教師信号（０⇒偽物、1⇒本物）
         # real ラベルを 1 としてそして fake ラベルを 0 として定義
-        ones_tsr =  torch.ones( self._batch_size ).to( self._device )
-        zeros_tsr =  torch.zeros( self._batch_size ).to( self._device )
+        patch = ( self._batch_size, self._image_height// 2 ** 4, self._image_width // 2 ** 4 )
+        ones_tsr =  torch.ones( patch ).to( self._device )
+        zeros_tsr =  torch.zeros( patch ).to( self._device )
 
         #-------------------------------------
         # モデルを学習モードに切り替える。
@@ -429,15 +419,21 @@ class Pix2PixModel( object ):
                 iterations += 1
 
                 # ミニバッチデータを GPU へ転送
-                images = images.to( self._device )
+                #images = images.to( self._device )
 
                 # 学習用データには、左側に衛星画像、右側に地図画像が入っているので、chunk で切り分ける
                 # torch.chunk() : 渡したTensorを指定した個数に切り分ける。
                 satel_image, map_image = torch.chunk( images, chunks=2, dim=3 )
+                satel_image = satel_image.to( self._device )
+                map_image = map_image.to( self._device )
 
                 #====================================================
                 # 識別器 D の fitting 処理
                 #====================================================
+                # 無効化していた識別器 D のネットワークの勾配計算を有効化。
+                for param in self._dicriminator.parameters():
+                    param.requires_grad = True
+
                 #----------------------------------------------------
                 # 勾配を 0 に初期化
                 # （この初期化処理が必要なのは、勾配がイテレーション毎に加算される仕様のため）
@@ -449,17 +445,18 @@ class Pix2PixModel( object ):
                 # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
                 #----------------------------------------------------
                 # D(x) : 本物画像 x = image を入力したときの識別器の出力 (0.0 ~ 1.0)
-                #D_x = self._dicriminator( images, y_real_image_label )
-                #print( "D_x.size() :", D_x.size() )
+                D_x = self._dicriminator( satel_image, map_image )
+                #print( "D_x.size() :", D_x.size() )     # torch.Size([batch_size, 16, 16])
                 #print( "D_x :", D_x )
 
                 # G(z) : 生成器から出力される偽物画像
-                #G_z = self._generator( input_noize_z, y_fake_one_hot )
+                G_z = self._generator( map_image )
                 #print( "G_z.size() :", G_z.size() )
                 #print( "G_z :", G_z )
 
                 # D( G(z) ) : 偽物画像を入力したときの識別器の出力 (0.0 ~ 1.0)
-                #D_G_z = self._dicriminator( G_z.detach(), y_fake_image_label.detach() )
+                #D_G_z = self._dicriminator( G_z.detach(), map_image )
+                D_G_z = self._dicriminator( G_z, map_image )
                 #print( "D_G_z.size() :", D_G_z.size() )
                 #print( "D_G_z :", D_G_z )
 
@@ -469,24 +466,24 @@ class Pix2PixModel( object ):
                 # この設定は、損失関数を __call__ をオーバライト
                 # loss は Pytorch の Variable として帰ってくるので、これをloss.data[0]で数値として見る必要があり
                 #----------------------------------------------------
-                # E[ log{D(x)} ]
-                #loss_D_real = self._loss_fn( D_x, ones_tsr )
+                # cGAN での損失関数
+                loss_D_real = self._loss_fn_cGAN( D_x, ones_tsr )
                 #print( "loss_D_real : ", loss_D_real.item() )
 
-                # E[ 1 - log{D(G(z))} ]
-                #loss_D_fake = self._loss_fn( D_G_z, zeros_tsr )
+                # L1正則化項の損失関数
+                loss_D_fake = self._loss_fn_cGAN( D_G_z, zeros_tsr )
                 #print( "loss_D_fake : ", loss_D_fake.item() )
 
                 # 識別器 D の損失関数 = E[ log{D(x)} ] + E[ 1 - log{D(G(z))} ]
-                #loss_D = loss_D_real + loss_D_fake
+                loss_D = loss_D_real + loss_D_fake
                 #print( "loss_D : ", loss_D.item() )
 
-                #self._loss_D_historys.append( loss_D.item() )
+                self._loss_D_historys.append( loss_D.item() )
 
                 #----------------------------------------------------
                 # 誤差逆伝搬
                 #----------------------------------------------------
-                #loss_D.backward()
+                loss_D.backward()
 
                 #----------------------------------------------------
                 # backward() で計算した勾配を元に、設定した optimizer に従って、重みを更新
@@ -496,6 +493,10 @@ class Pix2PixModel( object ):
                 #====================================================
                 # 生成器 G の fitting 処理
                 #====================================================
+                # 識別器 D のネットワークの勾配計算を無効化。
+                for param in self._dicriminator.parameters():
+                    param.requires_grad = False
+
                 #----------------------------------------------------
                 # 勾配を 0 に初期化
                 # （この初期化処理が必要なのは、勾配がイテレーション毎に加算される仕様のため）
@@ -507,75 +508,54 @@ class Pix2PixModel( object ):
                 # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
                 #----------------------------------------------------
                 # G(z) : 生成器から出力される偽物画像
-                #G_z = self._generator( input_noize_z, y_fake_one_hot )
+                G_z = self._generator( map_image )
                 #print( "G_z.size() :", G_z.size() )
                 #print( "G_z :", G_z )
 
                 # D( G(z) ) : 偽物画像を入力したときの識別器の出力 (0.0 ~ 1.0)
-                #D_G_z = self._dicriminator( G_z, y_fake_image_label )
+                D_G_z = self._dicriminator( G_z, map_image )
                 #print( "D_G_z.size() :", D_G_z.size() )
 
                 #----------------------------------------------------
                 # 損失関数を計算する
                 #----------------------------------------------------
-                # L_G = E[ log{D(G(z))} ]
-                #loss_G = self._loss_fn( D_G_z, ones_tsr )
-                #print( "loss_G :", loss_G )
-                #self._loss_G_historys.append( loss_G.item() )
+                # cGAN での損失関数
+                loss_G_cGAN = self._loss_fn_cGAN( D_G_z, ones_tsr )
+                #print( "loss_G_cGAN :", loss_G_cGAN )
+
+                # L1正則化項
+                loss_G_L1 = self._loss_fn_pixelwise( G_z, map_image )
+
+                # 最終的な生成器の損失関数
+                loss_L1_lamda = 100
+                loss_G = loss_G_cGAN + loss_L1_lamda * loss_G_L1
+                
+                self._loss_G_historys.append( loss_G.item() )
 
                 #----------------------------------------------------
                 # 誤差逆伝搬
                 #----------------------------------------------------
-                #loss_G.backward()
+                loss_G.backward()
 
                 #----------------------------------------------------
                 # backward() で計算した勾配を元に、設定した optimizer に従って、重みを更新
                 #----------------------------------------------------
                 self._G_optimizer.step()
+                #----------------------------------------------------
+                # 学習過程での自動生成画像
+                #----------------------------------------------------
+                # 特定のイテレーションでGeneratorから画像を保存
+                if( iterations % 50 == 0 ):
+                    save_image( tensor = G_z.cpu(), filename = "Pix2Pix_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
 
             #----------------------------------------------------
             # 学習過程での自動生成画像
             #----------------------------------------------------
             # 特定のエポックでGeneratorから画像を保存
             if( epoch % n_sava_step == 0 ):
-                pass
-                #images = self.generate_images( b_transformed = False )
-                #self._images_historys.append( images )
-                #save_image( tensor = images, filename = "Pix2Pix_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
+                save_image( tensor = G_z.cpu(), filename = "Pix2Pix_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
+                #self._images_historys.append( G_z.cpu().detach().numpy() )
 
         print("Finished Training Loop.")
         return
 
-
-    def generate_images( self, n_samples = 64, b_transformed = False ):
-        """
-        Pix2Pix の Generator から、画像データを自動生成する。
-        [Args]
-            n_samples : <int> 生成する画像の枚数
-            b_transformed : <bool> 画像のフォーマットを Tensor から変換するか否か
-        [Returns]
-            images : <Tensor> / shape = [n_samples, n_channels, height, width]
-                生成された画像データのリスト
-                行成分は生成する画像の数 n_samples
-        """
-        # 生成器を推論モードに切り替える。
-        self._generator.eval()
-
-        # 生成器に入力する入力ノイズ z
-        input_noize_z = torch.rand( (n_samples, self._n_input_noize_z, 1, 1) ).to( self._device )
-        #print( input_noize_z )
-
-        # 生成器に入力するクラスラベル y
-        eye_tsr = torch.eye( self._n_classes ).to( self._device )
-        y_fake_label = torch.randint( self._n_classes, (n_samples,), dtype = torch.long ).to( self._device )
-        y_fake_one_hot = eye_tsr[y_fake_label].view( -1, self._n_classes, 1, 1 ).to( self._device )
-
-        # 画像を生成
-        images = self._generator( input_noize_z, y_fake_one_hot )
-        #print( "images.size() :", images.size() )
-
-        if( b_transformed == True ):
-            # Tensor → numpy に変換
-            images = images.cpu().detach().numpy()
-
-        return images
