@@ -1,11 +1,11 @@
 # -*- coding:utf-8 -*-
-
 from datetime import datetime
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.animation as animation
-#import pickle
-import scipy.misc
+
+import os
+import urllib.request
+import gzip
 
 # PyTorch
 import torch
@@ -21,16 +21,16 @@ from UNet import SemanticSegmentationwithUNet
 #--------------------------------
 # 設定可能な定数
 #--------------------------------
-DEVICE = "CPU"               # 使用デバイス ("CPU" or "GPU")
-#DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
-DATASET_PATH = "./maps"       # 学習用データセットへのパス
+#DEVICE = "CPU"               # 使用デバイス ("CPU" or "GPU")
+DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
+#DATASET_PATH = "./maps"       # 学習用データセットへのパス
+DATASET_PATH = "./maps_custom"       # 学習用データセットへのパス
 NUM_SAVE_STEP = 1             # 自動生成画像の保存間隔（エポック単位）
 
 NUM_EPOCHES = 10              # エポック数（学習回数）
 LEARNING_RATE = 0.0002        # 学習率 (Default:0.0002)
 BATCH_SIZE = 1                # ミニバッチサイズ
 IMAGE_SIZE = 256              # 入力画像のサイズ（pixel単位）
-NUM_CHANNELS = 1              # 入力画像のチャンネル数
 NUM_FEATURE_MAPS = 64         # 特徴マップの枚数
 
 
@@ -99,6 +99,15 @@ def main():
     #---------------------------------------------------------------
     # data と label をセットにした TensorDataSet の作成
     #---------------------------------------------------------------
+    if( os.path.exists( DATASET_PATH ) == False ):
+        os.mkdir( DATASET_PATH )
+
+        # データをダウンロード
+        #urllib.request( "https://people.eecs.berkeley.edu/~tinghuiz/projects/pix2pix/datasets/maps.tar.gz", "maps.tar.gz" )
+
+        # gzip 解凍
+
+
     dataset = torchvision.datasets.ImageFolder(
         root = DATASET_PATH,
         transform = transform,

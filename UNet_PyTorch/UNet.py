@@ -268,8 +268,8 @@ class SemanticSegmentationwithUNet( object ):
                 # 学習用データには、左側に衛星画像、右側に地図画像が入っているので、chunk で切り分ける
                 # torch.chunk() : 渡したTensorを指定した個数に切り分ける。
                 satel_image, map_image = torch.chunk( images, chunks=2, dim=3 )
-                #satel_image = satel_image.to( self._device )
-                #map_image = map_image.to( self._device )
+                satel_image = satel_image.to( self._device )
+                map_image = map_image.to( self._device )
                 #satel_image.requires_grad_()
                 #map_image.requires_grad_()
 
@@ -305,6 +305,13 @@ class SemanticSegmentationwithUNet( object ):
                 # backward() で計算した勾配を元に、設定した optimizer に従って、重みを更新
                 #----------------------------------------------------
                 self._optimizer.step()
+
+                #----------------------------------------------------
+                # 学習過程での自動生成画像
+                #----------------------------------------------------
+                # 特定のイテレーションでGeneratorから画像を保存
+                if( iterations % 100 == 0 ):
+                    save_image( tensor = output.cpu(), filename = "UNet_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
 
             #----------------------------------------------------
             # 学習過程での自動生成画像
