@@ -55,7 +55,7 @@ NUM_CLASSES = 10              # クラスラベル y の次元数
 ### ◎ コードの実行結果：`main.py`
 
 |パラメータ名|値（実行条件１）|値（実行条件２）|値（実行条件３）|
-|---|---|---|---|---|
+|---|---|---|---|
 |学習用データセット：`DATASET`|"MNIST"|←|"CIFAR-10"|
 |使用デバイス：`DEVICE`|GPU|←|←|
 |シード値|`random.seed(8)`<br>`np.random.seed(8)`<br>`torch.manual_seed(8)`|←|
