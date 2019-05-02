@@ -23,15 +23,15 @@ class UNet( nn.Module ):
     UNet を表すクラス
 
     [Args]
-        in_dim : <int>
-        out_dim : <int>
+        n_in_channels : <int> 入力画像のチャンネル数
+        n_out_channels : <int> 出力画像のチャンネル数
         n_channels : <int> 特徴マップの枚数
     """
     def __init__(
         self,
         device,
-        in_dim = 3,
-        out_dim = 3,
+        n_in_channels = 3,
+        n_out_channels = 3,
         n_fmaps = 64
     ):
         super( UNet, self ).__init__()
@@ -57,7 +57,7 @@ class UNet( nn.Module ):
             return model
 
         # Encoder（ダウンサンプリング）
-        self._conv1 = conv_block( in_dim, n_fmaps ).to( self._device )
+        self._conv1 = conv_block( n_in_channels, n_fmaps ).to( self._device )
         self._pool1 = nn.MaxPool2d( kernel_size=2, stride=2, padding=0 ).to( self._device )
         self._conv2 = conv_block( n_fmaps*1, n_fmaps*2 ).to( self._device )
         self._pool2 = nn.MaxPool2d( kernel_size=2, stride=2, padding=0 ).to( self._device )
@@ -81,7 +81,7 @@ class UNet( nn.Module ):
 
         # 出力層
         self._out_layer = nn.Sequential(
-		    nn.Conv2d( n_fmaps, out_dim, 3, 1, 1 ),
+		    nn.Conv2d( n_fmaps, n_out_channels, 3, 1, 1 ),
 		    nn.Tanh(),
 		).to( self._device )
 
@@ -140,12 +140,15 @@ class SemanticSegmentationwithUNet( object ):
         _n_epoches : <int> エポック数（学習回数）
         _learnig_rate : <float> 最適化アルゴリズムの学習率
         _batch_size : <int> ミニバッチ学習時のバッチサイズ
+        _n_channels : <int> 入力画像と出力画像ののチャンネル数
         _n_fmaps : <int> 特徴マップの枚数
 
         _model : <nn.Module> UNet のネットワーク構成
         _loss_fn : 損失関数
         _optimizer : <torch.optim.Optimizer> 最適化アルゴリズム
         _loss_historys : <list> 損失関数値の履歴（イテレーション毎）
+
+        _fixed_pre_image : <Tensor> image-to-image の変換前の固定された画像（学習後の画像生成の入力画像として利用）
     [private] 変数名の前にダブルアンダースコア __ を付ける（Pythonルール）
     """
     def __init__( 
@@ -154,22 +157,27 @@ class SemanticSegmentationwithUNet( object ):
         n_epoches = 50,
         learing_rate = 0.0001,
         batch_size = 64,
+        n_channels = 3,
         n_fmaps = 64
     ):
         self._device = device
         self._n_epoches = n_epoches
         self._learning_rate = learing_rate
         self._batch_size = batch_size
+        self._n_channels = n_channels
         self._n_fmaps = n_fmaps
-
+        
         self._model = None
         self._loss_fn = None
         self._optimizer = None
         self._loss_historys = []
+        self._images_historys = []
 
         self.model()
         self.loss()
         self.optimizer()
+
+        self._fixed_pre_image = None
         return
 
     def print( self, str = "" ):
@@ -181,6 +189,7 @@ class SemanticSegmentationwithUNet( object ):
         print( "_n_epoches :", self._n_epoches )
         print( "_learning_rate :", self._learning_rate )
         print( "_batch_size :", self._batch_size )
+        print( "_n_channels :", self._n_channels )
         print( "_n_fmaps :", self._n_fmaps )
 
         print( "_model :", self._model )
@@ -193,6 +202,10 @@ class SemanticSegmentationwithUNet( object ):
     def loss_history( self ):
         return self._loss_historys
 
+    @property
+    def images_historys( self ):
+        return self._images_historys
+
     def model( self ):
         """
         モデルの定義を行う。
@@ -201,7 +214,8 @@ class SemanticSegmentationwithUNet( object ):
         """
         self._model = UNet(
             device = self._device,
-            in_dim = 3, out_dim = 3,
+            n_in_channels = self._n_channels,
+            n_out_channels = self._n_channels,
             n_fmaps = self._n_fmaps
         )
         return
@@ -228,7 +242,7 @@ class SemanticSegmentationwithUNet( object ):
         )
         return
 
-    def fit( self, dloader, n_sava_step = 5 ):
+    def fit( self, dloader, n_sava_step = 100 ):
         """
         指定されたトレーニングデータで、モデルの fitting 処理を行う。
         [Args]
@@ -236,6 +250,9 @@ class SemanticSegmentationwithUNet( object ):
             n_sava_step : <int> 学習途中での生成画像の保存間隔（エポック単位）
         [Returns]
         """
+        # image-to-image の変換前の固定された画像（学習後の画像生成の入力画像として利用）の初期化済みフラグ
+        b_init_fixed_image = False
+
         #-------------------------------------
         # モデルを学習モードに切り替える。
         #-------------------------------------
@@ -267,9 +284,11 @@ class SemanticSegmentationwithUNet( object ):
 
                 # 学習用データには、左側に衛星画像、右側に地図画像が入っているので、chunk で切り分ける
                 # torch.chunk() : 渡したTensorを指定した個数に切り分ける。
-                satel_image, map_image = torch.chunk( images, chunks=2, dim=3 )
-                satel_image = satel_image.to( self._device )
-                map_image = map_image.to( self._device )
+                # pre_image : image-to-image 変換タスクでの変換前の画像
+                # after_image : image-to-image 変換タスクでの変換後の画像
+                pre_image, after_image = torch.chunk( images, chunks=2, dim=3 )
+                pre_image = pre_image.to( self._device )
+                after_image = after_image.to( self._device )
                 #satel_image.requires_grad_()
                 #map_image.requires_grad_()
 
@@ -283,7 +302,7 @@ class SemanticSegmentationwithUNet( object ):
                 # 学習用データをモデルに流し込む
                 # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
                 #----------------------------------------------------
-                output = self._model( satel_image )
+                output = self._model( pre_image )
                 #print( "output.size() :", output.size() )   # torch.Size([1, 3, 256, 256])
 
                 #----------------------------------------------------
@@ -292,7 +311,7 @@ class SemanticSegmentationwithUNet( object ):
                 # この設定は、損失関数を __call__ をオーバライト
                 # loss は Pytorch の Variable として帰ってくるので、これをloss.data[0]で数値として見る必要があり
                 #----------------------------------------------------
-                loss = self._loss_fn( output, map_image )
+                loss = self._loss_fn( output, after_image )
                 print( "loss :", loss.item() )
                 self._loss_historys.append( loss.item() )
 
@@ -310,15 +329,76 @@ class SemanticSegmentationwithUNet( object ):
                 # 学習過程での自動生成画像
                 #----------------------------------------------------
                 # 特定のイテレーションでGeneratorから画像を保存
-                if( iterations % 100 == 0 ):
+                if( iterations % n_sava_step == 0 ):
+                    """
+                    if( b_init_fixed_image == False ):
+                        b_init_fixed_image = True
+                        # 初回ループの画像を、image-to-image の変換前の固定された画像（学習後の画像生成の入力画像として利用）として採用
+                        self._fixed_pre_image = pre_image
+
+                    image = self.generate_fixed_images( pre_image = self._fixed_pre_image, b_transformed = False )
+                    save_image( tensor = image, filename = "UNet_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
+                    # [batc_size, n_channels, height, width] → [height, width, n_channels]
+                    image_reshaped = image[0, :, :, :].squeeze().transpose( 0 ,2 )
+                    self._images_historys.append( image_reshaped.cpu().detach().numpy() )
+                    """
                     save_image( tensor = output.cpu(), filename = "UNet_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
 
             #----------------------------------------------------
             # 学習過程での自動生成画像
             #----------------------------------------------------
+            n_sava_epoch_step = 1
             # 特定のエポックでGeneratorから画像を保存
-            if( epoch % n_sava_step == 0 ):
+            if( epoch % n_sava_epoch_step == 0 ):
+                """
+                if( b_init_fixed_image == False ):
+                    b_init_fixed_image = True
+                    # 初回ループの画像を、image-to-image の変換前の固定された画像（学習後の画像生成の入力画像として利用）として採用
+                    self._fixed_pre_image = pre_image
+
+                image = self.generate_fixed_images( pre_image = self._fixed_pre_image, b_transformed = False )
+                save_image( tensor = image, filename = "UNet_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
+                # [batc_size, n_channels, height, width] → [height, width, n_channels]
+                image_reshaped = image[0, :, :, :].squeeze().transpose( 0 ,2 )
+                self._images_historys.append( image_reshaped.cpu().detach().numpy() )
+                """
                 save_image( tensor = output.cpu(), filename = "UNet_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
 
+        #self.save_image_historys_gif( file_name = "UNet_Image_epoches{}_iters{}.gif".format( epoch, iterations ) )
         print("Finished Training Loop.")
+        return
+
+
+    def generate_fixed_images( self, pre_image, b_transformed = False ):
+        """
+        U-Net から、固定された画像データを自動生成する。
+        [Args]
+            pre_image : <Tensor> image-to-image の変換前の画像
+            b_transformed : <bool> 画像のフォーマットを Tensor から変換するか否か
+        [Returns]
+            images : <Tensor> / shape = [n_channels, height, width]
+                生成された画像データのリスト
+        """
+        # GPU に転送
+        pre_image = pre_image.to( self._device )
+
+        # 生成器を推論モードに切り替える。
+        self._model.eval()
+
+        # 画像を生成
+        images = self._model( pre_image )
+
+        if( b_transformed == True ):
+            # Tensor → numpy に変換
+            images = images.cpu().detach().numpy()
+
+        return images
+
+
+    def save_image_historys_gif( self, file_name = "UNet.gif" ):
+        """
+        学習中の生成画像の様子を gif ファイルで保存
+        """
+        import imageio
+        imageio.mimsave( file_name, self._images_historys )
         return

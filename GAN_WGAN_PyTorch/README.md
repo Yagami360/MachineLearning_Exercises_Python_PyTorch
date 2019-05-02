@@ -9,7 +9,7 @@ Wasserstein GAN（WGAN）の PyTorch での実装。
 ## ■ 項目 [Contents]
 1. [動作環境](#動作環境)
 1. [使用法](#使用法)
-1. [コード説明＆実行結果](#コード説明＆実行結果)
+1. [コードの実行結果](#コードの実行結果)
 1. [背景理論](https://github.com/Yagami360/My_NoteBook/blob/master/%E6%83%85%E5%A0%B1%E5%B7%A5%E5%AD%A6/%E6%83%85%E5%A0%B1%E5%B7%A5%E5%AD%A6_%E6%A9%9F%E6%A2%B0%E5%AD%A6%E7%BF%92_%E7%94%9F%E6%88%90%E3%83%A2%E3%83%87%E3%83%AB.md#WGAN)
 
 ## ■ 動作環境
@@ -69,11 +69,9 @@ WEIGHT_CLAMP_UPPER = 0.01     # 重みクリッピングの上限値
 ```
 -->
 
-<a id="コード説明＆実行結果"></a>
+<a id="コードの実行結果"></a>
 
-## ■ コード説明＆実行結果
-
-### ◎ コードの実行結果：`main.py`
+## ■ コードの実行結果：`main.py`
 
 |パラメータ名|値（実行条件１）|値（実行条件２）|
 |---|---|---|
@@ -93,14 +91,14 @@ WEIGHT_CLAMP_UPPER = 0.01     # 重みクリッピングの上限値
 |重みクリッピングの上限値：`WEIGHT_CLAMP_UPPER`|0.01|←|
 
 
-#### ☆ 損失関数のグラフ（実行条件１）：`main.py`
+### ◎ 損失関数のグラフ（実行条件１）：`main.py`
 ![WGAN_Loss_epoches10_lr5e-05_batchsize64](https://user-images.githubusercontent.com/25688193/56844723-05c8db80-68f0-11e9-8fd3-9f4692c4e27c.png)<br>
 
 <!--
 > DCGAN よりは安定しているが、乱高下があり、論文中のグラフと異なる？
 -->
 
-#### ☆ 生成器から生成された自動生成画像（実行条件１）：`main.py`
+### ◎ 生成器から生成された自動生成画像（実行条件１）：`main.py`
 
 - エポック数 : 1 / イテレーション回数：937<br>
 ![WGAN_Image_epoches0_iters937](https://user-images.githubusercontent.com/25688193/56844476-9e109180-68eb-11e9-91d9-469c63d82825.png)<br>
@@ -135,7 +133,7 @@ WEIGHT_CLAMP_UPPER = 0.01     # 重みクリッピングの上限値
 ---
 
 <!--
-### ◎ コードの実行結果：`main_mnist.py`
+## ■ コードの実行結果：`main_mnist.py`
 
 |パラメータ名|値（実行条件１）|
 |---|---|
@@ -152,10 +150,10 @@ WEIGHT_CLAMP_UPPER = 0.01     # 重みクリッピングの上限値
 |重みクリッピングの下限値：`WEIGHT_CLAMP_LOWER`|-0.01|←|
 |重みクリッピングの上限値：`WEIGHT_CLAMP_UPPER`|0.01|←|
 
-#### ☆ 損失関数のグラフ（実行条件１）：`main_mnist.py`
+### ◎ 損失関数のグラフ（実行条件１）：`main_mnist.py`
 ![WGANforMNIST_Loss_epoches10_lr0 0002_batchsize64](https://user-images.githubusercontent.com/25688193/56844042-1031a800-68e5-11e9-833d-7307db54b21f.png)<br>
 
-#### ☆ 生成器から生成された自動生成画像（実行条件１）：`main_mnist.py`
+### ◎ 生成器から生成された自動生成画像（実行条件１）：`main_mnist.py`
 
 - エポック数 : 1 / イテレーション回数：937<br>
 ![WGANforMNIST_Image_epoches0_iters937](https://user-images.githubusercontent.com/25688193/56844069-5555da00-68e5-11e9-8290-055a686cbbed.png)<br>

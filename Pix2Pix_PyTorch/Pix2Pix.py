@@ -230,6 +230,8 @@ class Pix2PixModel( object ):
         _loss_G_historys : <list> 生成器 G の損失関数値の履歴（イテレーション毎）
         _loss_D_historys : <list> 識別器 D の損失関数値の履歴（イテレーション毎）
         _images_historys : <list> 生成画像のリスト
+
+        _fixed_pre_image : <Tensor> image-to-image の変換前の固定された画像（学習後の画像生成の入力画像として利用）
     [private] 変数名の前にダブルアンダースコア __ を付ける（Pythonルール）
     """
     def __init__(
@@ -266,6 +268,7 @@ class Pix2PixModel( object ):
         self.loss()
         self.optimizer()
 
+        self._fixed_pre_image = None
         return
 
     def print( self, str = "" ):
@@ -378,7 +381,7 @@ class Pix2PixModel( object ):
         return
 
 
-    def fit( self, dloader, n_sava_step = 5 ):
+    def fit( self, dloader, n_sava_step = 50 ):
         """
         指定されたトレーニングデータで、モデルの fitting 処理を行う。
         [Args]
@@ -386,6 +389,9 @@ class Pix2PixModel( object ):
             n_sava_step : <int> 学習途中での生成画像の保存間隔（エポック単位）
         [Returns]
         """
+        # image-to-image の変換前の固定された画像（学習後の画像生成の入力画像として利用）の初期化済みフラグ
+        b_init_fixed_image = False
+
         # 教師信号（０⇒偽物、1⇒本物）
         # real ラベルを 1 としてそして fake ラベルを 0 として定義
         patch = ( self._batch_size, self._image_height// 2 ** 4, self._image_width // 2 ** 4 )
@@ -423,9 +429,11 @@ class Pix2PixModel( object ):
 
                 # 学習用データには、左側に衛星画像、右側に地図画像が入っているので、chunk で切り分ける
                 # torch.chunk() : 渡したTensorを指定した個数に切り分ける。
-                satel_image, map_image = torch.chunk( images, chunks=2, dim=3 )
-                satel_image = satel_image.to( self._device )
-                map_image = map_image.to( self._device )
+                # pre_image : image-to-image 変換タスクでの変換前の画像
+                # after_image : image-to-image 変換タスクでの変換後の画像
+                pre_image, after_image = torch.chunk( images, chunks=2, dim=3 )
+                pre_image = pre_image.to( self._device )
+                after_image = after_image.to( self._device )
 
                 #====================================================
                 # 識別器 D の fitting 処理
@@ -445,18 +453,18 @@ class Pix2PixModel( object ):
                 # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
                 #----------------------------------------------------
                 # D(x) : 本物画像 x = image を入力したときの識別器の出力 (0.0 ~ 1.0)
-                D_x = self._dicriminator( satel_image, map_image )
+                D_x = self._dicriminator( pre_image, after_image )
                 #print( "D_x.size() :", D_x.size() )     # torch.Size([batch_size, 16, 16])
                 #print( "D_x :", D_x )
 
                 # G(z) : 生成器から出力される偽物画像
-                G_z = self._generator( map_image )
+                G_z = self._generator( after_image )
                 #print( "G_z.size() :", G_z.size() )
                 #print( "G_z :", G_z )
 
                 # D( G(z) ) : 偽物画像を入力したときの識別器の出力 (0.0 ~ 1.0)
-                #D_G_z = self._dicriminator( G_z.detach(), map_image )
-                D_G_z = self._dicriminator( G_z, map_image )
+                #D_G_z = self._dicriminator( G_z.detach(), after_image )
+                D_G_z = self._dicriminator( G_z, after_image )
                 #print( "D_G_z.size() :", D_G_z.size() )
                 #print( "D_G_z :", D_G_z )
 
@@ -508,12 +516,12 @@ class Pix2PixModel( object ):
                 # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
                 #----------------------------------------------------
                 # G(z) : 生成器から出力される偽物画像
-                G_z = self._generator( map_image )
+                G_z = self._generator( after_image )
                 #print( "G_z.size() :", G_z.size() )
                 #print( "G_z :", G_z )
 
                 # D( G(z) ) : 偽物画像を入力したときの識別器の出力 (0.0 ~ 1.0)
-                D_G_z = self._dicriminator( G_z, map_image )
+                D_G_z = self._dicriminator( G_z, after_image )
                 #print( "D_G_z.size() :", D_G_z.size() )
 
                 #----------------------------------------------------
@@ -524,7 +532,7 @@ class Pix2PixModel( object ):
                 #print( "loss_G_cGAN :", loss_G_cGAN )
 
                 # L1正則化項
-                loss_G_L1 = self._loss_fn_pixelwise( G_z, map_image )
+                loss_G_L1 = self._loss_fn_pixelwise( G_z, after_image )
 
                 # 最終的な生成器の損失関数
                 loss_L1_lamda = 100
@@ -541,21 +549,81 @@ class Pix2PixModel( object ):
                 # backward() で計算した勾配を元に、設定した optimizer に従って、重みを更新
                 #----------------------------------------------------
                 self._G_optimizer.step()
+
                 #----------------------------------------------------
                 # 学習過程での自動生成画像
                 #----------------------------------------------------
                 # 特定のイテレーションでGeneratorから画像を保存
-                if( iterations % 50 == 0 ):
+                if( iterations % n_sava_step == 0 ):
+                    """
+                    if( b_init_fixed_image == False ):
+                        b_init_fixed_image = True
+                        # 初回ループの画像を、image-to-image の変換前の固定された画像（学習後の画像生成の入力画像として利用）として採用
+                        self._fixed_pre_image = pre_image
+
+                    image = self.generate_fixed_images( pre_image = self._fixed_pre_image, b_transformed = False )
+                    save_image( tensor = image, filename = "Pix2Pix_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
+
+                    # [batc_size, n_channels, height, width] → [height, width, n_channels]
+                    image_reshaped = image[0, :, :, :].squeeze().transpose( 0 ,2 )
+                    self._images_historys.append( image_reshaped.cpu().detach().numpy() )
+                    """
                     save_image( tensor = G_z.cpu(), filename = "Pix2Pix_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
 
             #----------------------------------------------------
             # 学習過程での自動生成画像
             #----------------------------------------------------
+            n_sava_epoch_step = 1
             # 特定のエポックでGeneratorから画像を保存
-            if( epoch % n_sava_step == 0 ):
-                save_image( tensor = G_z.cpu(), filename = "Pix2Pix_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
-                #self._images_historys.append( G_z.cpu().detach().numpy() )
+            if( epoch % n_sava_epoch_step == 0 ):
+                """
+                if( b_init_fixed_image == False ):
+                    b_init_fixed_image = True
+                    # 初回ループの画像を、image-to-image の変換前の固定された画像（学習後の画像生成の入力画像として利用）として採用
+                    self._fixed_pre_image = pre_image
 
+                image = self.generate_fixed_images( pre_image = self._fixed_pre_image, b_transformed = False )
+                save_image( tensor = image, filename = "Pix2Pix_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
+                # [batc_size, n_channels, height, width] → [height, width, n_channels]
+                image_reshaped = image[0, :, :, :].squeeze().transpose( 0 ,2 )
+                self._images_historys.append( image_reshaped.cpu().detach().numpy() )
+                """
+                save_image( tensor = G_z.cpu(), filename = "Pix2Pix_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
+
+        #self.save_image_historys_gif( file_name = "Pix2Pix_Image_epoches{}_iters{}.gif".format( epoch, iterations ) )
         print("Finished Training Loop.")
         return
 
+
+    def generate_fixed_images( self, pre_image, b_transformed = False ):
+        """
+        pix2pix の Generator から、固定された画像データを自動生成する。
+        [Args]
+            pre_image : <Tensor> image-to-image の変換前の画像
+            b_transformed : <bool> 画像のフォーマットを Tensor から変換するか否か
+        [Returns]
+            images : <Tensor> / shape = [n_channels, height, width]
+                生成された画像データのリスト
+        """
+        # GPU に転送
+        pre_image = pre_image.to( self._device )
+
+        # 生成器を推論モードに切り替える。
+        self._generator.eval()
+
+        # 画像を生成
+        images = self._generator( pre_image )
+
+        if( b_transformed == True ):
+            # Tensor → numpy に変換
+            images = images.cpu().detach().numpy()
+
+        return images
+
+    def save_image_historys_gif( self, file_name = "Pix2Pix.gif" ):
+        """
+        学習中の生成画像の様子を gif ファイルで保存
+        """
+        import imageio
+        imageio.mimsave( file_name, self._images_historys )
+        return

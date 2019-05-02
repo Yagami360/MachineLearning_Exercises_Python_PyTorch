@@ -9,7 +9,7 @@ pix2pix によるセマンティックセグメンテーションを利用して
 ## ■ 項目 [Contents]
 1. [動作環境](#動作環境)
 1. [使用法](#使用法)
-1. [コード説明＆実行結果](#コード説明＆実行結果)
+1. [コードの実行結果](#コードの実行結果)
 1. [背景理論](https://github.com/Yagami360/My_NoteBook/blob/master/%E6%83%85%E5%A0%B1%E5%B7%A5%E5%AD%A6/%E6%83%85%E5%A0%B1%E5%B7%A5%E5%AD%A6_%E6%A9%9F%E6%A2%B0%E5%AD%A6%E7%BF%92_%E7%94%9F%E6%88%90%E3%83%A2%E3%83%87%E3%83%AB.md#pix2pix)
 
 
@@ -23,15 +23,9 @@ pix2pix によるセマンティックセグメンテーションを利用して
 
 ## ■ 使用法
 
-- データのダウンロード
-    - GPU で駆動させるときは、消費 VRAM を抑えるために、ダウンロードした学習用データの一部を削除して学習しています。
-
-```python
-wget https://people.eecs.berkeley.edu/~tinghuiz/projects/pix2pix/datasets/maps.tar.gz
-tar -xzvf maps.tar.gz
-```
-
-
+- 使用データ（航空写真と地図画像）<br>
+https://people.eecs.berkeley.edu/~tinghuiz/projects/pix2pix/datasets/maps.tar.gz<br>
+よりダウンロード後、解凍。
 
 - 使用法
 ```
@@ -45,7 +39,7 @@ $ python main.py
 #DEVICE = "CPU"               # 使用デバイス ("CPU" or "GPU")
 DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
 DATASET_PATH = "./maps_custom"    # 学習用データセットへのパス
-NUM_SAVE_STEP = 1             # 自動生成画像の保存間隔（エポック単位）
+NUM_SAVE_STEP = 100           # 自動生成画像の保存間隔（イテレーション単位）
 
 NUM_EPOCHES = 10               # エポック数（学習回数）
 LEARNING_RATE = 0.0002        # 学習率
@@ -59,9 +53,7 @@ BATCH_SIZE = 32               # ミニバッチサイズ
 
 <a id="コード説明＆実行結果"></a>
 
-## ■ コード説明＆実行結果
-
-### ◎ コードの実行結果：`main.py`
+## ■ コードの実行結果：`main.py`
 
 |パラメータ名|値（実行条件１）|値（実行条件２）|
 |---|---|---|
@@ -76,12 +68,14 @@ BATCH_SIZE = 32               # ミニバッチサイズ
 |入力画像のチャンネル数：`NUM_CHANNELS`|3|←|
 |特徴マップの枚数：`NUM_FEATURE_MAPS`|64||
 
-#### ☆ 損失関数のグラフ（実行条件１）
+※ GPU で駆動させるときは、消費 VRAM を抑えるために、ダウンロードした学習用データの内、一部のみ（1.jpg ~ 200.jpg の 200枚）を使用して学習している。
+
+### ◎ 損失関数のグラフ（実行条件１）
 ![Pix2Pix_Loss_epoches10_lr0 0002](https://user-images.githubusercontent.com/25688193/57012858-726f0d80-6c43-11e9-8fc0-23c76a5cdff8.png)<br>
 
 > ０付近の値に安定的に収束しており、うまく学習していることが見てとれる。
 
-#### ☆ 生成画像（実行条件１）
+### ◎ 生成画像（実行条件１）
 
 - Epoch 1 : iterations = 50<br>
 ![UNet_Image_epoches0_iters50](https://user-images.githubusercontent.com/25688193/57012140-0a6af800-6c40-11e9-91d1-a5df91f16094.png)<br>

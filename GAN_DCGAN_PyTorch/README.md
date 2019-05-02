@@ -4,7 +4,7 @@ DCGAN の PyTorch での実装。
 ## ■ 項目 [Contents]
 1. [動作環境](#動作環境)
 1. [使用法](#使用法)
-1. [コード説明＆実行結果](#コード説明＆実行結果)
+1. [コードの実行結果](#コードの実行結果)
 1. [背景理論](https://github.com/Yagami360/My_NoteBook/blob/master/%E6%83%85%E5%A0%B1%E5%B7%A5%E5%AD%A6/%E6%83%85%E5%A0%B1%E5%B7%A5%E5%AD%A6_%E6%A9%9F%E6%A2%B0%E5%AD%A6%E7%BF%92_%E7%94%9F%E6%88%90%E3%83%A2%E3%83%87%E3%83%AB.md#DCGAN)
 
 ## ■ 動作環境
@@ -58,11 +58,9 @@ NUM_INPUT_NOIZE_Z = 100       # 生成器に入力するノイズ z の次数
 ```
 
 
-<a id="コード説明＆実行結果"></a>
+<a id="コードの実行結果"></a>
 
-## ■ コード説明＆実行結果
-
-### ◎ コードの実行結果：`main_mnist.py`
+## ■ コードの実行結果：`main_mnist.py`
 
 |パラメータ名|値（実行条件１）|
 |---|---|
@@ -76,10 +74,10 @@ NUM_INPUT_NOIZE_Z = 100       # 生成器に入力するノイズ z の次数
 |生成器に入力するノイズ z の次数：`NUM_INPUT_NOIZE_Z`|62|
 |特徴マップの枚数：`NUM_FEATURE_MAPS`|64|
 
-#### ☆ 損失関数のグラフ（実行条件１）：`main_mnist.py`
+### ◎ 損失関数のグラフ（実行条件１）：`main_mnist.py`
 ![DCGANforMNIST_Loss_epoches10_lr0 0002_batchsize128](https://user-images.githubusercontent.com/25688193/56814818-eb084f80-687a-11e9-967f-062388b8d90a.png)<br>
 
-#### ☆ 生成器から生成された自動生成画像（実行条件１）：`main_mnist.py`
+### ◎ 生成器から生成された自動生成画像（実行条件１）：`main_mnist.py`
 
 - エポック数 : 1 / イテレーション回数：468<br>
 ![DCGANforMNIST_Image_epoches0_iters468](https://user-images.githubusercontent.com/25688193/56814485-4423b380-687a-11e9-932b-081b1e56f9e7.png)<br>
@@ -112,7 +110,7 @@ NUM_INPUT_NOIZE_Z = 100       # 生成器に入力するノイズ z の次数
 ![DCGANforMNIST_Image_epoches9_iters4680](https://user-images.githubusercontent.com/25688193/56814816-eb084f80-687a-11e9-94a9-4cf7140faaed.png)<br>
 
 
-### ◎ コードの実行結果：`main.py`
+## ■ コードの実行結果：`main.py`
 
 |パラメータ名|値（実行条件１）|値（実行条件２）|
 |---|---|---|
@@ -129,10 +127,10 @@ NUM_INPUT_NOIZE_Z = 100       # 生成器に入力するノイズ z の次数
 |入力画像のチャンネル数：`NUM_CHANNELS`|1|3|
 |特徴マップの枚数：`NUM_FEATURE_MAPS`|64|64|
 
-#### ☆ 損失関数のグラフ（実行条件１）
+### ◎ 損失関数のグラフ（実行条件１）
 <br>
 
-#### ☆ 生成器から生成された自動生成画像（実行条件１）
+### ◎ 生成器から生成された自動生成画像（実行条件１）
 
 - エポック数 : 1 / イテレーション回数：468<br>
 ![DCGAN_Image_epoches0_iters468](https://user-images.githubusercontent.com/25688193/56815729-02e0d300-687d-11e9-8dea-a2bdce4ae4b9.png)<br>

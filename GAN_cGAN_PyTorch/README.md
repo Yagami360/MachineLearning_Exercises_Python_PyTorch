@@ -6,7 +6,7 @@ Conditional GAN（cGAN）の PyTorch での実装。<br>
 ## ■ 項目 [Contents]
 1. [動作環境](#動作環境)
 1. [使用法](#使用法)
-1. [コード説明＆実行結果](#コード説明＆実行結果)
+1. [コードの実行結果](#コードの実行結果)
 1. [背景理論](https://github.com/Yagami360/My_NoteBook/blob/master/%E6%83%85%E5%A0%B1%E5%B7%A5%E5%AD%A6/%E6%83%85%E5%A0%B1%E5%B7%A5%E5%AD%A6_%E6%A9%9F%E6%A2%B0%E5%AD%A6%E7%BF%92_%E7%94%9F%E6%88%90%E3%83%A2%E3%83%87%E3%83%AB.md#ConditionalGAN%EF%BC%88CGAN%EF%BC%89)
 
 ## ■ 動作環境
@@ -48,11 +48,9 @@ NUM_CLASSES = 10              # クラスラベル y の次元数
 ```
 
 
-<a id="コード説明＆実行結果"></a>
+<a id="コードの実行結果"></a>
 
-## ■ コード説明＆実行結果
-
-### ◎ コードの実行結果：`main.py`
+## ■ コードの実行結果：`main.py`
 
 |パラメータ名|値（実行条件１）|値（実行条件２）|値（実行条件３）|
 |---|---|---|---|
@@ -71,7 +69,7 @@ NUM_CLASSES = 10              # クラスラベル y の次元数
 |特徴マップの枚数：`NUM_FEATURE_MAPS`|64|64|
 |クラスラベルの個数：`NUM_CLASSES`|10|10|x|
 
-#### ☆ 損失関数のグラフ（実行条件１）：`main.py`
+### ◎ 損失関数のグラフ（実行条件１）：`main.py`
 
 - 学習率：0.0002
 ![cGAN_Loss_epoches10_lr0 0002_batchsize128](https://user-images.githubusercontent.com/25688193/56874668-81ed2b80-6a76-11e9-925d-f6e02e8cda5d.png)<br>
@@ -80,9 +78,9 @@ NUM_CLASSES = 10              # クラスラベル y の次元数
 ![cGAN_Loss_epoches10_lr5e-05_batchsize128](https://user-images.githubusercontent.com/25688193/56875412-bd3e2900-6a7b-11e9-894a-4ed09480bfcb.png)<br>
 
 
-#### ☆ 生成器から生成された自動生成画像（実行条件１）：`main.py`
+### ◎ 生成器から生成された自動生成画像（実行条件１）：`main.py`
 
-##### 学習率：0.00005
+#### ☆ 学習率：0.00005
 
 - エポック数 : 1 / イテレーション回数：468<br>
 ![cDCGAN_Image_epoches0_iters468](https://user-images.githubusercontent.com/25688193/56875710-8bc65d00-6a7d-11e9-847e-a91e5ec79b93.png)<br>
@@ -151,7 +149,7 @@ NUM_CLASSES = 10              # クラスラベル y の次元数
         ![cDCGAN_Image9_epoches9_iters4680](https://user-images.githubusercontent.com/25688193/56875918-afd66e00-6a7e-11e9-9004-bf187b732322.png)<br>
 
 
-##### 学習率：0.0002
+#### ☆ 学習率：0.0002
 
 - エポック数 : 1 / イテレーション回数：468<br>
 ![cDCGAN_Image_epoches0_iters468](https://user-images.githubusercontent.com/25688193/56874420-b7911500-6a74-11e9-8559-133cddd19f3a.png)<br>

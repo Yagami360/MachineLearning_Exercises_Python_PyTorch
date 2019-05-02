@@ -21,7 +21,7 @@ from Pix2Pix import Pix2PixModel
 #DEVICE = "CPU"               # 使用デバイス ("CPU" or "GPU")
 DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
 DATASET_PATH = "./maps_custom"    # 学習用データセットへのパス
-NUM_SAVE_STEP = 1             # 自動生成画像の保存間隔（エポック単位）
+NUM_SAVE_STEP = 100           # 自動生成画像の保存間隔（イテレーション単位）
 
 NUM_EPOCHES = 10              # エポック数（学習回数）
 LEARNING_RATE = 0.0002        # 学習率
@@ -33,7 +33,8 @@ NUM_FEATURE_MAPS = 64         # 特徴マップの枚数
 
 def main():
     """
-    pix2pix の PyTorch 実装
+    pix2pix の PyTorch 実装。
+    pix2pix によるセマンティックセグメンテーションを利用して、衛星画像から地図を生成する。
     """
     print("Start main()")
     

@@ -25,19 +25,20 @@ from UNet import SemanticSegmentationwithUNet
 DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
 #DATASET_PATH = "./maps"       # 学習用データセットへのパス
 DATASET_PATH = "./maps_custom"       # 学習用データセットへのパス
-NUM_SAVE_STEP = 1             # 自動生成画像の保存間隔（エポック単位）
+NUM_SAVE_STEP = 100           # 自動生成画像の保存間隔（イテレーション単位）
 
-NUM_EPOCHES = 10              # エポック数（学習回数）
+NUM_EPOCHES = 50              # エポック数（学習回数）
 LEARNING_RATE = 0.0002        # 学習率 (Default:0.0002)
 BATCH_SIZE = 1                # ミニバッチサイズ
 IMAGE_SIZE = 256              # 入力画像のサイズ（pixel単位）
+NUM_CHANNELS = 3              # 入力画像のチャンネル数
 NUM_FEATURE_MAPS = 64         # 特徴マップの枚数
 
 
 def main():
     """
     U-Net による画像のセグメンテーション
-    ・学習用データセットは、
+    ・学習用データセットは、航空写真と地図画像
     """
     print("Start main()")
     
@@ -54,6 +55,7 @@ def main():
     print( "LEARNING_RATE : ", LEARNING_RATE )
     print( "BATCH_SIZE : ", BATCH_SIZE )
     print( "IMAGE_SIZE : ", IMAGE_SIZE )
+    print( "NUM_CHANNELS : ", NUM_CHANNELS )
     print( "NUM_FEATURE_MAPS : ", NUM_FEATURE_MAPS )
 
     #===================================
@@ -99,15 +101,6 @@ def main():
     #---------------------------------------------------------------
     # data と label をセットにした TensorDataSet の作成
     #---------------------------------------------------------------
-    if( os.path.exists( DATASET_PATH ) == False ):
-        os.mkdir( DATASET_PATH )
-
-        # データをダウンロード
-        #urllib.request( "https://people.eecs.berkeley.edu/~tinghuiz/projects/pix2pix/datasets/maps.tar.gz", "maps.tar.gz" )
-
-        # gzip 解凍
-
-
     dataset = torchvision.datasets.ImageFolder(
         root = DATASET_PATH,
         transform = transform,

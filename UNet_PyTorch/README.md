@@ -9,7 +9,7 @@ UNet によるセマンティックセグメンテーションを利用して、
 ## ■ 項目 [Contents]
 1. [動作環境](#動作環境)
 1. [使用法](#使用法)
-1. [コード説明＆実行結果](#コード説明＆実行結果)
+1. [コードの実行結果](#コードの実行結果)
 1. [背景理論](https://github.com/Yagami360/My_NoteBook/blob/master/%E6%83%85%E5%A0%B1%E5%B7%A5%E5%AD%A6/%E6%83%85%E5%A0%B1%E5%B7%A5%E5%AD%A6_%E6%A9%9F%E6%A2%B0%E5%AD%A6%E7%BF%92_%E7%94%9F%E6%88%90%E3%83%A2%E3%83%87%E3%83%AB.md#UNet)
 
 ## ■ 動作環境
@@ -22,13 +22,9 @@ UNet によるセマンティックセグメンテーションを利用して、
 
 ## ■ 使用法
 
-- データのダウンロード
-    - GPU で駆動させるときは、消費 VRAM を抑えるために、ダウンロードした学習用データの一部を削除して学習しています。
-
-```python
-wget https://people.eecs.berkeley.edu/~tinghuiz/projects/pix2pix/datasets/maps.tar.gz
-tar -xzvf maps.tar.gz
-```
+- 使用データ（航空写真と地図画像）<br>
+https://people.eecs.berkeley.edu/~tinghuiz/projects/pix2pix/datasets/maps.tar.gz<br>
+よりダウンロード後、解凍。
 
 - 使用法
 ```
@@ -42,7 +38,7 @@ $ python main.py
 #DEVICE = "CPU"               # 使用デバイス ("CPU" or "GPU")
 DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
 DATASET_PATH = "./maps"       # 学習用データセットへのパス
-NUM_SAVE_STEP = 1             # 自動生成画像の保存間隔（エポック単位）
+NUM_SAVE_STEP = 100           # 自動生成画像の保存間隔（イテレーション単位）
 
 NUM_EPOCHES = 10              # エポック数（学習回数）
 LEARNING_RATE = 0.0002        # 学習率 (Default:0.0002)
@@ -52,11 +48,9 @@ NUM_FEATURE_MAPS = 64         # 特徴マップの枚数
 ```
 
 
-<a id="コード説明＆実行結果"></a>
+<a id="コードの実行結果"></a>
 
-## ■ コード説明＆実行結果
-
-### ◎ コードの実行結果：`main.py`
+## ■ コードの実行結果：`main.py`
 
 |パラメータ名|値（実行条件１）|値（実行条件２）|
 |---|---|---|
@@ -69,10 +63,15 @@ NUM_FEATURE_MAPS = 64         # 特徴マップの枚数
 |学習率：`LEARNING_RATE`|0.0002|←|
 |減衰率 beta1|0.5|←|
 
-#### ☆ 損失関数のグラフ（実行条件１）
+### ◎ 損失関数のグラフ（実行条件１）
+
+- Epoch :10
 ![UNet_Loss_epoches10_lr0 0002_batchsize1](https://user-images.githubusercontent.com/25688193/57000545-2d20f080-6bef-11e9-84c1-b2687067b04c.png)<br>
 
-#### ☆ 生成画像（実行条件１）
+- Epoch : 50
+![UNet_Loss_epoches50_lr0 0002_batchsize1](https://user-images.githubusercontent.com/25688193/57051611-4e501280-6cbd-11e9-891a-c1fb2bb7583b.png)<br>
+
+### ◎ 生成画像（実行条件１）
 
 - Epoch = 1 ; iteration = 50<br>
 ![UNet_Image_epoches0_iters50](https://user-images.githubusercontent.com/25688193/56968890-f0c5a400-6b9e-11e9-978a-dcfcbc115a06.png)<br>
@@ -112,5 +111,20 @@ NUM_FEATURE_MAPS = 64         # 特徴マップの枚数
 
 - Epoch = 10 ; iteration = 10960<br>
 ![UNet_Image_epoches9_iters10960](https://user-images.githubusercontent.com/25688193/57000557-42961a80-6bef-11e9-9941-00f80719191f.png)<br>
+
+- Epoch = 15 ; iteration = 16500<br>
+![UNet_Image_epoches15_iters16500](https://user-images.githubusercontent.com/25688193/57017555-a1dd4480-6c5a-11e9-878e-f6cf21468c38.png)<br>
+
+- Epoch = 20 ; iteration = 22000<br>
+![UNet_Image_epoches20_iters22000](https://user-images.githubusercontent.com/25688193/57017550-9d189080-6c5a-11e9-98ff-9bcbe00f25c5.png)<br>
+
+- Epoch = 30 ; iteration = 32900<br>
+![UNet_Image_epoches30_iters32900](https://user-images.githubusercontent.com/25688193/57019866-98f07100-6c62-11e9-8f79-34809b845936.png)<br>
+
+- Epoch = 40 ; iteration = 43900<br>
+![UNet_Image_epoches40_iters43900](https://user-images.githubusercontent.com/25688193/57022399-ffc55880-6c69-11e9-984a-561881814f1c.png)<br>
+
+- Epoch = 48 ; iteration = 52800<br>
+![UNet_Image_epoches48_iters52800](https://user-images.githubusercontent.com/25688193/57051567-1a74ed00-6cbd-11e9-9352-2d015d0eef7d.png)<br>
 
 ## ■ デバッグ情報
