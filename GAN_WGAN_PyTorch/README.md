@@ -36,9 +36,10 @@ DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
 DATASET = "MNIST"            # データセットの種類（"MNIST" or "CIFAR-10"）
 #DATASET = "CIFAR-10"          # データセットの種類（"MNIST" or "CIFAR-10"）
 DATASET_PATH = "./dataset"    # 学習用データセットへのパス
-NUM_SAVE_STEP = 1             # 自動生成画像の保存間隔（エポック単位）
+RESULT_PATH = "./result_" + DATASET      # 結果を保存するディレクトリ
+NUM_SAVE_STEP = 100           # 自動生成画像の保存間隔（イテレーション単位）
 
-NUM_EPOCHES = 10               # エポック数（学習回数）
+NUM_EPOCHES = 10              # エポック数（学習回数）
 LEARNING_RATE = 0.00005       # 学習率 (Default:0.00005)
 BATCH_SIZE = 64               # ミニバッチサイズ
 IMAGE_SIZE = 64               # 入力画像のサイズ（pixel単位）

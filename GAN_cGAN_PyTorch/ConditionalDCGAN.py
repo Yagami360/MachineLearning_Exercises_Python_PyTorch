@@ -337,15 +337,18 @@ class ConditionalDCGAN( object ):
 
         return
 
-
-    def fit( self, dloader, n_sava_step = 5 ):
+    def fit( self, dloader, n_sava_step = 5, result_path = "./result" ):
         """
         指定されたトレーニングデータで、モデルの fitting 処理を行う。
         [Args]
             dloader : <DataLoader> 学習用データセットの DataLoader
-            n_sava_step : <int> 学習途中での生成画像の保存間隔（エポック単位）
+            n_sava_step : <int> 学習途中での生成画像の保存間隔（イテレーション単位）
+            result_path : <str> 学習途中＆結果を保存するディレクトリ
         [Returns]
         """
+        if( os.path.exists( result_path ) == False ):
+            os.mkdir( result_path )
+
         # 教師信号（０⇒偽物、1⇒本物）
         # real ラベルを 1 としてそして fake ラベルを 0 として定義
         ones_tsr =  torch.ones( self._batch_size ).to( self._device )
@@ -511,18 +514,28 @@ class ConditionalDCGAN( object ):
                 #----------------------------------------------------
                 self._G_optimizer.step()
 
+                #----------------------------------------------------
+                # 学習過程での自動生成画像
+                #----------------------------------------------------
+                # 特定のイテレーションでGeneratorから画像を保存
+                if( iterations % n_sava_step == 0 ):
+                    images = self.generate_fixed_images( b_transformed = False )
+                    save_image( tensor = images, filename = result_path + "/cGAN_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
+
             #----------------------------------------------------
             # 学習過程での自動生成画像
             #----------------------------------------------------
+            n_sava_step_epoch = 1
             # 特定のエポックでGeneratorから画像を保存
-            if( epoch % n_sava_step == 0 ):
+            if( epoch % n_sava_step_epoch == 0 ):
                 images = self.generate_fixed_images( b_transformed = False )
-                self._images_historys.append( images )
-                save_image( tensor = images, filename = "cDCGAN_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
+                save_image( tensor = images, filename = result_path + "/cDCGAN_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
 
                 for i in range( self._n_classes ):
                     images_i = self.generate_fixed_images_with_lable( n_samples = 64, y_label = i, b_transformed = False )
-                    save_image( tensor = images_i, filename = "cDCGAN_Image{}_epoches{}_iters{}.png".format( i, epoch, iterations ) )
+                    save_image( tensor = images_i, filename = result_path + "/cDCGAN_Image{}_epoches{}_iters{}.png".format( i, epoch, iterations ) )
+
+                #self._images_historys.append( images )
 
         print("Finished Training Loop.")
         return

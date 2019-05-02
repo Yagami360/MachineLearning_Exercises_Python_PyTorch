@@ -31,18 +31,21 @@ $ python main.py
 #DEVICE = "CPU"               # 使用デバイス ("CPU" or "GPU")
 DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
 DATASET = "MNIST"             # データセットの種類（"MNIST" or "CIFAR-10"）
+#DATASET = "CIFAR-10"         # データセットの種類（"MNIST" or "CIFAR-10"）
+GAN_BASELINE = "DCGAN"        # GAN のベースラインアルゴリズム（"DCGAN" or "LSGAN"）
+#GAN_BASELINE = "LSGAN"       # GAN のベースラインアルゴリズム（"DCGAN" or "LSGAN"）
+
 DATASET_PATH = "./dataset"    # 学習用データセットへのパス
-NUM_SAVE_STEP = 1             # 自動生成画像の保存間隔（エポック単位）
+RESULT_PATH = "./result_" + DATASET + "_" + GAN_BASELINE    # 結果を保存するディレクトリへのパス
+NUM_SAVE_STEP = 100           # 自動生成画像の保存間隔（イテレーション単位）
 
-#GAN_BASELINE = "DCGAN"       # GAN のベースラインアルゴリズム（"DCGAN" or "LSGAN"）
-GAN_BASELINE = "LSGAN"        # GAN のベースラインアルゴリズム（"DCGAN" or "LSGAN"）
 
-NUM_EPOCHES = 50              # エポック数（学習回数）
+NUM_EPOCHES = 10              # エポック数（学習回数）
 LEARNING_RATE = 0.00005       # 学習率
-BATCH_SIZE = 128              # ミニバッチサイズ
 IMAGE_SIZE = 64               # 入力画像のサイズ（pixel単位）
 NUM_CHANNELS = 1              # 入力画像のチャンネル数
 NUM_FEATURE_MAPS = 64         # 特徴マップの枚数
+BATCH_SIZE = 128              # ミニバッチサイズ
 NUM_INPUT_NOIZE_Z = 100       # 生成器に入力するノイズ z の次数
 NUM_CLASSES = 10              # クラスラベル y の次元数
 ```

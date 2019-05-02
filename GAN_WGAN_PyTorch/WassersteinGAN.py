@@ -343,14 +343,18 @@ class WassersteinGAN( object ):
         return
 
 
-    def fit( self, dloader, n_sava_step = 5 ):
+    def fit( self, dloader, n_sava_step = 5, result_path = "./result" ):
         """
         指定されたトレーニングデータで、モデルの fitting 処理を行う。
         [Args]
             dloader : <DataLoader> 学習用データセットの DataLoader
-            n_sava_step : <int> 学習途中での生成画像の保存間隔（エポック単位）
+            n_sava_step : <int> 学習途中での生成画像の保存間隔（イテレーション単位）
+            result_path : <str> 学習途中＆結果を保存するディレクトリ
         [Returns]
         """
+        if( os.path.exists( result_path ) == False ):
+            os.mkdir( result_path )
+
         # 入力ノイズ z
         input_noize_z = torch.FloatTensor( self._batch_size, self._n_input_noize_z ).to( self._device )
 
@@ -453,6 +457,7 @@ class WassersteinGAN( object ):
                     # クリティック C の損失関数 = E_x[ C(x) ] + E_z[ C(G(z) ]
                     loss_C = loss_C_real - loss_C_fake
                     #print( "loss_C : ", loss_C.item() )
+                    self._loss_C_historys.append( loss_C.item() )
 
                     #----------------------------------------------------
                     # 誤差逆伝搬
@@ -501,6 +506,7 @@ class WassersteinGAN( object ):
                 #loss_G = torch.mean( C_G_z )
                 loss_G = C_G_z
                 #print( "loss_G :", loss_G )
+                self._loss_G_historys.append( loss_G.item() )
 
                 #----------------------------------------------------
                 # 誤差逆伝搬
@@ -512,18 +518,23 @@ class WassersteinGAN( object ):
                 #----------------------------------------------------
                 self._G_optimizer.step()
 
-                #
-                self._loss_C_historys.append( loss_C.item() )
-                self._loss_G_historys.append( loss_G.item() )
+                #----------------------------------------------------
+                # 学習過程での自動生成画像
+                #----------------------------------------------------
+                # 特定のイテレーションでGeneratorから画像を保存
+                if( iterations % n_sava_step == 0 ):
+                    images = self.generate_fixed_images( b_transformed = False )
+                    save_image( tensor = images, filename = result_path + "/cGAN_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
 
             #----------------------------------------------------
             # 学習過程での自動生成画像
             #----------------------------------------------------
+            n_sava_step_epoch = 1
             # 特定のエポックでGeneratorから画像を保存
-            if( epoch % n_sava_step == 0 ):
+            if( epoch % n_sava_step_epoch == 0 ):
                 images = self.generate_fixed_images( b_transformed = False )
-                self._images_historys.append( images )
                 save_image( tensor = images, filename = "WGAN_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
+                #self._images_historys.append( images )
 
         print("Finished Training Loop.")
         return

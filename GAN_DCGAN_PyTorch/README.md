@@ -81,10 +81,7 @@ NUM_INPUT_NOIZE_Z = 100       # 生成器に入力するノイズ z の次数
 |特徴マップの枚数：`NUM_FEATURE_MAPS`|64|
 
 ### ◎ 損失関数のグラフ（実行条件１）：`main_mnist.py`
-
-<!--
 ![DCGANforMNIST_Loss_epoches10_lr0 0002_batchsize128](https://user-images.githubusercontent.com/25688193/56814818-eb084f80-687a-11e9-967f-062388b8d90a.png)<br>
--->
 
 ### ◎ 生成器から生成された自動生成画像（実行条件１）：`main_mnist.py`
 
@@ -116,8 +113,10 @@ NUM_INPUT_NOIZE_Z = 100       # 生成器に入力するノイズ z の次数
 ![DCGANforMNIST_Image_epoches7_iters3500](https://user-images.githubusercontent.com/25688193/57061477-f08cec00-6cf7-11e9-8418-1f31757539ea.png)
 
 - エポック数 : 9 / イテレーション回数：4000<br>
+![DCGANforMNIST_Image_epoches8_iters4000](https://user-images.githubusercontent.com/25688193/57069829-ae23d900-6d10-11e9-88e9-ed4734bffb8b.png)
 
 - エポック数 : 10 / イテレーション回数：4500<br>
+![DCGANforMNIST_Image_epoches9_iters4500](https://user-images.githubusercontent.com/25688193/57069831-af550600-6d10-11e9-92ea-6e4c92c6c336.png)
 
 
 ## ■ コードの実行結果：`main.py`

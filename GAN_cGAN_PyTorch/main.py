@@ -27,11 +27,13 @@ from ConditionalLSGAN import ConditionalLSGAN
 DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
 DATASET = "MNIST"             # データセットの種類（"MNIST" or "CIFAR-10"）
 #DATASET = "CIFAR-10"         # データセットの種類（"MNIST" or "CIFAR-10"）
-DATASET_PATH = "./dataset"    # 学習用データセットへのパス
-NUM_SAVE_STEP = 1             # 自動生成画像の保存間隔（エポック単位）
+GAN_BASELINE = "DCGAN"        # GAN のベースラインアルゴリズム（"DCGAN" or "LSGAN"）
+#GAN_BASELINE = "LSGAN"       # GAN のベースラインアルゴリズム（"DCGAN" or "LSGAN"）
 
-GAN_BASELINE = "DCGAN"       # GAN のベースラインアルゴリズム（"DCGAN" or "LSGAN"）
-#GAN_BASELINE = "LSGAN"        # GAN のベースラインアルゴリズム（"DCGAN" or "LSGAN"）
+DATASET_PATH = "./dataset"    # 学習用データセットへのパス
+RESULT_PATH = "./result_" + DATASET + "_" + GAN_BASELINE    # 結果を保存するディレクトリへのパス
+NUM_SAVE_STEP = 100           # 自動生成画像の保存間隔（イテレーション単位）
+
 
 NUM_EPOCHES = 10              # エポック数（学習回数）
 LEARNING_RATE = 0.00005       # 学習率
@@ -228,7 +230,7 @@ def main():
     #======================================================================
     # モデルの学習フェイズ
     #======================================================================
-    model.fit( dloader = dloader_train, n_sava_step = NUM_SAVE_STEP )
+    model.fit( dloader = dloader_train, n_sava_step = NUM_SAVE_STEP, result_path = RESULT_PATH )
 
     #===================================
     # 学習結果の描写処理
@@ -259,7 +261,7 @@ def main():
     plt.grid()
     plt.tight_layout()
     plt.savefig(
-        "cGAN_Loss_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE ),  
+        RESULT_PATH + "/cGAN_Loss_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE ),  
         dpi = 300, bbox_inches = "tight"
     )
     plt.show()
@@ -273,18 +275,8 @@ def main():
 
     save_image( 
         tensor = images, 
-        filename = "cGAN_Image_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE )
+        filename = RESULT_PATH + "/cGAN_Image_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE )
     )
-
-    """
-    images = model.generate_images( n_samples = 64, b_transformed = True )
-    scipy.misc.imsave( 
-        "cGAN_Image_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE ),
-        np.vstack(
-            np.array( [ np.hstack(img) for img in images ] )
-        )
-    )
-    """
 
     print("Finish main()")
     print( "終了時間：", datetime.now() )
