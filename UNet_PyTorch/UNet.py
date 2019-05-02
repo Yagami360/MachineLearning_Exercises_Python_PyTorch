@@ -334,7 +334,7 @@ class SemanticSegmentationwithUNet( object ):
                     if( b_init_fixed_image == False ):
                         b_init_fixed_image = True
                         # 初回ループの画像を、image-to-image の変換前の固定された画像（学習後の画像生成の入力画像として利用）として採用
-                        self._fixed_pre_image = pre_image
+                        self._fixed_pre_image = pre_image.detach()
 
                     image = self.generate_fixed_images( pre_image = self._fixed_pre_image, b_transformed = False )
                     save_image( tensor = image, filename = "UNet_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
@@ -354,7 +354,7 @@ class SemanticSegmentationwithUNet( object ):
                 if( b_init_fixed_image == False ):
                     b_init_fixed_image = True
                     # 初回ループの画像を、image-to-image の変換前の固定された画像（学習後の画像生成の入力画像として利用）として採用
-                    self._fixed_pre_image = pre_image
+                    self._fixed_pre_image = pre_image.detach()
 
                 image = self.generate_fixed_images( pre_image = self._fixed_pre_image, b_transformed = False )
                 save_image( tensor = image, filename = "UNet_Image_epoches{}_iters{}.png".format( epoch, iterations ) )

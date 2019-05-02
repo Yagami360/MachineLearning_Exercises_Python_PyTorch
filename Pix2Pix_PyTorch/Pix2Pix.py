@@ -173,20 +173,33 @@ class Discriminator( nn.Module ):
         super( Discriminator, self ).__init__()
         self._device = device
 
-        def discriminator_block( in_filters, out_filters, normalization = True ):
-            """Returns downsampling layers of each discriminator block"""
-            layers = [nn.Conv2d(in_filters, out_filters, 4, stride=2, padding=1)]
-            if normalization:
-                layers.append(nn.InstanceNorm2d(out_filters))
-            layers.append(nn.LeakyReLU(0.2, inplace=True))
-            return layers
+        # 識別器のネットワークでは、Patch GAN を採用するが、
+        # patchを切り出したり、ストライドするような処理は、直接的には行わない
+        # その代りに、これを畳み込みで表現する。
+        # つまり、CNNを畳み込んで得られる特徴マップのある1pixelは、入力画像のある領域(Receptive field)の影響を受けた値になるが、
+        # 裏を返せば、ある1pixelに影響を与えられるのは、入力画像のある領域だけ。
+        # そのため、「最終出力をあるサイズをもった特徴マップにして、各pixelにて真偽判定をする」ことと 、「入力画像をpatchにして、各patchの出力で真偽判定をする」ということが等価になるためである。
+        def discriminator_block1( in_dim, out_dim ):
+            model = nn.Sequential(
+                nn.Conv2d( in_dim, out_dim, 4, stride=2, padding=1 ),
+                nn.LeakyReLU( 0.2, inplace=True )
+            )
+            return model
 
-        self._layer = nn.Sequential(
-            *discriminator_block( n_in_channels * 2, n_fmaps, normalization=False ),
-            *discriminator_block( n_fmaps, n_fmaps*2 ),
-            *discriminator_block( n_fmaps*2, n_fmaps*4 ),
-            *discriminator_block( n_fmaps*4, n_fmaps*8 ),
-            nn.ZeroPad2d((1, 0, 1, 0)),
+        def discriminator_block2( in_dim, out_dim ):
+            model = nn.Sequential(
+                nn.Conv2d( in_dim, out_dim, 4, stride=2, padding=1 ),
+                nn.InstanceNorm2d( out_dim ),
+                nn.LeakyReLU( 0.2, inplace=True )
+            )
+            return model
+
+        self._layer1 = discriminator_block1( n_in_channels * 2, n_fmaps ).to( self._device )
+        self._layer2 = discriminator_block2( n_fmaps, n_fmaps*2 ).to( self._device )
+        self._layer3 = discriminator_block2( n_fmaps*2, n_fmaps*4 ).to( self._device )
+        self._layer4 = discriminator_block2( n_fmaps*4, n_fmaps*8 ).to( self._device )
+        self._output_layer = nn.Sequential(
+            nn.ZeroPad2d( (1, 0, 1, 0) ),
             nn.Conv2d( n_fmaps*8, 1, 4, padding=1, bias=False )
         ).to( self._device )
 
@@ -200,7 +213,11 @@ class Discriminator( nn.Module ):
             y : <Tensor> image-to-image 変換後の画像データ
         """
         output = torch.cat( [x, y], dim=1 )
-        output = self._layer( output )
+        output = self._layer1( output )
+        output = self._layer2( output )
+        output = self._layer3( output )
+        output = self._layer4( output )
+        output = self._output_layer( output )
         output = output.squeeze()
         return output
 
@@ -559,7 +576,7 @@ class Pix2PixModel( object ):
                     if( b_init_fixed_image == False ):
                         b_init_fixed_image = True
                         # 初回ループの画像を、image-to-image の変換前の固定された画像（学習後の画像生成の入力画像として利用）として採用
-                        self._fixed_pre_image = pre_image
+                        self._fixed_pre_image = pre_image.detach()
 
                     image = self.generate_fixed_images( pre_image = self._fixed_pre_image, b_transformed = False )
                     save_image( tensor = image, filename = "Pix2Pix_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
@@ -580,7 +597,7 @@ class Pix2PixModel( object ):
                 if( b_init_fixed_image == False ):
                     b_init_fixed_image = True
                     # 初回ループの画像を、image-to-image の変換前の固定された画像（学習後の画像生成の入力画像として利用）として採用
-                    self._fixed_pre_image = pre_image
+                    self._fixed_pre_image = pre_image.detach()
 
                 image = self.generate_fixed_images( pre_image = self._fixed_pre_image, b_transformed = False )
                 save_image( tensor = image, filename = "Pix2Pix_Image_epoches{}_iters{}.png".format( epoch, iterations ) )

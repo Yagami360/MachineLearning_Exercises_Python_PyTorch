@@ -24,7 +24,8 @@ from DeepConvolutionalGANforMNIST import DeepConvolutionalGANforMNIST
 #DEVICE = "CPU"               # 使用デバイス ("CPU" or "GPU")
 DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
 DATASET_PATH = "./dataset"    # 学習用データセットへのパス
-NUM_SAVE_STEP = 1             # 自動生成画像の保存間隔（エポック単位）
+RESULT_PATH = "./result_forMNIST"   # 結果を保存するディレクトリ
+NUM_SAVE_STEP = 100           # 自動生成画像の保存間隔（イテレーション単位）
 
 NUM_EPOCHES = 10              # エポック数（学習回数）
 LEARNING_RATE = 0.0002        # 学習率
@@ -166,7 +167,7 @@ def main():
     #======================================================================
     # モデルの学習フェイズ
     #======================================================================
-    model.fit( dloader = dloader_train, n_sava_step = NUM_SAVE_STEP )
+    model.fit( dloader = dloader_train, n_sava_step = NUM_SAVE_STEP, result_path = RESULT_PATH )
 
     #===================================
     # 学習結果の描写処理
@@ -197,7 +198,7 @@ def main():
     plt.grid()
     plt.tight_layout()
     plt.savefig(
-        "DCGANforMNIST_Loss_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE ),  
+        RESULT_PATH + "/DCGANforMNIST_Loss_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE ),  
         dpi = 300, bbox_inches = "tight"
     )
     plt.show()
@@ -211,7 +212,7 @@ def main():
 
     save_image( 
         tensor = images, 
-        filename = "DCGANforMNIST_Image_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE )
+        filename = RESULT_PATH + "/DCGANforMNIST_Image_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE )
     )
 
     """
@@ -222,51 +223,6 @@ def main():
             np.array( [ np.hstack(img) for img in images ] )
         )
     )
-    """
-
-    #-------------------------------------------------------------------
-    # 学習過程での自動生成画像の動画を表示
-    #-------------------------------------------------------------------
-    """ 実装中
-    images_historys = model.images_historys
-
-    fig = plt.figure( figsize = (8,8) )
-    k = 0
-    for i in range(8):
-        for j in range(8):
-            k += 1
-            subplot = fig.add_subplot( 4, 8, k )
-            subplot.set_xticks([])
-            subplot.set_yticks([])
-            subplot.imshow(
-                images[k-1].reshape(28, 28),    # (1,28,28) → (28,28)
-                vmin=0, vmax=1,
-                cmap = plt.cm.gray_r
-            )
-
-    plt.tight_layout()
-    plt.savefig( 
-        "DCGAN_Image_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE ),  
-        dpi = 300, bbox_inches = "tight"
-    )
-    plt.show()
-    """
-
-    #-------------------------------------------------------------------
-    # 潜在空間で動かした場合の、自動生成画像の動画を表示
-    #-------------------------------------------------------------------
-    """ 実装中
-    morphing_inputs = []
-
-    # 球の表面上の回転
-    theta1, theta2 = 0, 0
-    for _ in range(32):     # batch_size
-        theta1 += 2*np.pi / 32
-        theta2 += 2*np.pi / 32
-        morphing_inputs.append(
-            np.cos(theta1) * input_noize[0] \
-            + np.sin(theta1)*( np.cos(theta2)*input_noize[1] + np.sin(theta2)*input_noize[2] )
-        )
     """
 
     print("Finish main()")

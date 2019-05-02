@@ -27,9 +27,11 @@ DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
 DATASET = "MNIST"            # データセットの種類（"MNIST" or "CIFAR-10"）
 #DATASET = "CIFAR-10"          # データセットの種類（"MNIST" or "CIFAR-10"）
 DATASET_PATH = "./dataset"    # 学習用データセットへのパス
-NUM_SAVE_STEP = 1             # 自動生成画像の保存間隔（エポック単位）
+RESULT_PATH = "./result_" + DATASET      # 結果を保存するディレクトリ
 
-NUM_EPOCHES = 50              # エポック数（学習回数）
+NUM_SAVE_STEP = 50            # 自動生成画像の保存間隔（エポック単位）
+
+NUM_EPOCHES = 10              # エポック数（学習回数）
 LEARNING_RATE = 0.00005       # 学習率
 IMAGE_SIZE = 64               # 入力画像のサイズ（pixel単位）
 NUM_CHANNELS = 1              # 入力画像のチャンネル数
@@ -210,7 +212,7 @@ def main():
     #======================================================================
     # モデルの学習フェイズ
     #======================================================================
-    model.fit( dloader = dloader_train, n_sava_step = NUM_SAVE_STEP )
+    model.fit( dloader = dloader_train, n_sava_step = NUM_SAVE_STEP, result_path = RESULT_PATH )
 
     #===================================
     # 学習結果の描写処理
@@ -241,7 +243,7 @@ def main():
     plt.grid()
     plt.tight_layout()
     plt.savefig(
-        "DCGAN_Loss_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE ),  
+        RESULT_PATH + "/DCGAN_Loss_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE ),  
         dpi = 300, bbox_inches = "tight"
     )
     plt.show()
@@ -255,7 +257,7 @@ def main():
 
     save_image( 
         tensor = images, 
-        filename = "DCGAN_Image_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE )
+        filename = RESULT_PATH + "/DCGAN_Image_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE )
     )
 
     """

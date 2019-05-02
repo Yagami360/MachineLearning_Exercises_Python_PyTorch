@@ -17,6 +17,33 @@ import torch.optim as optim
 from torchvision.utils import save_image
 
 
+# custom weights initialization called on netG and netD
+def weights_init(m):
+    classname = m.__class__.__name__
+    if classname.find('Conv') != -1:
+        nn.init.normal_(m.weight.data, 0.0, 0.02)
+    elif classname.find('BatchNorm') != -1:
+        nn.init.normal_(m.weight.data, 1.0, 0.02)
+        nn.init.constant_(m.bias.data, 0)
+
+"""
+def weights_init( model ):
+    for m in model.modules():
+        if isinstance(m, nn.Conv2d):
+            m.weight.data.normal_(0, 0.02)
+            m.bias.data.zero_()
+        elif isinstance(m, nn.ConvTranspose2d):
+            m.weight.data.normal_(0, 0.02)
+            m.bias.data.zero_()
+        elif isinstance(m, nn.Linear):
+            m.weight.data.normal_(0, 0.02)
+            m.bias.data.zero_()
+        elif isinstance(m, nn.BatchNorm2d):
+            m.weight.data.normal_(1.0, 0.02)
+            m.bias.data.zero_()
+    return
+"""
+
 class Generator( nn.Module ):
     """
     DCGAN の生成器 G [Generator] 側のネットワーク構成を記述したモデル。
@@ -59,14 +86,7 @@ class Generator( nn.Module ):
             nn.Tanh()
         ).to( self._device )
 
-        self.init_weight()
-        return
-
-
-    def init_weight( self ):
-        """
-        独自の重みの初期化処理
-        """
+        weights_init( self )
         return
 
     def forward( self, input ):
@@ -122,18 +142,13 @@ class Discriminator( nn.Module ):
             nn.Sigmoid()
         ).to( self._device )
 
-        self.init_weight()
+        weights_init( self )
 
-        return
-
-    def init_weight( self ):
-        """
-        独自の重みの初期化処理
-        """
         return
 
     def forward(self, input):
         output = self._layer( input )
+        output = output.squeeze()
         return output
 
 
@@ -312,14 +327,18 @@ class DeepConvolutionalGAN( object ):
         return
 
 
-    def fit( self, dloader, n_sava_step = 5 ):
+    def fit( self, dloader, n_sava_step = 5, result_path = "./result" ):
         """
         指定されたトレーニングデータで、モデルの fitting 処理を行う。
         [Args]
             dloader : <DataLoader> 学習用データセットの DataLoader
-            n_sava_step : <int> 学習途中での生成画像の保存間隔（エポック単位）
+            n_sava_step : <int> 学習途中での生成画像の保存間隔（イテレーション単位）
+            result_path : <str> 学習途中＆結果を保存するディレクトリ
         [Returns]
         """
+        if( os.path.exists( result_path ) == False ):
+            os.mkdir( result_path )
+
         # 教師信号（０⇒偽物、1⇒本物）
         # real ラベルを 1 としてそして fake ラベルを 0 として定義
         ones_tsr =  torch.ones( self._batch_size ).to( self._device )
@@ -354,20 +373,37 @@ class DeepConvolutionalGAN( object ):
                 # ミニバッチデータを GPU へ転送
                 images = images.to( self._device )
 
-                #====================================================
-                # 識別器 D の fitting 処理
-                #====================================================
                 # 生成器 G に入力するノイズ z (62 : ノイズの次元)
-                # Generatorの更新の前にノイズを新しく生成しなおす必要があり。
                 input_noize_z = torch.rand( 
                     size = (self._batch_size, self._n_input_noize_z, 1, 1)
                 ).to( self._device )
 
+                #====================================================
+                # 識別器 D の fitting 処理
+                #====================================================
                 #----------------------------------------------------
                 # 勾配を 0 に初期化
                 # （この初期化処理が必要なのは、勾配がイテレーション毎に加算される仕様のため）
                 #----------------------------------------------------
                 self._D_optimizer.zero_grad()
+
+                """
+                # Train with all-real batch
+                # D(x) : 本物画像 x = image を入力したときの識別器の出力 (0.0 ~ 1.0)
+                D_x = self._dicriminator( images )
+                # E[ log{D(x)} ]
+                loss_D_real = self._loss_fn( D_x, ones_tsr )
+
+                # Train with all-fake batch
+                # G(z) : 生成器から出力される偽物画像
+                G_z = self._generator( input_noize_z )
+
+                # D( G(z) ) : 偽物画像を入力したときの識別器の出力 (0.0 ~ 1.0)
+                # 識別器 D のみ学習を行っている段階ので、生成器からの出力 G_z を deatch() して、生成器側に勾配が伝わらないようにする。
+                D_G_z = self._dicriminator( G_z.detach() )
+                # E[ 1 - log{D(G(z))} ]
+                loss_D_fake = self._loss_fn( D_G_z, zeros_tsr )
+                """
 
                 #----------------------------------------------------
                 # 学習用データをモデルに流し込む
@@ -384,7 +420,8 @@ class DeepConvolutionalGAN( object ):
                 #print( "G_z :", G_z )
 
                 # D( G(z) ) : 偽物画像を入力したときの識別器の出力 (0.0 ~ 1.0)
-                D_G_z = self._dicriminator( G_z )
+                # 識別器 D のみ学習を行っている段階ので、生成器からの出力 G_z を deatch() して、生成器側に勾配が伝わらないようにする。
+                D_G_z = self._dicriminator( G_z.detach() )
                 #print( "D_G_z.size() :", D_G_z.size() )
                 #print( "D_G_z :", D_G_z )
 
@@ -421,12 +458,6 @@ class DeepConvolutionalGAN( object ):
                 #====================================================
                 # 生成器 G の fitting 処理
                 #====================================================
-                # 生成器 G に入力するノイズ z (62 : ノイズの次元)
-                # Generatorの更新の前にノイズを新しく生成しなおす必要があり。
-                input_noize_z = torch.rand( 
-                    size = (self._batch_size, self._n_input_noize_z, 1, 1)
-                ).to( self._device )
-
                 #----------------------------------------------------
                 # 勾配を 0 に初期化
                 # （この初期化処理が必要なのは、勾配がイテレーション毎に加算される仕様のため）
@@ -437,11 +468,6 @@ class DeepConvolutionalGAN( object ):
                 # 学習用データをモデルに流し込む
                 # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
                 #----------------------------------------------------
-                # G(z) : 生成器から出力される偽物画像
-                G_z = self._generator( input_noize_z )
-                #print( "G_z.size() :", G_z.size() )
-                #print( "G_z :", G_z )
-
                 # D( G(z) ) : 偽物画像を入力したときの識別器の出力 (0.0 ~ 1.0)
                 D_G_z = self._dicriminator( G_z )
                 #print( "D_G_z.size() :", D_G_z.size() )
@@ -464,15 +490,32 @@ class DeepConvolutionalGAN( object ):
                 #----------------------------------------------------
                 self._G_optimizer.step()
 
+                #----------------------------------------------------
+                # 学習過程での自動生成画像
+                #----------------------------------------------------
+                # 特定のイテレーションでGeneratorから画像を保存
+                if( iterations % n_sava_step == 0 ):
+                    images = self.generate_fixed_images( b_transformed = False )
+                    save_image( tensor = images, filename = result_path + "/DCGAN_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
+
+                    # [batch_size, n_channels, height, width] → [height, width, n_channels]
+                    image_reshaped = images[0].transpose( 0 ,2 )
+                    self._images_historys.append( image_reshaped.cpu().detach().numpy() )
+
             #----------------------------------------------------
             # 学習過程での自動生成画像
             #----------------------------------------------------
+            n_sava_step_epoch = 1
             # 特定のエポックでGeneratorから画像を保存
-            if( epoch % n_sava_step == 0 ):
+            if( epoch % n_sava_step_epoch == 0 ):
                 images = self.generate_fixed_images( b_transformed = False )
-                self._images_historys.append( images )
-                save_image( tensor = images, filename = "DCGAN_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
+                save_image( tensor = images, filename = result_path + "/DCGAN_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
 
+                # [batc_size, n_channels, height, width] → [height, width, n_channels]
+                image_reshaped = images[0].transpose( 0 ,2 )
+                self._images_historys.append( image_reshaped.cpu().detach().numpy() )
+
+        self.save_image_historys_gif( file_name = result_path + "/DCGAN_Image_epoches{}_iters{}.gif".format( epoch, iterations ) )
         print("Finished Training Loop.")
         return
 
@@ -527,3 +570,11 @@ class DeepConvolutionalGAN( object ):
             images = images.cpu().detach().numpy()
 
         return images
+
+    def save_image_historys_gif( self, file_name = "DCGAN.gif" ):
+        """
+        学習中の生成画像の様子を gif ファイルで保存
+        """
+        import imageio
+        imageio.mimsave( file_name, self._images_historys )
+        return
