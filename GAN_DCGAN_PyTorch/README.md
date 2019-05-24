@@ -174,3 +174,47 @@ NUM_INPUT_NOIZE_Z = 100       # 生成器に入力するノイズ z の次数
 - エポック数 : 10 / イテレーション回数 : 4680<br>
 <br>
 -->
+
+## デバッグ情報
+
+- 422 : G_z.detach() 有り/ 無し
+
+```python
+                D_G_z = self._dicriminator( G_z.detach() )
+                #print( "D_G_z.size() :", D_G_z.size() )
+
+```
+- 識別器での再度の入力ノイズ z 設定有りなし
+
+```python
+                # 生成器 G に入力するノイズ z
+                #input_noize_z = torch.rand( (self._batch_size, self._n_input_noize_z, 1, 1) ).to( self._device )
+
+                ...
+                # G(z) : 生成器から出力される偽物画像
+                #G_z = self._generator( input_noize_z )
+```
+
+- xxx
+
+```python
+                """
+                # Train with all-real batch
+                # D(x) : 本物画像 x = image を入力したときの識別器の出力 (0.0 ~ 1.0)
+                D_x = self._dicriminator( images )
+                # E[ log{D(x)} ]
+                loss_D_real = self._loss_fn( D_x, ones_tsr )
+
+                # Train with all-fake batch
+                # G(z) : 生成器から出力される偽物画像
+                G_z = self._generator( input_noize_z )
+
+                # D( G(z) ) : 偽物画像を入力したときの識別器の出力 (0.0 ~ 1.0)
+                # 識別器 D のみ学習を行っている段階ので、生成器からの出力 G_z を deatch() して、生成器側に勾配が伝わらないようにする。
+                D_G_z = self._dicriminator( G_z.detach() )
+                # E[ 1 - log{D(G(z))} ]
+                loss_D_fake = self._loss_fn( D_G_z, zeros_tsr )
+                """
+```
+
+- weight の初期化の有無

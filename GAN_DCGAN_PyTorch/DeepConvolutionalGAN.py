@@ -457,7 +457,7 @@ class DeepConvolutionalGAN( object ):
                 # 生成器 G の fitting 処理
                 #====================================================
                 # 生成器 G に入力するノイズ z
-                input_noize_z = torch.rand( (self._batch_size, self._n_input_noize_z, 1, 1) ).to( self._device )
+                #input_noize_z = torch.rand( (self._batch_size, self._n_input_noize_z, 1, 1) ).to( self._device )
 
                 #----------------------------------------------------
                 # 勾配を 0 に初期化
@@ -470,7 +470,7 @@ class DeepConvolutionalGAN( object ):
                 # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
                 #----------------------------------------------------
                 # G(z) : 生成器から出力される偽物画像
-                G_z = self._generator( input_noize_z )
+                #G_z = self._generator( input_noize_z )
 
                 # D( G(z) ) : 偽物画像を入力したときの識別器の出力 (0.0 ~ 1.0)
                 D_G_z = self._dicriminator( G_z )
