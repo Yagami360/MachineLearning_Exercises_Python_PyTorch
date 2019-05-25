@@ -28,10 +28,16 @@ ResNet-18 の PyTorch での実装<br>
 $ python main.py
 ```
 
-- CIFAR-10 の場合
+- CIFAR-10 の場合（学習時）
 
 ```
-$ python main.py --device GPU --dataset CIFAR-10 --n_epoches 10  --batch_size 32 --learning_rate 0.001
+$ python main.py --device GPU --run_mode train --dataset CIFAR-10 --n_epoches 10  --batch_size 32 --learning_rate 0.001
+```
+
+- CIFAR-10 の場合（推論時）
+
+```
+$ python main.py --device GPU --run_mode test --dataset CIFAR-10
 ```
 
 
@@ -40,6 +46,7 @@ $ python main.py --device GPU --dataset CIFAR-10 --n_epoches 10  --batch_size 32
 |引数名|意味|値 (Default値)|
 |---|---|---|
 |`--device`|実行デバイス|`GPU` (Default) or `CPU`|
+|`--run_mode`|実行デバイス|`train` (Default) or `add_train` or `test`|
 |`--dataset`|データセット|`MNIST` (Default) or `CIFAR-10`|
 |`--dataset_path`|データセットの保存先|`./dataset` (Default)|
 |`--image_size`|データセットの画像サイズ（pixel単位）|`224` (Default)<br>ImageNetのサイズ|
@@ -196,4 +203,25 @@ _model : ResNet18(
 ```
 
 ### ◎ 損失関数のグラフ（実行条件１）
+![ResNet18_Loss_epoches5_lr0 001_batchsize32](https://user-images.githubusercontent.com/25688193/58368136-bf34c400-7f23-11e9-8ca1-9880de75776b.png)
 
+### ◎ 正解率
+
+- エポック : 5 / Acuraccy [test data] : 0.738
+- エポック : 10 / Acuraccy [test data] : 0.80390
+
+<!--
+|ラベル|Acuraccy [test data]|サンプル数|
+|---|---|---|
+|全ラベルでの平均|0.738(±)|10,000 個|
+|0 : airplane|xxx|1000 個|
+|1 : automoblie|xxx|1000 個|
+|2 : bird|xxx|1000 個|
+|3 : cat|xxx|1000 個|
+|4 : deer|xxx|1000 個|
+|5 : dog|xxx|1000 個|
+|6 : frog|xxx|1000 個|
+|7 : horse|xxx|1000 個|
+|8 : ship|xxx|1000 個|
+|9 : tuck|xxx|1000 個|
+-->

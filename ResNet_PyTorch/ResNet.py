@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torchvision.utils import save_image
+import tensorboardX as tbx
 
 
 class BasicBlock( nn.Module ):
@@ -246,6 +247,9 @@ class ResNetClassifier( object ):
         if( os.path.exists( result_path ) == False ):
             os.mkdir( result_path )
 
+        # TensorBoard の Writter
+        writer = tbx.SummaryWriter( result_path )
+
         #-------------------------------------
         # モデルを学習モードに切り替える。
         #-------------------------------------
@@ -291,7 +295,7 @@ class ResNetClassifier( object ):
                 # 損失関数を計算する
                 #----------------------------------------------------
                 loss = self._loss_fn( output, targets )
-                self._loss_historys.append( loss )
+                self._loss_historys.append( loss.item() )
 
                 #----------------------------------------------------
                 # 誤差逆伝搬
@@ -303,15 +307,112 @@ class ResNetClassifier( object ):
                 #----------------------------------------------------
                 self._optimizer.step()
 
-                #
+                # 学習経過の表示処理
+                writer.add_scalar( "data/loss", loss.item(), iterations )
                 print( "\nepoch = %d / iterations = %d / loss = %f" % ( epoch, iterations, loss ) )
 
+            # エポック度の処理
+            self.save_model()
+                
+        self.save_model()
+        writer.export_scalars_to_json( os.path.join( result_path, "tensorboard.json" ) )
+        writer.close()
         print("Finished Training Loop.")
         return
 
+    def predict( self, dloader ):
+        """
+        fitting 処理したモデルで推定を行い、予想クラスラベル値を返す。
 
-    def save_model( self, dir = ".checkpoint/" ):
+        [Args]
+            dloader : <DataLoader> テスト用データセットの DataLoader
+        [Returns]
+            predicts : <Tensor> 予想クラスラベル
+        """
+        # model を推論モードに切り替える（PyTorch特有の処理）
+        self._model.eval()
+
+        # torch.no_grad()
+        # 微分を行わない処理の範囲を with 構文で囲む
+        # pytorchではtrain時，forward計算時に勾配計算用のパラメータを保存しておくことでbackward計算の高速化を行っており、
+        # これは，model.eval()で行っていてもパラメータが保存されるために、torch.no_grad() でパラメータの保存を止める必要がある。
+        with torch.no_grad():
+            for (inputs,targets) in dloader:
+                # ミニバッチデータを GPU へ転送
+                inputs = inputs.to( self._device )
+                targets = targets.to( self._device )
+
+                # テストデータをモデルに流し込む
+                outputs = self._model( inputs )
+
+                # 確率値が最大のラベル 0~9 を予想ラベルとする。
+                # dim = 1 ⇒ 列方向で最大値をとる
+                # Returns : (Tensor, LongTensor)
+                _, predicts = torch.max( outputs.data, dim = 1 )
+                #print( "predicts :", predicts )
+
+        return predicts
+
+
+    def accuracy( self, dloader ):
+        """
+        指定したデータでの正解率 [accuracy] を計算する。
+
+        [Args]
+            dloader : <DataLoader> テスト用データセットの DataLoader
+        [Returns]
+            accuracy : <float> 正解率
+
+        """
+        n_correct = 0
+        n_tests = 0
+
+        # torch.no_grad()
+        # 微分を行わない処理の範囲を with 構文で囲む
+        # pytorchではtrain時，forward計算時に勾配計算用のパラメータを保存しておくことでbackward計算の高速化を行っており、
+        # これは，model.eval()で行っていてもパラメータが保存されるために、torch.no_grad() でパラメータの保存を止める必要がある。
+        with torch.no_grad():
+            for (inputs,targets) in dloader:
+                # ミニバッチデータを GPU へ転送
+                inputs = inputs.to( self._device )
+                targets = targets.to( self._device )
+
+                # テストデータをモデルに流し込む
+                outputs = self._model( inputs )
+
+                # 確率値が最大のラベル 0~9 を予想ラベルとする。
+                # dim = 1 ⇒ 列方向で最大値をとる
+                # Returns : (Tensor, LongTensor)
+                _, predicts = torch.max( outputs.data, dim = 1 )
+                #print( "predicts :", predicts )
+
+                #--------------------
+                # 正解数のカウント
+                #--------------------
+                n_tests += targets.size(0)
+
+                # ミニバッチ内で一致したラベルをカウント
+                n_correct += ( predicts == targets ).sum().item()
+
+        # 正解率の計算
+        accuracy = n_correct / n_tests
+        print( "Accuracy [test] : {}/{} {:.5f}\n".format( n_correct, n_tests, accuracy ) )
+
+        return accuracy
+
+
+    def save_model( self, save_dir = "./checkpoint" ):
+        if( os.path.exists( save_dir ) == False ):
+            os.mkdir( save_dir )
+
+        torch.save( 
+            self._model.state_dict(), 
+            os.path.join( save_dir, "model.pth" )
+        )
         return
 
-    def load_model( self ):
+    def load_model( self, load_dir = "./checkpoint" ):
+        self._model.load_state_dict( 
+            torch.load( os.path.join( load_dir, "model.pth" ) )
+        )
         return

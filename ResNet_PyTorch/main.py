@@ -13,6 +13,7 @@ from torch.utils.data import TensorDataset, DataLoader
 import torchvision      # 画像処理関連
 import torchvision.transforms as transforms
 from torchvision.utils import save_image
+import tensorboardX as tbx
 
 # 自作モジュール
 from ResNet import ResNetClassifier
@@ -26,8 +27,9 @@ if __name__ == '__main__':
 
     # コマンドライン引数の取得
     parser = argparse.ArgumentParser()
-    parser.add_argument( "--device", type = str, default = "GPU" )
-    parser.add_argument( "--dataset", type = str, default = "CIFAR-10" )
+    parser.add_argument( "--device", type = str, default = "GPU" )              # GPU | CPU
+    parser.add_argument( "--run_mode", type = str, default = "train" )          # train | add_train | test
+    parser.add_argument( "--dataset", type = str, default = "CIFAR-10" )        # CIFAR-10 | MNIST
     parser.add_argument( "--dataset_path", type = str, default = "./dataset" )
     parser.add_argument( "--image_size", type = int, default = 224 )
     parser.add_argument( "--n_classes", type = int, default = 10 )
@@ -44,6 +46,7 @@ if __name__ == '__main__':
     print( "開始時間：", datetime.now() )
     print( "PyTorch version:", torch.__version__ )
     print( "--device : ", args.device )
+    print( "--run_mode : ", args.run_mode )
     print( "--dataset : ", args.dataset )
     print( "--dataset_path : ", args.dataset_path )
     print( "--image_size : ", args.image_size )
@@ -178,36 +181,52 @@ if __name__ == '__main__':
     #======================================================================
     # モデルの学習フェイズ
     #======================================================================
-    model.fit( dloader = dloader_train, n_sava_step = 1, result_path = args.result_path )
+    if( args.run_mode == "train" ):
+        model.fit( dloader = dloader_train, n_sava_step = 1, result_path = args.result_path )
+    elif( args.run_mode == "add_train" ):
+        model.load_model()
+        model.fit( dloader = dloader_train, n_sava_step = 1, result_path = args.result_path )
+    elif( args.run_mode == "test" ):
+        model.load_model()
+
+    #======================================================================
+    # モデルの推論フェイズ
+    #======================================================================
+    #predicts = model.predict( dloader = dloader_test )
+    accuracy = model.accuracy( dloader = dloader_test )
 
     #===================================
     # 学習結果の描写処理
     #===================================
-    #-----------------------------------
-    # 損失関数の plot
-    #-----------------------------------
-    plt.clf()
-    plt.plot(
-        range( 0, len(model.loss_history) ), model.loss_history,
-        linestyle = '-',
-        linewidth = 0.2,
-        color = 'red'
-    )
-    plt.title( "loss" )
-    plt.legend( loc = 'best' )
-    #plt.xlim( 0, len(model.loss_history) )
-    #plt.ylim( [0, 1.05] )
-    plt.xlabel( "iterations" )
-    plt.grid()
-    plt.tight_layout()
-    plt.savefig(
-        os.path.join(
-            args.result_path,     
-            "ResNet18_Loss_epoches{}_lr{}_batchsize{}.png".format( args.n_epoches, args.learning_rate, args.batch_size )
-        ),
-        dpi = 300, bbox_inches = "tight"
-    )
-    plt.show()
+    if( args.run_mode != "test" ):
+        #import sys
+        #sys.exit(0)
+
+        #-----------------------------------
+        # 損失関数の plot
+        #-----------------------------------
+        plt.clf()
+        plt.plot(
+            range( 0, len(model.loss_history) ), model.loss_history,
+            linestyle = '-',
+            linewidth = 0.2,
+            color = 'red'
+        )
+        plt.title( "loss" )
+        plt.legend( loc = 'best' )
+        #plt.xlim( 0, len(model.loss_history) )
+        #plt.ylim( [0, 1.05] )
+        plt.xlabel( "iterations" )
+        plt.grid()
+        plt.tight_layout()
+        plt.savefig(
+            os.path.join(
+                args.result_path,     
+                "ResNet18_Loss_epoches{}_lr{}_batchsize{}.png".format( args.n_epoches, args.learning_rate, args.batch_size )
+            ),
+            dpi = 300, bbox_inches = "tight"
+        )
+        plt.show()
 
 
     print("Finish main()")
