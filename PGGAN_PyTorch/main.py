@@ -17,6 +17,7 @@ import tensorboardX as tbx
 
 # 自作モジュール
 from ProgressiveGANforMNIST import ProgressiveGANforMNIST
+from ProgressiveGANforCIFAR10 import ProgressiveGANforCIFAR10
 
 
 if __name__ == '__main__':
@@ -32,10 +33,10 @@ if __name__ == '__main__':
     parser.add_argument( "--dataset", type = str, default = "MNIST" )           # MNIST | CIFAR-10
     #parser.add_argument( "--dataset", type = str, default = "CIFAR-10" )        # 
     parser.add_argument( "--dataset_path", type = str, default = "./dataset" )  # 
-    parser.add_argument( "--image_size", type = int, default = 32 )
     parser.add_argument( "--n_input_noize_z", type = int, default = 128 )
     parser.add_argument( "--init_image_size", type = int, default = 4 )
     parser.add_argument( "--final_image_size", type = int, default = 32 )
+    #parser.add_argument( "--final_image_size", type = int, default = 64 )
     parser.add_argument( "--n_epoches", type = int, default = 10 )    
     parser.add_argument( "--batch_size", type = int, default = 16 )
     parser.add_argument( "--learning_rate", type = float, default = 0.001 )
@@ -50,7 +51,6 @@ if __name__ == '__main__':
     print( "--run_mode : ", args.run_mode )
     print( "--dataset : ", args.dataset )
     print( "--dataset_path : ", args.dataset_path )
-    print( "--image_size : ", args.image_size )
     print( "--n_input_noize_z : ", args.n_input_noize_z )
     print( "--init_image_size : ", args.init_image_size )
     print( "--final_image_size : ", args.final_image_size )
@@ -92,7 +92,7 @@ if __name__ == '__main__':
     if( args.dataset == "MNIST" ):
         transform = transforms.Compose(
             [
-                transforms.Resize( args.image_size ),
+                transforms.Resize( args.final_image_size ),
                 transforms.ToTensor(),   # Tensor に変換
                 transforms.Normalize((0.5,), (0.5,)),
             ]
@@ -100,7 +100,7 @@ if __name__ == '__main__':
     elif( args.dataset == "CIFAR-10" ):
         transform = transforms.Compose(
             [
-                transforms.Resize( args.image_size ),
+                transforms.Resize( args.final_image_size ),
                 transforms.ToTensor(),   # Tensor に変換
                 transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)),
             ]
@@ -170,16 +170,32 @@ if __name__ == '__main__':
     #======================================================================
     # モデルの構造を定義する。
     #======================================================================
-    model = ProgressiveGANforMNIST(
-        device = device,
-        n_epoches = args.n_epoches,
-        batch_size = args.batch_size,
-        learing_rate = args.learning_rate,
-        n_input_noize_z = args.n_input_noize_z,
-        init_image_size = args.init_image_size,
-        final_image_size = args.final_image_size,
-    )
-    model.print( "after init()" )
+    if( args.dataset == "MNIST" ):
+        model = ProgressiveGANforMNIST(
+            device = device,
+            n_epoches = args.n_epoches,
+            batch_size = args.batch_size,
+            learing_rate = args.learning_rate,
+            n_input_noize_z = args.n_input_noize_z,
+            init_image_size = args.init_image_size,
+            final_image_size = args.final_image_size,
+        )
+        model.print( "after init()" )
+
+    elif( args.dataset == "CIFAR-10" ):
+        model = ProgressiveGANforCIFAR10(
+            device = device,
+            n_epoches = args.n_epoches,
+            batch_size = args.batch_size,
+            learing_rate = args.learning_rate,
+            n_input_noize_z = args.n_input_noize_z,
+            init_image_size = args.init_image_size,
+            final_image_size = args.final_image_size,
+        )
+        model.print( "after init()" )
+
+    else:
+        print( "WARNING: Inavlid dataset" )
 
     #======================================================================
     # モデルの学習フェイズ

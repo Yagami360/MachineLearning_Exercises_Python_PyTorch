@@ -51,7 +51,6 @@ $ python main.py
 |`--run_mode`|動作モード|`train` (Default) or `add_train` or `test`|
 |`--dataset`|データセット|`MNIST` (Default) or `CIFAR-10`|
 |`--dataset_path`|データセットの保存先|`./dataset` (Default)|
-|`--image_size`|データセットの画像サイズ（pixel単位）|`32` (Default)|
 |`--n_input_noize_z`|入力ノイズ z の次元数（＝潜在変数の次元数）|`128`(Default)|
 |`--init_image_size`|最初の Training Progresses での生成画像の解像度|`4`(Default)|
 |`--final_image_size`|最終的な Training Progresses での生成画像の解像度|`32`(Default)|
@@ -71,12 +70,11 @@ $ python main.py
 |使用デバイス：<br>`--device`|GPU|←|
 |データセット：<br>`--dataset`|MNIST|CIFAR-10|
 |動作モード：<br>`--run_mode`|`train`|←|
-|画像サイズ：<br>`--image_size`|32|64|
-|エポック数：<br>`--n_epoches`|10|
-|入力ノイズ z の次元数：<br>`--n_input_noize_z`|128||
+|エポック数：<br>`--n_epoches`|10|10|
+|入力ノイズ z の次元数：<br>`--n_input_noize_z`|128|256|
 |最初の生成画像の解像度：<br>`--init_image_size`|4|4|
 |最終的なの生成画像の解像度：<br>`--final_image_size`|32|64|
-|バッチサイズ：<br>`--batch_size`|16|
+|バッチサイズ：<br>`--batch_size`|16|16|
 |最適化アルゴリズム|Adam|←|
 |学習率：<br>`--learning_rate`|0.001|
 |減衰率 beta1|0.5|←|
@@ -123,6 +121,35 @@ $ python main.py
 
 	- Epoch 9 : iterations = 37500<br>
 		![PGGAN_Image_iters37500](https://user-images.githubusercontent.com/25688193/59812701-d2cc2280-9349-11e9-8705-4c26fff84712.png)<br>
+
+### ◎ 損失関数のグラフ（実行条件２）
+
+- iterations = 0 ~ 3750 : Traing Progress 1 (4 × 4 pixel) <br>
+- iterations = 3751 ~ 11250 : Traing Progress 2 (8 × 8 pixel) <br>
+- iterations = 11251 ~ 18750 : Traing Progress 3 (16 × 16 pixel) <br>
+- iterations = 18751 ~ 37500 : Traing Progress 4 (32 × 32 pixel) <br>
+
+
+### ◎ 生成画像（実行条件２）
+
+- [Traing Progress 1] : 4 × 4 pixel 縦（8 枚）×横（８枚）<br>
+	- Epoch 0 : iterations = 3750<br>
+
+
+- [Traing Progress 2] : 8 × 8 pixel 縦（8 枚）×横（８枚）<br>
+	- Epoch 1 : iterations = xxx<br>
+
+- [Traing Progress 3] : 16 × 16 pixel 縦（8 枚）×横（８枚）<br>
+	- Epoch 2 : iterations = xxx<br>
+
+- [Traing Progress 4] : 32 × 32 pixel 縦（8 枚）×横（８枚）<br>
+	- Epoch 3 : iterations = xxx<br>
+
+- [Traing Progress 5] : 64 × 64 pixel 縦（8 枚）×横（８枚）<br>
+	- Epoch 4 : iterations = xxx<br>
+	- Epoch 5 : iterations = xxx<br>
+	- Epoch 9 : iterations = xxx<br>
+
 
 ## ■ デバッグ情報
 

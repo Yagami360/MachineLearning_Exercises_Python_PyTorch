@@ -10,6 +10,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from torchvision.utils import save_image
+import torchvision.utils as vutils
 import tensorboardX as tbx
 
 #
@@ -29,7 +30,7 @@ class Generator( nn.Module ):
         self,
         device,
         init_image_size = 4,
-        final_image_size = 32,
+        final_image_size = 64,
         n_input_noize_z = 128,
         n_rgb = 3,
     ):
@@ -76,10 +77,18 @@ class Generator( nn.Module ):
         layers = nn.Sequential( *layers )
         self.toRGBs.append( layers )
 
+        # 64 × 64
+        layers = []
+        layers.append( nn.Conv2d( in_channels=n_input_noize_z, out_channels=n_rgb, kernel_size=1, stride=1, padding=0 ).to( self._device ) )
+        #layers.append( nn.Conv2d( in_channels=n_input_noize_z//2, out_channels=n_rgb, kernel_size=1, stride=1, padding=0 ).to( self._device ) )
+        layers.append( WScaleLayer(pre_layer = layers[-1]).to( self._device ) )
+        layers = nn.Sequential( *layers )
+        self.toRGBs.append( layers )
+
         #print( "toRGBs :\n", toRGBs )
 
         #=======================================
-        # 0.0 < α <= 1.0 での deconv 層
+        # 0.0 < α < 1.0 での deconv 層
         #=======================================
         self.blocks = nn.ModuleList().to( self._device )
 
@@ -133,13 +142,33 @@ class Generator( nn.Module ):
         layers = nn.Sequential( *layers )
         self.blocks.append( layers )
 
+        #---------------------------------------
         # 32 × 32 の解像度の画像生成用ネットワーク
+        #---------------------------------------
         layers = []
         layers.append( nn.Conv2d( in_channels=n_input_noize_z, out_channels=n_input_noize_z, kernel_size=3, stride=1, padding=1 ).to( self._device ) )
         layers.append( WScaleLayer( pre_layer = layers[-1] ).to( self._device ) )
         layers.append( nn.LeakyReLU(negative_slope=0.2).to( self._device ) )
         layers.append( PixelNormLayer().to( self._device ) )
         layers.append( nn.Conv2d( in_channels=n_input_noize_z, out_channels=n_input_noize_z, kernel_size=3, stride=1, padding=1 ).to( self._device ) )
+        layers.append( WScaleLayer( pre_layer = layers[-1] ).to( self._device ) )
+        layers.append( nn.LeakyReLU(negative_slope=0.2).to( self._device ) )
+        layers.append( PixelNormLayer().to( self._device ) )
+        layers = nn.Sequential( *layers )
+        self.blocks.append( layers )
+
+        #---------------------------------------
+        # 64 × 64 の解像度の画像生成用ネットワーク
+        #---------------------------------------
+        layers = []
+        layers.append( nn.Conv2d( in_channels=n_input_noize_z, out_channels=n_input_noize_z, kernel_size=3, stride=1, padding=1 ).to( self._device ) )
+        #layers.append( nn.Conv2d( in_channels=n_input_noize_z//2, out_channels=n_input_noize_z//2, kernel_size=3, stride=1, padding=1 ).to( self._device ) )
+        layers.append( WScaleLayer( pre_layer = layers[-1] ).to( self._device ) )
+        layers.append( nn.LeakyReLU(negative_slope=0.2).to( self._device ) )
+        layers.append( PixelNormLayer().to( self._device ) )
+
+        layers.append( nn.Conv2d( in_channels=n_input_noize_z, out_channels=n_input_noize_z, kernel_size=3, stride=1, padding=1 ).to( self._device ) )
+        #layers.append( nn.Conv2d( in_channels=n_input_noize_z//2, out_channels=n_input_noize_z//2, kernel_size=3, stride=1, padding=1 ).to( self._device ) )
         layers.append( WScaleLayer( pre_layer = layers[-1] ).to( self._device ) )
         layers.append( nn.LeakyReLU(negative_slope=0.2).to( self._device ) )
         layers.append( PixelNormLayer().to( self._device ) )
@@ -207,7 +236,7 @@ class Discriminator( nn.Module ):
         self,
         device,
         init_image_size = 4,
-        final_image_size = 32,
+        final_image_size = 64,
         n_fmaps = 128,
         n_rgb = 3,
     ):
@@ -246,6 +275,15 @@ class Discriminator( nn.Module ):
         # 32 × 32
         layers = []
         layers.append( nn.Conv2d( in_channels=n_rgb, out_channels=n_fmaps, kernel_size=1, stride=1, padding=0 ).to( self._device ) )
+        layers.append( WScaleLayer( pre_layer = layers[-1] ) )
+        layers.append( nn.LeakyReLU(negative_slope=0.2).to( self._device ) )
+        layers = nn.Sequential( *layers )
+        self.fromRGBs.append( layers )
+
+        # 64 × 64
+        layers = []
+        layers.append( nn.Conv2d( in_channels=n_rgb, out_channels=n_fmaps, kernel_size=1, stride=1, padding=0 ).to( self._device ) )
+        #layers.append( nn.Conv2d( in_channels=n_rgb, out_channels=n_fmaps//2, kernel_size=1, stride=1, padding=0 ).to( self._device ) )
         layers.append( WScaleLayer( pre_layer = layers[-1] ) )
         layers.append( nn.LeakyReLU(negative_slope=0.2).to( self._device ) )
         layers = nn.Sequential( *layers )
@@ -324,6 +362,22 @@ class Discriminator( nn.Module ):
         layers = nn.Sequential( *layers )
         self.blocks.append( layers )
 
+        #-----------------------------------------
+        # 64 × 64
+        #-----------------------------------------
+        layers = []
+        layers.append( nn.Conv2d( in_channels=n_fmaps, out_channels=n_fmaps, kernel_size=3, stride=1, padding=1 ).to( self._device ) )
+        #layers.append( nn.Conv2d( in_channels=n_fmaps//2, out_channels=n_fmaps//2, kernel_size=3, stride=1, padding=1 ).to( self._device ) )
+        layers.append( WScaleLayer( pre_layer = layers[-1] ).to( self._device ) )
+        layers.append( nn.LeakyReLU(negative_slope=0.2).to( self._device ) )
+
+        layers.append( nn.Conv2d( in_channels=n_fmaps, out_channels=n_fmaps, kernel_size=3, stride=1, padding=1 ).to( self._device ) )
+        #layers.append( nn.Conv2d( in_channels=n_fmaps//2, out_channels=n_fmaps//2, kernel_size=3, stride=1, padding=1 ).to( self._device ) )
+        layers.append( WScaleLayer( pre_layer = layers[-1] ).to( self._device ) )
+        layers.append( nn.LeakyReLU(negative_slope=0.2).to( self._device ) )
+        layers = nn.Sequential( *layers )
+        self.blocks.append( layers )
+
         #print( "blocks :", blocks )
 
         return
@@ -388,7 +442,7 @@ class Discriminator( nn.Module ):
         return output
 
 
-class ProgressiveGANforMNIST( object ):
+class ProgressiveGANforCIFAR10( object ):
     """
     PGGAN を表すクラス
     --------------------------------------------
@@ -400,7 +454,8 @@ class ProgressiveGANforMNIST( object ):
         _batch_size : <int> ミニバッチ学習時のバッチサイズ
         _n_input_noize_z : <int> 入力ノイズ z の次元数
         _init_image_size : <int> 最初の Training Progresses での生成画像の解像度
-        final_image_size : <int> 最終的な Training Progresses での生成画像の解像度
+        _final_image_size : <int> 最終的な Training Progresses での生成画像の解像度
+
         _generator : <nn.Module> 生成器
         _discriminator : <nn.Module> 識別器
         _loss_fn : 損失関数
@@ -419,7 +474,7 @@ class ProgressiveGANforMNIST( object ):
         batch_size = 32,
         n_input_noize_z = 128,
         init_image_size = 4,
-        final_image_size = 32,
+        final_image_size = 64,
         n_samples = 64
     ):
         self._device = device
@@ -447,7 +502,7 @@ class ProgressiveGANforMNIST( object ):
 
     def print( self, str = "" ):
         print( "----------------------------------" )
-        print( "ProgressiveGANforMNIST" )
+        print( "ProgressiveGANforCIFAR10" )
         print( self )
         print( str )
         print( "_device :", self._device )
@@ -484,7 +539,7 @@ class ProgressiveGANforMNIST( object ):
             init_image_size = self._init_image_size,
             final_image_size = self._final_image_size,
             n_input_noize_z = self._n_input_noize_z,
-            n_rgb = 1,
+            n_rgb = 3,
         )
 
         self._dicriminator = Discriminator( 
@@ -492,7 +547,7 @@ class ProgressiveGANforMNIST( object ):
             init_image_size = self._init_image_size,
             final_image_size = self._final_image_size,
             n_fmaps = self._n_input_noize_z,
-            n_rgb = 1,
+            n_rgb = 3,
         )
         return
 
@@ -585,9 +640,9 @@ class ProgressiveGANforMNIST( object ):
                 images = images.to( self._device )
 
                 # 元の画像ピクセル数を、Training Progresses 用にダウンサンプリング
-                # cur_progress = 0.0 ⇒ 32 × 32 → 4 × 4, 
-                # 0.00 < cur_progress < 1.00 ⇒ 32 × 32 → 8 × 8,
-                # 1.00 < cur_progress < 2.00 ⇒ 32 × 32 → 16 × 16,
+                # cur_progress = 0.0 ⇒ 64 × 64 → 4 × 4, 
+                # 0.00 < cur_progress < 1.00 ⇒ 64 × 64 → 8 × 8,
+                # 1.00 < cur_progress < 2.00 ⇒ 64 × 64 → 16 × 16,
                 # ...
                 images = F.adaptive_avg_pool2d(images, 4 * 2 ** int(ceil(cur_progress)) )
 
@@ -642,6 +697,7 @@ class ProgressiveGANforMNIST( object ):
                 #print( "loss_D : ", loss_D.item() )
 
                 self._loss_D_historys.append( loss_D.item() )
+
                 writer.add_scalar('loss/loss_D', loss_D.item(), iterations )
                 writer.add_scalar('loss/loss_D_real', loss_D_real.item(), iterations )
                 writer.add_scalar('loss/loss_D_fake', loss_D_fake.item(), iterations )
@@ -704,14 +760,13 @@ class ProgressiveGANforMNIST( object ):
                 # 特定のイテレーションでGeneratorから画像を保存
                 if( iterations % n_sava_step == 0 ):
                     images = self.generate_fixed_images( cur_progress = cur_progress, b_transformed = False )
-                    save_image( tensor = images, filename = result_path + "/PGGANforMNIST_Image_epochs{}_iters{}.png".format( epoch, iterations ) )
-                    writer.add_image('Image', images, iterations )
+                    save_image( tensor = images, filename = result_path + "/PGGANforCIFAR10_Image_epochs{}_iters{}.png".format( epoch, iterations ) )
                     writer.add_image( 'Image', vutils.make_grid(images, normalize=True, scale_each=True), iterations )
 
             images = self.generate_fixed_images( cur_progress = cur_progress, b_transformed = False )
-            save_image( tensor = images, filename = result_path + "/PGGANforMNIST_Image_epochs{}_iters{}.png".format( epoch, iterations ) )
+            save_image( tensor = images, filename = result_path + "/PGGANforCIFAR10_Image_epochs{}_iters{}.png".format( epoch, iterations ) )
             writer.add_image( 'Image', vutils.make_grid(images, normalize=True, scale_each=True), iterations )
-            
+
         print("Finished Training Loop.")
         #writer.export_scalars_to_json( "runs/tensorboard_all_scalars.json" )
         writer.close()
