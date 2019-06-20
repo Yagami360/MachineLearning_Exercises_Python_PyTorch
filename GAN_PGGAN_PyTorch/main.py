@@ -39,6 +39,7 @@ if __name__ == '__main__':
     #parser.add_argument( "--final_image_size", type = int, default = 64 )
     parser.add_argument( "--n_epoches", type = int, default = 10 )    
     parser.add_argument( "--batch_size", type = int, default = 16 )
+    #parser.add_argument( "--batch_size", type = int, default = 4 )
     parser.add_argument( "--learning_rate", type = float, default = 0.001 )
     parser.add_argument( "--result_path", type = str, default = "./result" )
     args = parser.parse_args()

@@ -71,10 +71,10 @@ $ python main.py
 |データセット：<br>`--dataset`|MNIST|CIFAR-10|
 |動作モード：<br>`--run_mode`|`train`|←|
 |エポック数：<br>`--n_epoches`|10|10|
-|入力ノイズ z の次元数：<br>`--n_input_noize_z`|128|256|
+|入力ノイズ z の次元数：<br>`--n_input_noize_z`|128|128|
 |最初の生成画像の解像度：<br>`--init_image_size`|4|4|
 |最終的なの生成画像の解像度：<br>`--final_image_size`|32|64|
-|バッチサイズ：<br>`--batch_size`|16|16|
+|バッチサイズ：<br>`--batch_size`|16|8|
 |最適化アルゴリズム|Adam|←|
 |学習率：<br>`--learning_rate`|0.001|
 |減衰率 beta1|0.5|←|
