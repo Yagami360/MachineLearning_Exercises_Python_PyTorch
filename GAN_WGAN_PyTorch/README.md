@@ -14,92 +14,59 @@ Wasserstein GAN（WGAN）の PyTorch での実装。
 
 ## ■ 動作環境
 
-- Windows 10
-- Geforce GTX1050 / VRAM:2GB
+- Mac OS
 - Python : 3.6
 - Anaconda : 5.0.1
 - PyTorch : 1.0.1
 
 ## ■ 使用法
 
-- 使用法
-```
-$ python main.py
-```
-
-- 設定可能な定数
-
-```python
-[main.py]
-#DEVICE = "CPU"               # 使用デバイス ("CPU" or "GPU")
-DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
-DATASET = "MNIST"            # データセットの種類（"MNIST" or "CIFAR-10"）
-#DATASET = "CIFAR-10"          # データセットの種類（"MNIST" or "CIFAR-10"）
-DATASET_PATH = "./dataset"    # 学習用データセットへのパス
-RESULT_PATH = "./result_" + DATASET      # 結果を保存するディレクトリ
-NUM_SAVE_STEP = 100           # 自動生成画像の保存間隔（イテレーション単位）
-
-NUM_EPOCHES = 10              # エポック数（学習回数）
-LEARNING_RATE = 0.00005       # 学習率 (Default:0.00005)
-BATCH_SIZE = 64               # ミニバッチサイズ
-IMAGE_SIZE = 64               # 入力画像のサイズ（pixel単位）
-NUM_CHANNELS = 1              # 入力画像のチャンネル数
-NUM_FEATURE_MAPS = 64         # 特徴マップの枚数
-NUM_INPUT_NOIZE_Z = 100       # 生成器に入力するノイズ z の次数
-NUM_CRITIC = 5                # クリティックの更新回数
-WEIGHT_CLAMP_LOWER = - 0.01   # 重みクリッピングの下限値
-WEIGHT_CLAMP_UPPER = 0.01     # 重みクリッピングの上限値
+- 学習処理
+```sh
+$ python train.py
 ```
 
-<!--
-```python
-[main_mnist.py]
-#DEVICE = "CPU"               # 使用デバイス ("CPU" or "GPU")
-DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
-DATASET_PATH = "./dataset"    # 学習用データセットへのパス
-NUM_SAVE_STEP = 1             # 自動生成画像の保存間隔（エポック単位）
-
-NUM_EPOCHES = 10              # エポック数（学習回数）
-LEARNING_RATE = 0.0002        # 学習率 (Default:0.00005)
-BATCH_SIZE = 64               # ミニバッチサイズ
-NUM_FEATURE_MAPS = 64         # 特徴マップの枚数
-NUM_INPUT_NOIZE_Z = 62        # 生成器に入力するノイズ z の次数
-NUM_CRITIC = 5                # クリティックの更新回数
-WEIGHT_CLAMP_LOWER = - 0.01   # 重みクリッピングの下限値
-WEIGHT_CLAMP_UPPER = 0.01     # 重みクリッピングの上限値
+- 推論処理
+```sh
+$ python test.py
 ```
--->
+- TensorBoard
+
+```sh
+$ tensorboard --logdir tensorboard --port 6006
+```
 
 <a id="コードの実行結果"></a>
 
-## ■ コードの実行結果：`main.py`
+## ■ コードの実行結果
 
 |パラメータ名|値（実行条件１）|値（実行条件２）|
 |---|---|---|
-|学習用データセット：`DATASET`|"MNIST"|"CIFAR-10"|
-|使用デバイス：`DEVICE`|GPU|←|
+|実験名：<br>`args.exper_name`|""|""|
+|学習用データセット：`args.dataset`|"mnist"|"cifar-10"|
+|使用デバイス：<br>`args.device`|"gpu"|←|
 |シード値|`random.seed(8)`<br>`np.random.seed(8)`<br>`torch.manual_seed(8)`|←|
-|エポック数：`NUM_EPOCHES`|10|50|
-|バッチサイズ：`BATCH_SIZE`|64|64|
-|生成器に入力するノイズ z の次数：`NUM_INPUT_NOIZE_Z`|100|100|
-|入力画像のサイズ：`IMAGE_SIZE`|64|64|
-|入力画像のチャンネル数：`NUM_CHANNELS`|1|3|
-|特徴マップの枚数：`NUM_FEATURE_MAPS`|64|64|
+|エポック数：<br>`args.n_epoches`|10|50|
+|バッチサイズ：<br>`args.batch_size`|64|64|
+|生成器に入力するノイズ z の次数：<br>`args.n_input_noize_z`|100|100|
+|入力画像のサイズ：<br>`args.image_size`|64|64|
+|入力画像のチャンネル数：<br>`args.n_channels`|1|3|
+|特徴マップの枚数：<br>`args.n_fmaps`|64|64|
 |最適化アルゴリズム|Adam|←|
-|学習率：`LEARNING_RATE`|0.00005|←|
-|クリティックの更新回数：`NUM_CRITIC`|5|←|
-|重みクリッピングの下限値：`WEIGHT_CLAMP_LOWER`|-0.01|←|
-|重みクリッピングの上限値：`WEIGHT_CLAMP_UPPER`|0.01|←|
+|学習率：<br>`args.lr`|0.00005|←|
+|クリティックの更新回数：<br>`args.n_critic`|5|←|
+|重みクリッピングの下限値：<br>`args.w_clamp_lower`|-0.01|←|
+|重みクリッピングの上限値：<br>`args.w_clamp_upper`|0.01|←|
 
 
-### ◎ 損失関数のグラフ（実行条件１）：`main.py`
+### ◎ 損失関数のグラフ（実行条件１）
 ![WGAN_Loss_epoches10_lr5e-05_batchsize64](https://user-images.githubusercontent.com/25688193/56844723-05c8db80-68f0-11e9-8fd3-9f4692c4e27c.png)<br>
 
 <!--
 > DCGAN よりは安定しているが、乱高下があり、論文中のグラフと異なる？
 -->
 
-### ◎ 生成器から生成された自動生成画像（実行条件１）：`main.py`
+### ◎ 生成器から生成された自動生成画像（実行条件１）
 
 - エポック数 : 1 / イテレーション回数：937<br>
 ![WGAN_Image_epoches0_iters937](https://user-images.githubusercontent.com/25688193/56844476-9e109180-68eb-11e9-91d9-469c63d82825.png)<br>

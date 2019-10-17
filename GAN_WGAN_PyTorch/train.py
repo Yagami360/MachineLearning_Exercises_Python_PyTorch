@@ -1,11 +1,14 @@
 # -*- coding:utf-8 -*-
-
+import argparse
 from datetime import datetime
 import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.animation as animation
+from PIL import Image
 #import pickle
 import scipy.misc
+import random
+
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 
 # PyTorch
 import torch
@@ -16,63 +19,48 @@ import torchvision.transforms as transforms
 from torchvision.utils import save_image
 
 # 自作モジュール
-from WassersteinGAN import WassersteinGAN
+from model import WassersteinGAN
 
 
-#--------------------------------
-# 設定可能な定数
-#--------------------------------
-#DEVICE = "CPU"               # 使用デバイス ("CPU" or "GPU")
-DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
-DATASET = "MNIST"             # データセットの種類（"MNIST" or "CIFAR-10"）
-#DATASET = "CIFAR-10"          # データセットの種類（"MNIST" or "CIFAR-10"）
-DATASET_PATH = "./dataset"    # 学習用データセットへのパス
-RESULT_PATH = "./result_" + DATASET      # 結果を保存するディレクトリ
-NUM_SAVE_STEP = 100           # 自動生成画像の保存間隔（イテレーション単位）
-
-NUM_EPOCHES = 10              # エポック数（学習回数）
-LEARNING_RATE = 0.00005       # 学習率 (Default:0.00005)
-BATCH_SIZE = 64               # ミニバッチサイズ
-IMAGE_SIZE = 64               # 入力画像のサイズ（pixel単位）
-NUM_CHANNELS = 1              # 入力画像のチャンネル数
-NUM_FEATURE_MAPS = 64         # 特徴マップの枚数
-NUM_INPUT_NOIZE_Z = 100       # 生成器に入力するノイズ z の次数
-NUM_CRITIC = 5                # クリティックの更新回数
-WEIGHT_CLAMP_LOWER = - 0.01   # 重みクリッピングの下限値
-WEIGHT_CLAMP_UPPER = 0.01     # 重みクリッピングの上限値
-
-
-def main():
+if __name__ == '__main__':
     """
-    Wasserstein による画像の自動生成
+    WGAN-gp による画像の自動生成
     ・学習用データセットは、MNIST / CIFAR-10
     """
-    print("Start main()")
-    
-    # バージョン確認
-    print( "PyTorch :", torch.__version__ )
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--exper_name", default="WGAN-GP_train", help="実験名")
+    parser.add_argument('--dataset_dir', type=str, default="dataset", help="データセットのディレクトリ")
+    parser.add_argument('--result_dir', type=str, default="result", help="結果を保存するディレクトリ")
+    parser.add_argument('--device', choices=['cpu', 'gpu'], default="cpu", help="使用デバイス (CPU or GPU)")
+    parser.add_argument('--dataset', choices=['mnist', 'cifar-10'], default="mnist", help="データセットの種類（MNIST or CIFAR-10）")
+    parser.add_argument('--n_epoches', type=int, default=10, help="エポック数")
+    parser.add_argument('--batch_size', type=int, default=64, help="バッチサイズ")
+    parser.add_argument('--lr', type=float, default=0.00005, help="学習率")
+    parser.add_argument('--image_size', type=int, default=64, help="入力画像のサイズ（pixel単位）")
+    parser.add_argument('--n_channels', type=int, default=1, help="入力画像のチャンネル数")
+    parser.add_argument('--n_fmaps', type=int, default=64, help="特徴マップの枚数")
+    parser.add_argument('--n_input_noize_z', type=int, default=100, help="生成器に入力するノイズ z の次数")
+    parser.add_argument('--n_critic', type=int, default=5, help="クリティックの更新回数")
+    parser.add_argument('--w_clamp_upper', type=float, default=0.01, help="重みクリッピングの下限値")
+    parser.add_argument('--w_clamp_lower', type=float, default=-0.01, help="重みクリッピングの下限値")
+    parser.add_argument('--n_save_step', type=int, default=100, help="生成画像の保存間隔（イテレーション単位）")
+    parser.add_argument('--debug', action='store_true')
+    args = parser.parse_args()
 
     # 実行条件の出力
     print( "----------------------------------------------" )
     print( "実行条件" )
     print( "----------------------------------------------" )
     print( "開始時間：", datetime.now() )
-    print( "DEVICE : ", DEVICE )
-    print( "NUM_EPOCHES : ", NUM_EPOCHES )
-    print( "LEARNING_RATE : ", LEARNING_RATE )
-    print( "BATCH_SIZE : ", BATCH_SIZE )
-    print( "IMAGE_SIZE : ", IMAGE_SIZE )
-    print( "NUM_CHANNELS : ", NUM_CHANNELS )
-    print( "NUM_FEATURE_MAPS : ", NUM_FEATURE_MAPS )
-    print( "NUM_INPUT_NOIZE_Z : ", NUM_INPUT_NOIZE_Z )
-    print( "NUM_CRITIC : ", NUM_CRITIC )
-    print( "WEIGHT_CLAMP_LOWER : ", WEIGHT_CLAMP_LOWER )
-    print( "WEIGHT_CLAMP_UPPER : ", WEIGHT_CLAMP_UPPER )
+    print( "PyTorch version :", torch.__version__ )
+    for key, value in vars(args).items():
+        print('%s: %s' % (str(key), str(value)))
+    print('-------------- End ----------------------------')
 
     #===================================
     # 実行 Device の設定
     #===================================
-    if( DEVICE == "GPU" ):
+    if( args.device == "gpu" ):
         use_cuda = torch.cuda.is_available()
         if( use_cuda == True ):
             device = torch.device( "cuda" )
@@ -90,7 +78,6 @@ def main():
     print( "----------------------------------------------" )
 
     # seed 値の固定
-    import random
     random.seed(8)
     np.random.seed(8)
     torch.manual_seed(8)
@@ -99,22 +86,20 @@ def main():
     # データセットを読み込み or 生成
     # データの前処理
     #======================================================================
-    dataset = DATASET
-
     # データをロードした後に行う各種前処理の関数を構成を指定する。
-    if( dataset == "MNIST" ):
+    if( args.dataset == "mnist" ):
         transform = transforms.Compose(
             [
-                transforms.Resize(IMAGE_SIZE),
+                transforms.Resize(args.image_size, interpolation=Image.LANCZOS ),
                 transforms.ToTensor(),   # Tensor に変換]
                 transforms.Normalize((0.5,), (0.5,)),   # 1 channel 分
             ]
         )
 
-    elif( dataset == "CIFAR-10" ):
+    elif( args.dataset == "cifar-10" ):
         transform = transforms.Compose(
             [
-                transforms.Resize(IMAGE_SIZE),
+                transforms.Resize(args.image_size, interpolation=Image.LANCZOS ),
                 transforms.ToTensor(),   # Tensor に変換
                 transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)),
             ]
@@ -125,9 +110,9 @@ def main():
     #---------------------------------------------------------------
     # data と label をセットにした TensorDataSet の作成
     #---------------------------------------------------------------
-    if( dataset == "MNIST" ):
+    if( args.dataset == "mnist" ):
         ds_train = torchvision.datasets.MNIST(
-            root = DATASET_PATH,
+            root = args.dataset_dir,
             train = True,
             transform = transform,      # transforms.Compose(...) で作った前処理の一連の流れ
             target_transform = None,    
@@ -135,15 +120,15 @@ def main():
         )
 
         ds_test = torchvision.datasets.MNIST(
-            root = DATASET_PATH,
+            root = args.dataset_dir,
             train = False,
             transform = transform,
             target_transform = None,
             download = True
         )
-    elif( dataset == "CIFAR-10" ):
+    elif( args.dataset == "cifar-10" ):
         ds_train = torchvision.datasets.CIFAR10(
-            root = DATASET_PATH,
+            root = args.dataset_dir,
             train = True,
             transform = transform,      # transforms.Compose(...) で作った前処理の一連の流れ
             target_transform = None,    
@@ -151,7 +136,7 @@ def main():
         )
 
         ds_test = torchvision.datasets.CIFAR10(
-            root = DATASET_PATH,
+            root = args.dataset_dir,
             train = False,
             transform = transform,
             target_transform = None,
@@ -171,13 +156,13 @@ def main():
     #---------------------------------------------------------------
     dloader_train = DataLoader(
         dataset = ds_train,
-        batch_size = BATCH_SIZE,
+        batch_size = args.batch_size,
         shuffle = True
     )
 
     dloader_test = DataLoader(
         dataset = ds_test,
-        batch_size = BATCH_SIZE,
+        batch_size = args.batch_size,
         shuffle = False
     )
     
@@ -193,15 +178,15 @@ def main():
     #======================================================================
     model = WassersteinGAN(
         device = device,
-        n_epoches = NUM_EPOCHES,
-        learing_rate = LEARNING_RATE,
-        batch_size = BATCH_SIZE,
-        n_channels = NUM_CHANNELS,
-        n_fmaps = NUM_FEATURE_MAPS,
-        n_input_noize_z = NUM_INPUT_NOIZE_Z,
-        n_critic = NUM_CRITIC,
-        w_clamp_lower = WEIGHT_CLAMP_LOWER,
-        w_clamp_upper = WEIGHT_CLAMP_UPPER
+        n_epoches = args.n_epoches,
+        learing_rate = args.lr,
+        batch_size = args.batch_size,
+        n_channels = args.n_channels,
+        n_fmaps = args.n_fmaps,
+        n_input_noize_z = args.n_input_noize_z,
+        n_critic = args.n_critic,
+        w_clamp_lower = args.w_clamp_lower,
+        w_clamp_upper = args.w_clamp_upper
     )
 
     model.print( "after init()" )
@@ -219,7 +204,7 @@ def main():
     #======================================================================
     # モデルの学習フェイズ
     #======================================================================
-    model.fit( dloader = dloader_train, n_sava_step = NUM_SAVE_STEP, result_path = RESULT_PATH )
+    model.fit( dloader = dloader_train, n_sava_step = args.n_save_step, result_path = args.result_dir )
 
     #===================================
     # 学習結果の描写処理
@@ -250,7 +235,7 @@ def main():
     plt.grid()
     plt.tight_layout()
     plt.savefig(
-        RESULT_PATH + "/WGAN_Loss_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE ),  
+        RESULT_PATH + "/WGAN_Loss_epoches{}_lr{}_batchsize{}.png".format( args.n_epoches, args.lr, args.batch_size ),  
         dpi = 300, bbox_inches = "tight"
     )
     plt.show()
@@ -263,15 +248,8 @@ def main():
 
     save_image( 
         tensor = images, 
-        filename = RESULT_PATH + "/WGAN_Image_epoches{}_lr{}_batchsize{}.png".format( NUM_EPOCHES, LEARNING_RATE, BATCH_SIZE )
+        filename = RESULT_PATH + "/WGAN_Image_epoches{}_lr{}_batchsize{}.png".format( args.n_epoches, args.lr, args.batch_size )
     )
 
     print("Finish main()")
     print( "終了時間：", datetime.now() )
-
-    return
-
-
-    
-if __name__ == '__main__':
-     main()
