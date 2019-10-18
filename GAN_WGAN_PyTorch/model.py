@@ -430,7 +430,7 @@ class WassersteinGAN( object ):
             # 特定のエポックでGeneratorから画像を保存
             if( epoch % n_sava_step_epoch == 0 ):
                 images = self.generate_fixed_images( b_transformed = False )
-                save_image( tensor = images, filename = self.exper_name + "_image_epoches{}_iters{}.png".format( epoch, iterations ) )
+                save_image( tensor = images, filename = self._exper_name + "_image_epoches{}_iters{}.png".format( epoch, iterations ) )
                 #self._images_historys.append( images )
                     
                 board_add_image(board, 'fake image', images, iterations+1)
