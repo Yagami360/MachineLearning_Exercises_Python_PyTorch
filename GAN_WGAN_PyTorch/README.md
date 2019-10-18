@@ -30,8 +30,8 @@ $ python train.py
 ```sh
 $ python test.py
 ```
-- TensorBoard
 
+- TensorBoard
 ```sh
 $ tensorboard --logdir tensorboard --port 6006
 ```

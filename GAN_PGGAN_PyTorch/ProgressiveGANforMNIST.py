@@ -161,7 +161,9 @@ class Generator( nn.Module ):
         # 学習開始時点（α=0.0）
         #-----------------------------------------
         if( progress % 1 == 0 ):
+            print( "input", input )
             output = self.pre(input)
+            print( "PixelNorm", input )
             output = self.blocks[0](output)
 
             for i in range(1, int(ceil(progress) + 1)):

@@ -1,4 +1,5 @@
 # -*- coding:utf-8 -*-
+import os
 import argparse
 from datetime import datetime
 import numpy as np
@@ -17,6 +18,7 @@ from torch.utils.data import TensorDataset, DataLoader
 import torchvision      # 画像処理関連
 import torchvision.transforms as transforms
 from torchvision.utils import save_image
+from tensorboardX import SummaryWriter
 
 # 自作モジュール
 from model import WassersteinGAN
@@ -24,14 +26,15 @@ from model import WassersteinGAN
 
 if __name__ == '__main__':
     """
-    WGAN-gp による画像の自動生成
+    WGAN による画像の自動生成
     ・学習用データセットは、MNIST / CIFAR-10
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument("--exper_name", default="WGAN-GP_train", help="実験名")
+    parser.add_argument("--exper_name", default="WGAN_train", help="実験名")
     parser.add_argument('--dataset_dir', type=str, default="dataset", help="データセットのディレクトリ")
     parser.add_argument('--result_dir', type=str, default="result", help="結果を保存するディレクトリ")
-    parser.add_argument('--device', choices=['cpu', 'gpu'], default="cpu", help="使用デバイス (CPU or GPU)")
+    parser.add_argument('--tensorboard_dir', type=str, default="tensorboard", help="TensorBoard のディレクトリ")
+    parser.add_argument('--device', choices=['cpu', 'gpu'], default="gpu", help="使用デバイス (CPU or GPU)")
     parser.add_argument('--dataset', choices=['mnist', 'cifar-10'], default="mnist", help="データセットの種類（MNIST or CIFAR-10）")
     parser.add_argument('--n_epoches', type=int, default=10, help="エポック数")
     parser.add_argument('--batch_size', type=int, default=64, help="バッチサイズ")
@@ -47,7 +50,9 @@ if __name__ == '__main__':
     parser.add_argument('--debug', action='store_true')
     args = parser.parse_args()
 
+    #===================================
     # 実行条件の出力
+    #===================================
     print( "----------------------------------------------" )
     print( "実行条件" )
     print( "----------------------------------------------" )
@@ -56,6 +61,11 @@ if __name__ == '__main__':
     for key, value in vars(args).items():
         print('%s: %s' % (str(key), str(value)))
     print('-------------- End ----------------------------')
+
+    if not( os.path.exists(args.result_dir) ):
+        os.mkdir(args.result_dir)
+    if not( os.path.exists(args.tensorboard_dir) ):
+        os.mkdir(args.tensorboard_dir)
 
     #===================================
     # 実行 Device の設定
@@ -178,6 +188,7 @@ if __name__ == '__main__':
     #======================================================================
     model = WassersteinGAN(
         device = device,
+        exper_name = args.exper_name,
         n_epoches = args.n_epoches,
         learing_rate = args.lr,
         batch_size = args.batch_size,
@@ -204,7 +215,8 @@ if __name__ == '__main__':
     #======================================================================
     # モデルの学習フェイズ
     #======================================================================
-    model.fit( dloader = dloader_train, n_sava_step = args.n_save_step, result_path = args.result_dir )
+    board = SummaryWriter( log_dir = os.path.join(args.tensorboard_dir, args.exper_name) )
+    model.fit( dloader = dloader_train, n_sava_step = args.n_save_step, result_path = args.result_dir, board = board )
 
     #===================================
     # 学習結果の描写処理
@@ -235,7 +247,7 @@ if __name__ == '__main__':
     plt.grid()
     plt.tight_layout()
     plt.savefig(
-        RESULT_PATH + "/WGAN_Loss_epoches{}_lr{}_batchsize{}.png".format( args.n_epoches, args.lr, args.batch_size ),  
+        os.path.join(args.result_dir, args.exper_name + "_loss_epoches{}_lr{}_batchsize{}.png".format( args.n_epoches, args.lr, args.batch_size ) ),  
         dpi = 300, bbox_inches = "tight"
     )
     plt.show()
@@ -248,7 +260,7 @@ if __name__ == '__main__':
 
     save_image( 
         tensor = images, 
-        filename = RESULT_PATH + "/WGAN_Image_epoches{}_lr{}_batchsize{}.png".format( args.n_epoches, args.lr, args.batch_size )
+        filename = os.path.join(args.result_dir, args.exper_name + "_image_epoches{}_lr{}_batchsize{}.png".format( args.n_epoches, args.lr, args.batch_size ) )
     )
 
     print("Finish main()")

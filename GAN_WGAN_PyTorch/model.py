@@ -1,11 +1,4 @@
 # -*- coding:utf-8 -*-
-
-"""
-    更新情報
-    [19/04/23] : 新規作成
-    [xx/xx/xx] : 
-               : 
-"""
 import os
 import numpy as np
 from tqdm import tqdm
@@ -15,9 +8,12 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torchvision.utils import save_image
+from tensorboardX import SummaryWriter
 
-#
+# 自作モジュール
 from networks import Generator, Critic
+from visualization import board_add_image, board_add_images
+
 
 class WassersteinGAN( object ):
     """
@@ -60,6 +56,7 @@ class WassersteinGAN( object ):
     def __init__(
         self,
         device,
+        exper_name = "WGAN",
         n_epoches = 300,
         learing_rate = 0.0001,
         batch_size = 64,
@@ -72,7 +69,7 @@ class WassersteinGAN( object ):
         n_samples = 64
     ):
         self._device = device
-
+        self._exper_name = exper_name
         self._n_epoches = n_epoches
         self._learning_rate = learing_rate
         self._batch_size = batch_size
@@ -106,6 +103,7 @@ class WassersteinGAN( object ):
         print( self )
         print( str )
         print( "_device :", self._device )
+        print( "_exper_name :", self._exper_name )
         print( "_n_epoches :", self._n_epoches )
         print( "_learning_rate :", self._learning_rate )
         print( "_batch_size :", self._batch_size )
@@ -222,7 +220,7 @@ class WassersteinGAN( object ):
         return
 
 
-    def fit( self, dloader, n_sava_step = 5, result_path = "./result" ):
+    def fit( self, dloader, n_sava_step = 5, result_path = "./result", board = None ):
         """
         指定されたトレーニングデータで、モデルの fitting 処理を行う。
         [Args]
@@ -401,9 +399,29 @@ class WassersteinGAN( object ):
                 # 学習過程での自動生成画像
                 #----------------------------------------------------
                 # 特定のイテレーションでGeneratorから画像を保存
-                if( iterations % n_sava_step == 0 ):
+                if( iterations == 1 or ( iterations % n_sava_step == 0 ) ):
                     images = self.generate_fixed_images( b_transformed = False )
-                    save_image( tensor = images, filename = result_path + "/cGAN_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
+                    save_image( tensor = images, filename = os.path.join(result_path, self._exper_name + "_image_epoches{}_iters{}.png".format( epoch, iterations )) )
+                    
+                    """
+                    # map into [0,1]
+                    images = (images.clone()+1) * 0.5
+                    images.cpu().clamp(0,1)
+
+                    if images.size(1) == 1:
+                        images = images.repeat(1,3,1,1)
+
+                    #images = images.cpu().detach().numpy()
+                    #batch_size = images.shape[0]
+                    for batch_size, img in enumerate(images):
+                        board.add_image('fake image/%03d' % (batch_size), img, iterations)
+                    """
+
+                    board_add_image(board, 'fake image', images, iterations+1)
+                    board.add_scalar('Generater/loss_G', loss_G.item(), iterations)
+                    board.add_scalar('Critic/loss_C', loss_C.item(), iterations)
+                    board.add_scalar('Critic/loss_C_real', loss_C_real.item(), iterations)
+                    board.add_scalar('Critic/loss_C_fake', loss_C_fake.item(), iterations)
 
             #----------------------------------------------------
             # 学習過程での自動生成画像
@@ -412,8 +430,15 @@ class WassersteinGAN( object ):
             # 特定のエポックでGeneratorから画像を保存
             if( epoch % n_sava_step_epoch == 0 ):
                 images = self.generate_fixed_images( b_transformed = False )
-                save_image( tensor = images, filename = "WGAN_Image_epoches{}_iters{}.png".format( epoch, iterations ) )
+                save_image( tensor = images, filename = self.exper_name + "_image_epoches{}_iters{}.png".format( epoch, iterations ) )
                 #self._images_historys.append( images )
+                    
+                board_add_image(board, 'fake image', images, iterations+1)
+                board.add_scalar('Generater/loss_G', loss_G.item(), iterations)
+                board.add_scalar('Critic/loss_C', loss_C.item(), iterations)
+                board.add_scalar('Critic/loss_C_real', loss_C_real.item(), iterations)
+                board.add_scalar('Critic/loss_C_fake', loss_C_fake.item(), iterations)
+
 
         print("Finished Training Loop.")
         return
