@@ -2,15 +2,15 @@
 #source activate pytorch11_py36
 #sh train.sh
 #tensorboard --logdir tensorboard
-set -e
+set -eu
 
-EXEP_NAME=WGAN-GP_train
+EXEP_NAME=WGAN_train
 TENSOR_BOARD_DIR=tensorboard
 
 BATCH_SIZE=256
 BATCH_SIZE_TEST=256
-N_DISPLAY_STEP=`expr ${BATCH_SIZE} \* 5`
-N_DISPLAY_TEST_STEP=`expr ${BATCH_SIZE} \* 20`
+N_DISPLAY_STEP=`expr ${BATCH_SIZE} \* 10`
+N_DISPLAY_TEST_STEP=`expr ${BATCH_SIZE} \* 50`
 
 if [ -d "${TENSOR_BOARD_DIR}/${EXEP_NAME}" ] ; then
     rm -r ${TENSOR_BOARD_DIR}/${EXEP_NAME}
@@ -26,9 +26,8 @@ python train.py \
     --dataset_dir dataset \
     --tensorboard_dir ${TENSOR_BOARD_DIR} \
     --dataset mnist --image_size 64 --n_channels 1 \
-    --n_test 5 \
+    --n_test 100 \
     --n_epoches 10 --batch_size ${BATCH_SIZE} --batch_size_test ${BATCH_SIZE_TEST} \
-    --lr 0.0001 --beta1 0.999 --beta2 0.5 \
-    --n_critic 5 --lambda_wgangp 10.0 \
+    --n_critic 5 --w_clamp_upper 0.01 --w_clamp_lower -0.01 \
     --n_display_step ${N_DISPLAY_STEP} --n_display_test_step ${N_DISPLAY_TEST_STEP} \
     --debug
