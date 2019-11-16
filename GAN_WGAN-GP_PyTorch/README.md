@@ -6,7 +6,7 @@ WGAN-GPの PyTorch での実装。（実装中...）
 1. [動作環境](#動作環境)
 1. [使用法](#使用法)
 1. [コードの実行結果](#コードの実行結果)
-1. [背景理論]()
+1. [背景理論](https://github.com/Yagami360/MachineLearning-Papers_Survey/issues/25)
 
 ## ■ 動作環境
 

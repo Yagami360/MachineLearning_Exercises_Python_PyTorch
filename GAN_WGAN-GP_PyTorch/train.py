@@ -33,6 +33,7 @@ if __name__ == '__main__':
     parser.add_argument('--dataset_dir', type=str, default="dataset", help="データセットのディレクトリ")
     parser.add_argument('--tensorboard_dir', type=str, default="tensorboard", help="TensorBoard のディレクトリ")
     parser.add_argument('--dataset', choices=['mnist', 'cifar-10'], default="mnist", help="データセットの種類（MNIST or CIFAR-10）")
+    parser.add_argument('--n_test', type=int, default=100, help="test dataset の最大数")
     parser.add_argument('--n_epoches', type=int, default=10, help="エポック数")
     parser.add_argument('--batch_size', type=int, default=64, help="バッチサイズ")
     parser.add_argument('--batch_size_test', type=int, default=4, help="test データのバッチサイズ")
@@ -47,7 +48,7 @@ if __name__ == '__main__':
     parser.add_argument('--w_clamp_upper', type=float, default=0.01, help="重みクリッピングの下限値")
     parser.add_argument('--w_clamp_lower', type=float, default=-0.01, help="重みクリッピングの下限値")
     parser.add_argument('--n_display_step', type=int, default=100, help="tensorboard への表示間隔")
-    parser.add_argument('--n_display_test_step', type=int, default=100, help="test データの tensorboard への表示間隔")
+    parser.add_argument('--n_display_test_step', type=int, default=1000, help="test データの tensorboard への表示間隔")
     parser.add_argument('--debug', action='store_true')
     args = parser.parse_args()
 
@@ -64,11 +65,10 @@ if __name__ == '__main__':
     if( args.device == "gpu" ):
         use_cuda = torch.cuda.is_available()
         if( use_cuda == True ):
-            #device = torch.device( "cuda" )
+            device = torch.device( "cuda" )
             #torch.cuda.set_device(args.gpu_ids[0])
-            device = torch.device( args.gpu_ids[0] )
             print( "実行デバイス :", device)
-            print( "GPU名 :", torch.cuda.get_device_name(args.gpu_ids[0]))
+            print( "GPU名 :", torch.cuda.get_device_name(device))
             print("torch.cuda.current_device() =", torch.cuda.current_device())
         else:
             print( "can't using gpu." )
@@ -160,10 +160,13 @@ if __name__ == '__main__':
 
     dloader_test = DataLoader(
         dataset = ds_test,
-        batch_size = 4,
+        batch_size = args.batch_size_test,
         shuffle = False
     )
     
+    print( "ds_train :\n", ds_train ) # MNIST : torch.Size([60000, 28, 28]) , CIFAR-10 : (50000, 32, 32, 3)
+    print( "ds_test :\n", ds_test )
+
     #======================================================================
     # モデルの構造を定義する。
     #======================================================================
@@ -376,48 +379,50 @@ if __name__ == '__main__':
                 loss_C_total = 0
                 loss_G_total = 0
                 #for i, test_data in enumerate( test_dataset ):
-                for (test_images,test_targets) in dloader_test :
-                    with torch.no_grad():
+                n_test_loop = 0
+                with torch.no_grad():
+                    for (test_images,test_targets) in dloader_test :
                         test_images = test_images.to( device )
                         C_x = model_D( test_images )
                         G_z = model_G( input_noize_z )
                         C_G_z = model_D( G_z )
 
-                        loss_C_real = C_x
-                        loss_C_fake = C_G_z
-                        loss_C = loss_C_real - loss_C_fake
+                        test_loss_C_real = C_x
+                        test_loss_C_fake = C_G_z
+                        test_loss_C = test_loss_C_real - test_loss_C_fake
 
+                        input_noize_z.resize_( args.batch_size, args.n_input_noize_z, 1, 1 ).normal_(0, 1)
                         G_z = model_G( input_noize_z )
                         C_G_z = model_D( G_z )
-                        loss_G = C_G_z
+                        test_loss_G = C_G_z
 
-                        loss_C_real_total += loss_C_real.item()
-                        loss_C_fake_total += loss_C_fake.item()
-                        loss_C_total += loss_C.item()
-                        loss_G_total += loss_G.item()
+                        loss_C_real_total += test_loss_C_real.item()
+                        loss_C_fake_total += test_loss_C_fake.item()
+                        loss_C_total += test_loss_C.item()
+                        loss_G_total += test_loss_G.item()
 
-                board_train.add_scalar('Generater/loss_G', loss_G_total/len(ds_test), iterations)
-                board_train.add_scalar('Critic/loss_C', loss_C_total/len(ds_test), iterations)
-                board_train.add_scalar('Critic/loss_C_real', loss_C_real_total/len(ds_test), iterations)
-                board_train.add_scalar('Critic/loss_C_fake', loss_C_fake_total/len(ds_test), iterations)
+                        n_test_loop += 1
+                        if( n_test_loop > args.n_test ):
+                            break
 
-                #images = generate_fixed_images( b_transformed = False )
-                #board_add_image(board_test, 'fake image', images, iterations+1)
+                board_test.add_scalar('Generater/loss_G', loss_G_total/n_test_loop, iterations)
+                board_test.add_scalar('Critic/loss_C', loss_C_total/n_test_loop, iterations)
+                board_test.add_scalar('Critic/loss_C_real', loss_C_real_total/n_test_loop, iterations)
+                board_test.add_scalar('Critic/loss_C_fake', loss_C_fake_total/n_test_loop, iterations)
+                board_add_image(board_test, 'fake image', G_z, iterations+1)
 
             n_print -= 1
 
         #----------------------------------------------------
-        # 学習過程での自動生成画像
+        # 学習過程の表示
         #----------------------------------------------------
         n_sava_step_epoch = 1
         # 特定のエポックでGeneratorから画像を保存
         if( epoch % n_sava_step_epoch == 0 ):
-            #images = self.generate_fixed_images( b_transformed = False )                
-            #board_add_image(board, 'fake image', images, iterations+1)
-            board.add_scalar('Generater/loss_G', loss_G.item(), iterations)
-            board.add_scalar('Critic/loss_C', loss_C.item(), iterations)
-            board.add_scalar('Critic/loss_C_real', loss_C_real.item(), iterations)
-            board.add_scalar('Critic/loss_C_fake', loss_C_fake.item(), iterations)
-
+            board_add_image(board_train, 'fake image', G_z, iterations+1)
+            board_train.add_scalar('Generater/loss_G', loss_G.item(), iterations)
+            board_train.add_scalar('Critic/loss_C', loss_C.item(), iterations)
+            board_train.add_scalar('Critic/loss_C_real', loss_C_real.item(), iterations)
+            board_train.add_scalar('Critic/loss_C_fake', loss_C_fake.item(), iterations)
 
         print("Finished Training Loop.")
