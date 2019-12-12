@@ -222,6 +222,9 @@ if __name__ == '__main__':
             # ミニバッチデータを GPU へ転送
             images = images.to( device )
 
+            # 入力ノイズを再生成
+            input_noize_z.resize_( args.batch_size, args.n_input_noize_z, 1, 1 ).normal_(0, 1)
+
             #====================================================
             # クリティック C の fitting 処理
             #====================================================
@@ -246,28 +249,18 @@ if __name__ == '__main__':
                     print( "C_x.size() :", C_x.size() )
                     #print( "C_x :", C_x )
 
-                # 生成器 G に入力するノイズ z
-                # Generatorの更新の前にノイズを新しく生成しなおす必要があり。
-                with torch.no_grad():
-                    input_noize_z.resize_( args.batch_size, args.n_input_noize_z, 1 , 1 ).normal_(0, 1)
-
-                # G(z) : 生成器から出力される偽物画像
-                G_z = model_G( input_noize_z )
-
                 # 微分を行わない処理の範囲を with 構文で囲む
                 # クリティック D の学習中は、生成器 G のネットワークの勾配は更新しない。
-                #with torch.no_grad():
-                    #G_z = model_G( input_noize_z )
-                
-                if( args.debug and n_print > 0 ):
-                    print( "G_z.size() :", G_z.size() )     # torch.Size([128, 1, 28, 28])
-                    #print( "G_z :", G_z )
+                with torch.no_grad():
+                    # G(z) : 生成器から出力される偽物画像
+                    G_z = model_G( input_noize_z )                
+                    if( args.debug and n_print > 0 ):
+                        print( "G_z.size() :", G_z.size() )     # torch.Size([128, 1, 28, 28])
 
                 # E[ C( G(z) ) ] : 偽物画像を入力したときの識別器の出力 (平均化処理済み)
                 C_G_z = model_D( G_z )
                 if( args.debug and n_print > 0 ):
                     print( "C_G_z.size() :", C_G_z.size() )
-                    #print( "C_G_z :", C_G_z )
 
                 #----------------------------------------------------
                 # 損失関数を計算する
@@ -276,15 +269,12 @@ if __name__ == '__main__':
                 # loss は Pytorch の Variable として帰ってくるので、これをloss.data[0]で数値として見る必要があり
                 #----------------------------------------------------
                 # E_x[ C(x) ]
-                loss_C_real = torch.mean( C_x )
-                #loss_C_real.backward( torch.FloatTensor([-1]).to(device) )
-                
+                loss_C_real = torch.mean( C_x )                
                 if( args.debug and n_print > 0 ):
                     print( "loss_C_real : ", loss_C_real.item() )
 
                 # E_z[ C(G(z) ]
                 loss_C_fake = torch.mean( C_G_z )
-                #loss_C_fake.backward( torch.FloatTensor([1]).to(device) )
                 if( args.debug and n_print > 0 ):
                     print( "loss_C_fake : ", loss_C_fake.item() )
 
@@ -292,10 +282,9 @@ if __name__ == '__main__':
                 gradient_penalty_loss = calc_gradient_penalty(
                     model_D, images, G_z, device, 'mixed', 1.0, args.lambda_wgangp
                 )                
-                #gradient_penalty_loss.backward()
 
                 # クリティック C の損失関数 = E_x[ C(x) ] + E_z[ C(G(z) ]
-                loss_C = loss_C_real - loss_C_fake + gradient_penalty_loss
+                loss_C = - loss_C_real + loss_C_fake + gradient_penalty_loss
                 if( args.debug and n_print > 0 ):
                     print( "loss_C : ", loss_C.item() )
 
@@ -326,10 +315,6 @@ if __name__ == '__main__':
             # 学習用データをモデルに流し込む
             # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
             #----------------------------------------------------
-            # 生成器 G に入力するノイズ z
-            # Generatorの更新の前にノイズを新しく生成しなおす必要があり。
-            input_noize_z.resize_( args.batch_size, args.n_input_noize_z, 1, 1 ).normal_(0, 1)
-
             # G(z) : 生成器から出力される偽物画像
             G_z = model_G( input_noize_z )
             if( args.debug and n_print > 0 ):
@@ -345,7 +330,7 @@ if __name__ == '__main__':
             # 損失関数を計算する
             #----------------------------------------------------
             # L_G = E_z[ C(G(z) ]
-            loss_G = torch.mean( C_G_z )
+            loss_G = - torch.mean( C_G_z )
             if( args.debug and n_print > 0 ):
                 print( "loss_G :", loss_G )
 
@@ -353,7 +338,6 @@ if __name__ == '__main__':
             # 誤差逆伝搬
             #----------------------------------------------------
             loss_G.backward()
-            #loss_G.backward( torch.FloatTensor([-1]).to(device) )
 
             #----------------------------------------------------
             # backward() で計算した勾配を元に、設定した optimizer に従って、重みを更新
@@ -396,14 +380,14 @@ if __name__ == '__main__':
                     test_gradient_penalty_loss = calc_gradient_penalty(
                         model_D, test_images, G_z, device, 'mixed', 1.0, args.lambda_wgangp
                     )                
-                    test_loss_C = test_loss_C_real - test_loss_C_fake + test_gradient_penalty_loss
+                    test_loss_C = - test_loss_C_real + test_loss_C_fake + test_gradient_penalty_loss
                     
                     with torch.no_grad():
                         input_noize_z.resize_( args.batch_size, args.n_input_noize_z, 1, 1 ).normal_(0, 1)
                         G_z = model_G( input_noize_z )
                         C_G_z = model_D( G_z )
 
-                    test_loss_G = torch.mean( C_G_z )
+                    test_loss_G = - torch.mean( C_G_z )
 
                     loss_C_real_total += test_loss_C_real.item()
                     loss_C_fake_total += test_loss_C_fake.item()

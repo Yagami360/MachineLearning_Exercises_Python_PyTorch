@@ -1,6 +1,13 @@
 # -*- coding:utf-8 -*-
+import os
+import numpy as np
+from tqdm import tqdm
+
+# PyTorch
 import torch
 import torch.nn as nn
+import torch.optim as optim
+from torchvision.utils import save_image
 
 class Generator( nn.Module ):
     """
@@ -8,17 +15,20 @@ class Generator( nn.Module ):
 
     [public]
     [protected] 変数名の前にアンダースコア _ を付ける
+        _device : <toech.cuda.device> 使用デバイス
         _layer : <nn.Sequential> 生成器のネットワーク構成
     [private] 変数名の前にダブルアンダースコア __ を付ける（Pythonルール）
 
     """
     def __init__(
         self,
+        device,
         n_input_noize_z = 100,
         n_channels = 3,
         n_fmaps = 64
     ):
         super( Generator, self ).__init__()
+        self._device = device
         
         self._layer = nn.Sequential(
             nn.ConvTranspose2d(n_input_noize_z, n_fmaps*8, kernel_size=4, stride=1, padding=0, bias=False),
@@ -39,7 +49,7 @@ class Generator( nn.Module ):
 
             nn.ConvTranspose2d( n_fmaps, n_channels, kernel_size=4, stride=2, padding=1, bias=False ),
             nn.Tanh()
-        )
+        ).to( self._device )
 
         self.init_weight()
         return
@@ -70,15 +80,19 @@ class Critic( nn.Module ):
 
     [public]
     [protected] 変数名の前にアンダースコア _ を付ける
+        _device : <toech.cuda.device> 使用デバイス
         _layer : <nn.Sequential> クリティックのネットワーク構成
     [private] 変数名の前にダブルアンダースコア __ を付ける（Pythonルール）
     """
     def __init__(
        self,
+       device,
        n_channels = 3,
        n_fmaps = 64
     ):
-        super( Critic, self ).__init__()        
+        super( Critic, self ).__init__()
+        self._device = device
+        
         self._layer = nn.Sequential(
             nn.Conv2d(n_channels, n_fmaps, kernel_size=4, stride=2, padding=1, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
@@ -96,7 +110,7 @@ class Critic( nn.Module ):
             nn.LeakyReLU(0.2, inplace=True),
 
             nn.Conv2d(n_fmaps*8, 1, kernel_size=4, stride=1, padding=0, bias=False),
-        )
+        ).to( self._device )
 
         self.init_weight()
 

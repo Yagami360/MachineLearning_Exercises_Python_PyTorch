@@ -351,7 +351,7 @@ class DeepConvolutionalGANforMNIST( object ):
                 # 識別器 D の fitting 処理
                 #====================================================
                 # 生成器 G に入力するノイズ z
-                input_noize_z = torch.rand( size = (self._batch_size, self._n_input_noize_z) ).to( self._device )
+                #input_noize_z = torch.rand( size = (self._batch_size, self._n_input_noize_z) ).to( self._device )
 
                 #----------------------------------------------------
                 # 勾配を 0 に初期化

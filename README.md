@@ -26,7 +26,9 @@ PyTorch の練習コード集。<br>
 1. GAN
     1. [Deep Convolutional GAN（DCGAN）](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_DCGAN_PyTorch)
     1. [Conditional GAN（cGAN）](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_cGAN_PyTorch)
-    1. [Wasserstein GAN（WGAN）](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_WGAN2_PyTorch)
+    1. [Wasserstein GAN（WGAN）](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_WGAN_PyTorch)
+    1. [WGAN-GP](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_WGAN-GP_PyTorch)
+    1. [RGAN](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_RGAN_PyTorch)
     1. [Pix2Pix](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/Pix2Pix_PyTorch)
     1. [ProgressiveGAN](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_PGGAN_PyTorch)
 1. [【外部リンク】ReinforcementLearning](https://github.com/Yagami360/ReinforcementLearning_Exercises)
