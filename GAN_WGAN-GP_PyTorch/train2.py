@@ -20,10 +20,11 @@ from tensorboardX import SummaryWriter
 # 自作クラス
 from networks import Generator, Critic
 from visualization import board_add_image, board_add_images
+from losses import calc_gradient_penalty
 
 if __name__ == '__main__':
     """
-    WGAN による学習処理
+    WGAN-GP による学習処理
     ・学習用データセットは、MNIST / CIFAR-10
     """
     parser = argparse.ArgumentParser()
@@ -45,8 +46,7 @@ if __name__ == '__main__':
     parser.add_argument('--n_fmaps', type=int, default=64, help="特徴マップの枚数")
     parser.add_argument('--n_input_noize_z', type=int, default=100, help="生成器に入力するノイズ z の次数")
     parser.add_argument('--n_critic', type=int, default=5, help="クリティックの更新回数")
-    parser.add_argument('--w_clamp_upper', type=float, default=0.01, help="重みクリッピングの下限値")
-    parser.add_argument('--w_clamp_lower', type=float, default=-0.01, help="重みクリッピングの下限値")
+    parser.add_argument('--lambda_wgangp', type=float, default=10.0, help="WAGAN-GP の勾配ペナルティー係数")
     parser.add_argument('--n_display_step', type=int, default=100, help="tensorboard への表示間隔")
     parser.add_argument('--n_display_test_step', type=int, default=1000, help="test データの tensorboard への表示間隔")
     parser.add_argument('--debug', action='store_true')
@@ -89,8 +89,8 @@ if __name__ == '__main__':
     board_test = SummaryWriter( log_dir = os.path.join(args.tensorboard_dir, args.exper_name + "_test") )
 
     # seed 値の固定
-    np.random.seed(8)
-    torch.manual_seed(8)
+    #np.random.seed(8)
+    #torch.manual_seed(8)
 
     #======================================================================
     # データセットを読み込み or 生成
@@ -148,8 +148,7 @@ if __name__ == '__main__':
             download = True
         )
     else:
-        print( "Error: Invalid dataset" )
-        exit()
+        raise NotImplementedError('dataset %s not implemented' % args.dataset)
 
     # TensorDataset → DataLoader への変換
     dloader_train = DataLoader(
@@ -202,6 +201,9 @@ if __name__ == '__main__':
     # 入力ノイズ z
     input_noize_z = torch.FloatTensor( args.batch_size, args.n_input_noize_z ).to( device )
 
+    one_tsr = torch.FloatTensor([1]).to( device )
+    mone_tsr = one_tsr * -1
+
     print("Starting Training Loop...")
     iterations = 0      # 学習処理のイテレーション回数
     n_print = 1
@@ -222,6 +224,9 @@ if __name__ == '__main__':
             # ミニバッチデータを GPU へ転送
             images = images.to( device )
 
+            # 入力ノイズを再生成
+            input_noize_z.resize_( args.batch_size, args.n_input_noize_z, 1, 1 ).normal_(0, 1)
+
             #====================================================
             # クリティック C の fitting 処理
             #====================================================
@@ -230,24 +235,7 @@ if __name__ == '__main__':
                 param.requires_grad = True
 
             for n in range( args.n_critic ):
-                #----------------------------------------------------
-                # 重みクリッピング
-                #----------------------------------------------------
-                for param in model_D.parameters():
-                    #print( "critic param :", param )
-                    param.data.clamp_( args.w_clamp_lower, args.w_clamp_upper )
-                    #print( "critic param :", param )
-
-                # 生成器 G に入力するノイズ z
-                # Generatorの更新の前にノイズを新しく生成しなおす必要があり。
-                input_noize_z.resize_( args.batch_size, args.n_input_noize_z, 1 , 1 ).normal_(0, 1)
-
-                #----------------------------------------------------
-                # 勾配を 0 に初期化
-                # （この初期化処理が必要なのは、勾配がイテレーション毎に加算される仕様のため）
-                #----------------------------------------------------
-                optimizer_D.zero_grad()
-
+                input_noize_z.resize_( args.batch_size, args.n_input_noize_z, 1, 1 ).normal_(0, 1)
                 #----------------------------------------------------
                 # 学習用データをモデルに流し込む
                 # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
@@ -258,23 +246,18 @@ if __name__ == '__main__':
                     print( "C_x.size() :", C_x.size() )
                     #print( "C_x :", C_x )
 
-                # G(z) : 生成器から出力される偽物画像
-                G_z = model_G( input_noize_z )
-
                 # 微分を行わない処理の範囲を with 構文で囲む
                 # クリティック D の学習中は、生成器 G のネットワークの勾配は更新しない。
-                #with torch.no_grad():
-                    #G_z = model_G( input_noize_z )
-                
-                if( args.debug and n_print > 0 ):
-                    print( "G_z.size() :", G_z.size() )     # torch.Size([128, 1, 28, 28])
-                    #print( "G_z :", G_z )
+                with torch.no_grad():
+                    # G(z) : 生成器から出力される偽物画像
+                    G_z = model_G( input_noize_z )                
+                    if( args.debug and n_print > 0 ):
+                        print( "G_z.size() :", G_z.size() )     # torch.Size([128, 1, 28, 28])
 
                 # E[ C( G(z) ) ] : 偽物画像を入力したときの識別器の出力 (平均化処理済み)
                 C_G_z = model_D( G_z )
                 if( args.debug and n_print > 0 ):
                     print( "C_G_z.size() :", C_G_z.size() )
-                    #print( "C_G_z :", C_G_z )
 
                 #----------------------------------------------------
                 # 損失関数を計算する
@@ -284,26 +267,38 @@ if __name__ == '__main__':
                 #----------------------------------------------------
                 # E_x[ C(x) ]
                 loss_C_real = torch.mean( C_x )
-                #loss_C_real.backward( torch.FloatTensor([-1]).to(device) )
-                
                 if( args.debug and n_print > 0 ):
                     print( "loss_C_real : ", loss_C_real.item() )
 
                 # E_z[ C(G(z) ]
                 loss_C_fake = torch.mean( C_G_z )
-                #loss_C_fake.backward( torch.FloatTensor([1]).to(device) )
                 if( args.debug and n_print > 0 ):
                     print( "loss_C_fake : ", loss_C_fake.item() )
 
+                #
+                gradient_penalty_loss = calc_gradient_penalty(
+                    model_D, images, G_z, device, 'mixed', 1.0, args.lambda_wgangp
+                )                
+
                 # クリティック C の損失関数 = E_x[ C(x) ] + E_z[ C(G(z) ]
-                loss_C = - loss_C_real + loss_C_fake
+                #loss_C = loss_C_real - loss_C_fake + gradient_penalty_loss
+                loss_C = - loss_C_real + loss_C_fake + gradient_penalty_loss
                 if( args.debug and n_print > 0 ):
                     print( "loss_C : ", loss_C.item() )
 
                 #----------------------------------------------------
-                # 誤差逆伝搬
+                # 勾配を 0 に初期化
+                # （この初期化処理が必要なのは、勾配がイテレーション毎に加算される仕様のため）
+                #----------------------------------------------------
+                optimizer_D.zero_grad()
+
+                #----------------------------------------------------
+                # 勾配を計算
                 #----------------------------------------------------
                 loss_C.backward()
+                #loss_C_real.backward(mone_tsr)                
+                #loss_C_fake.backward(one_tsr)
+                #gradient_penalty_loss.backward()
 
                 #----------------------------------------------------
                 # backward() で計算した勾配を元に、設定した optimizer に従って、重みを更新
@@ -317,25 +312,16 @@ if __name__ == '__main__':
             for param in model_D.parameters():
                 param.requires_grad = False
 
-            # 生成器 G に入力するノイズ z
-            # Generatorの更新の前にノイズを新しく生成しなおす必要があり。
-            input_noize_z.resize_( args.batch_size, args.n_input_noize_z, 1, 1 ).normal_(0, 1)
-
-            #----------------------------------------------------
-            # 勾配を 0 に初期化
-            # （この初期化処理が必要なのは、勾配がイテレーション毎に加算される仕様のため）
-            #----------------------------------------------------
-            optimizer_G.zero_grad()
-
             #----------------------------------------------------
             # 学習用データをモデルに流し込む
             # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
             #----------------------------------------------------
+            input_noize_z.resize_( args.batch_size, args.n_input_noize_z, 1, 1 ).normal_(0, 1)
+
             # G(z) : 生成器から出力される偽物画像
             G_z = model_G( input_noize_z )
             if( args.debug and n_print > 0 ):
                 print( "G_z.size() :", G_z.size() )
-                #print( "G_z :", G_z )
 
             # E[C( G(z) )] : 偽物画像を入力したときのクリティックの出力（平均化処理済み）
             C_G_z = model_D( G_z )
@@ -346,14 +332,22 @@ if __name__ == '__main__':
             # 損失関数を計算する
             #----------------------------------------------------
             # L_G = E_z[ C(G(z) ]
+            #loss_G = torch.mean( C_G_z )
             loss_G = - torch.mean( C_G_z )
             if( args.debug and n_print > 0 ):
                 print( "loss_G :", loss_G )
 
             #----------------------------------------------------
-            # 誤差逆伝搬
+            # 勾配を 0 に初期化
+            # （この初期化処理が必要なのは、勾配がイテレーション毎に加算される仕様のため）
+            #----------------------------------------------------
+            optimizer_G.zero_grad()
+
+            #----------------------------------------------------
+            # 勾配を計算
             #----------------------------------------------------
             loss_G.backward()
+            #loss_G.backward(mone_tsr)
 
             #----------------------------------------------------
             # backward() で計算した勾配を元に、設定した optimizer に従って、重みを更新
@@ -368,8 +362,10 @@ if __name__ == '__main__':
                 board_train.add_scalar('Critic/loss_C', loss_C.item(), iterations)
                 board_train.add_scalar('Critic/loss_C_real', loss_C_real.item(), iterations)
                 board_train.add_scalar('Critic/loss_C_fake', loss_C_fake.item(), iterations)
+                board_train.add_scalar('Critic/gradient_penalty', gradient_penalty_loss.item(), iterations)
                 board_add_image(board_train, 'fake image', G_z, iterations+1)
 
+            """
             if( iterations == args.batch_size or ( iterations % args.n_display_test_step == 0 ) ):
                 model_G.eval()
                 model_D.eval()
@@ -380,52 +376,47 @@ if __name__ == '__main__':
                 loss_C_total = 0
                 loss_G_total = 0
                 n_test_loop = 0
-                with torch.no_grad():
-                    for (test_images,test_targets) in dloader_test :
-                        if test_images.size()[0] != args.batch_size_test:
-                            break
+                for (test_images,test_targets) in dloader_test :
+                    if test_images.size()[0] != args.batch_size_test:
+                        break
 
+                    with torch.no_grad():
                         test_images = test_images.to( device )
                         C_x = model_D( test_images )
                         G_z = model_G( input_noize_z )
                         C_G_z = model_D( G_z )
 
-                        test_loss_C_real = torch.mean( C_x )
-                        test_loss_C_fake = torch.mean( C_G_z )
-                        test_loss_C = - test_loss_C_real + test_loss_C_fake
-
+                    test_loss_C_real = torch.mean( C_x )
+                    test_loss_C_fake = torch.mean( C_G_z )
+                    test_gradient_penalty_loss = calc_gradient_penalty(
+                        model_D, test_images, G_z, device, 'mixed', 1.0, args.lambda_wgangp
+                    )                
+                    test_loss_C = - test_loss_C_real + test_loss_C_fake + test_gradient_penalty_loss
+                    
+                    with torch.no_grad():
                         input_noize_z.resize_( args.batch_size, args.n_input_noize_z, 1, 1 ).normal_(0, 1)
                         G_z = model_G( input_noize_z )
                         C_G_z = model_D( G_z )
-                        test_loss_G = - torch.mean( C_G_z )
 
-                        loss_C_real_total += test_loss_C_real.item()
-                        loss_C_fake_total += test_loss_C_fake.item()
-                        loss_C_total += test_loss_C.item()
-                        loss_G_total += test_loss_G.item()
+                    test_loss_G = torch.mean( C_G_z )
 
-                        n_test_loop += 1
-                        if( n_test_loop > args.n_test ):
-                            break
+                    loss_C_real_total += test_loss_C_real.item()
+                    loss_C_fake_total += test_loss_C_fake.item()
+                    gradient_penalty_loss_total += test_gradient_penalty_loss.item()
+                    loss_C_total += test_loss_C.item()
+                    loss_G_total += test_loss_G.item()
+
+                    n_test_loop += 1
+                    if( n_test_loop > args.n_test ):
+                        break
 
                 board_test.add_scalar('Generater/loss_G', loss_G_total/n_test_loop, iterations)
                 board_test.add_scalar('Critic/loss_C', loss_C_total/n_test_loop, iterations)
                 board_test.add_scalar('Critic/loss_C_real', loss_C_real_total/n_test_loop, iterations)
                 board_test.add_scalar('Critic/loss_C_fake', loss_C_fake_total/n_test_loop, iterations)
+                board_test.add_scalar('Critic/gradient_penalty', gradient_penalty_loss_total/n_test_loop, iterations)
                 board_add_image(board_test, 'fake image', G_z, iterations+1)
-
+            """
             n_print -= 1
 
-        #----------------------------------------------------
-        # 学習過程の表示
-        #----------------------------------------------------
-        n_sava_step_epoch = 1
-        # 特定のエポックでGeneratorから画像を保存
-        if( epoch % n_sava_step_epoch == 0 ):
-            board_add_image(board_train, 'fake image', G_z, iterations+1)
-            board_train.add_scalar('Generater/loss_G', loss_G.item(), iterations)
-            board_train.add_scalar('Critic/loss_C', loss_C.item(), iterations)
-            board_train.add_scalar('Critic/loss_C_real', loss_C_real.item(), iterations)
-            board_train.add_scalar('Critic/loss_C_fake', loss_C_fake.item(), iterations)
-
-    print("Finished Training Loop.")
+        print("Finished Training Loop.")

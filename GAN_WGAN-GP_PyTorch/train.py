@@ -89,8 +89,8 @@ if __name__ == '__main__':
     board_test = SummaryWriter( log_dir = os.path.join(args.tensorboard_dir, args.exper_name + "_test") )
 
     # seed 値の固定
-    np.random.seed(8)
-    torch.manual_seed(8)
+    #np.random.seed(8)
+    #torch.manual_seed(8)
 
     #======================================================================
     # データセットを読み込み or 生成
@@ -200,7 +200,10 @@ if __name__ == '__main__':
     model_D.train()
 
     # 入力ノイズ z
-    input_noize_z = torch.FloatTensor( args.batch_size, args.n_input_noize_z ).to( device )
+    input_noize_z = torch.rand( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
+    if( args.debug ):
+        print( "input_noize_z.shape :", input_noize_z.shape )
+
 
     print("Starting Training Loop...")
     iterations = 0      # 学習処理のイテレーション回数
@@ -223,7 +226,7 @@ if __name__ == '__main__':
             images = images.to( device )
 
             # 入力ノイズを再生成
-            input_noize_z.resize_( args.batch_size, args.n_input_noize_z, 1, 1 ).normal_(0, 1)
+            input_noize_z = torch.rand( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
 
             #====================================================
             # クリティック C の fitting 処理
@@ -243,6 +246,8 @@ if __name__ == '__main__':
                 # 学習用データをモデルに流し込む
                 # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
                 #----------------------------------------------------
+                input_noize_z = torch.rand( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
+
                 # E[C(x)] : 本物画像 x = image を入力したときのクリティックの出力 （平均化処理済み）
                 C_x = model_D( images )
                 if( args.debug and n_print > 0 ):
@@ -258,7 +263,7 @@ if __name__ == '__main__':
                         print( "G_z.size() :", G_z.size() )     # torch.Size([128, 1, 28, 28])
 
                 # E[ C( G(z) ) ] : 偽物画像を入力したときの識別器の出力 (平均化処理済み)
-                C_G_z = model_D( G_z )
+                C_G_z = model_D( G_z.detach() )
                 if( args.debug and n_print > 0 ):
                     print( "C_G_z.size() :", C_G_z.size() )
 
@@ -315,11 +320,12 @@ if __name__ == '__main__':
             # 学習用データをモデルに流し込む
             # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
             #----------------------------------------------------
+            input_noize_z = torch.rand( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
+
             # G(z) : 生成器から出力される偽物画像
             G_z = model_G( input_noize_z )
             if( args.debug and n_print > 0 ):
                 print( "G_z.size() :", G_z.size() )
-                #print( "G_z :", G_z )
 
             # E[C( G(z) )] : 偽物画像を入力したときのクリティックの出力（平均化処理済み）
             C_G_z = model_D( G_z )
@@ -355,6 +361,7 @@ if __name__ == '__main__':
                 board_train.add_scalar('Critic/gradient_penalty', gradient_penalty_loss.item(), iterations)
                 board_add_image(board_train, 'fake image', G_z, iterations+1)
 
+            """
             if( iterations == args.batch_size or ( iterations % args.n_display_test_step == 0 ) ):
                 model_G.eval()
                 model_D.eval()
@@ -405,19 +412,7 @@ if __name__ == '__main__':
                 board_test.add_scalar('Critic/loss_C_fake', loss_C_fake_total/n_test_loop, iterations)
                 board_test.add_scalar('Critic/gradient_penalty', gradient_penalty_loss_total/n_test_loop, iterations)
                 board_add_image(board_test, 'fake image', G_z, iterations+1)
-
+            """
             n_print -= 1
 
-        #----------------------------------------------------
-        # 学習過程の表示
-        #----------------------------------------------------
-        n_sava_step_epoch = 1
-        # 特定のエポックでGeneratorから画像を保存
-        if( epoch % n_sava_step_epoch == 0 ):
-            board_add_image(board_train, 'fake image', G_z, iterations+1)
-            board_train.add_scalar('Generater/loss_G', loss_G.item(), iterations)
-            board_train.add_scalar('Critic/loss_C', loss_C.item(), iterations)
-            board_train.add_scalar('Critic/loss_C_real', loss_C_real.item(), iterations)
-            board_train.add_scalar('Critic/loss_C_fake', loss_C_fake.item(), iterations)
-
-        print("Finished Training Loop.")
+    print("Finished Training Loop.")

@@ -1,6 +1,5 @@
-# GAN_RGAN-GP_PyTorch （実装中...）
-RSGAN, RGAN, RaGAN の PyTorch での実装。（実装中...）
-
+# GAN_RGAN-GP_PyTorch
+RSGAN, RaSGAN, RaLSGAN の PyTorch での実装。
 
 ## ■ 項目 [Contents]
 1. [動作環境](#動作環境)
@@ -58,10 +57,24 @@ $ tensorboard --logdir tensorboard --port 6006
 
 -->
 
-### ◎ 損失関数のグラフ（実行条件１）
+### ◎ 損失関数のグラフ
 
-### ◎ 生成器から生成された自動生成画像（実行条件１）
+- RSGAN<br>
+    ![image](https://user-images.githubusercontent.com/25688193/70800236-1088a000-1def-11ea-9a72-5bb289360563.png)<br>
+    ![image](https://user-images.githubusercontent.com/25688193/70800017-7fb1c480-1dee-11ea-86bc-ca0c63a1dc11.png)<br>
 
+
+- RaSGAN<br>
+
+### ◎ 生成器から生成された自動生成画像
+
+- RSGAN<br>
+    - Epochs :10<br>
+            ![image](https://user-images.githubusercontent.com/25688193/70800135-d15a4f00-1dee-11ea-9275-0dd44068a599.png)<br>
+
+- RaSGAN<br>
+    - Epochs :10<br>
+        ![image](https://user-images.githubusercontent.com/25688193/70803801-42523480-1df8-11ea-8807-4dfa0149fe4b.png)<br>
 
 
 ## ■ デバッグ情報

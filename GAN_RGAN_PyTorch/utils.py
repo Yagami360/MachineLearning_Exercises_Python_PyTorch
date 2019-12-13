@@ -1,8 +1,57 @@
-from tensorboardX import SummaryWriter
-import torch
-from PIL import Image
+# -*- coding:utf-8 -*-
 import os
+from PIL import Image
 
+import torch
+import torch.nn as nn
+from tensorboardX import SummaryWriter
+
+#====================================================
+# モデルの保存＆読み込み
+#====================================================
+def save_checkpoint(model, device, save_path, step):
+    if not os.path.exists(os.path.dirname(save_path)):
+        os.makedirs(os.path.dirname(save_path))
+
+    torch.save(
+        {
+            'step': step,
+            'model_state_dict': model.cpu().state_dict(),
+        }, save_path
+    )
+    model.to(device)
+    return
+
+def save_checkpoint_wo_step(model, device, save_path):
+    if not os.path.exists(os.path.dirname(save_path)):
+        os.makedirs(os.path.dirname(save_path))
+
+    torch.save(model.cpu().state_dict(), save_path)
+    model.to(device)
+    return
+
+def load_checkpoint(model, device, checkpoint_path):
+    if not os.path.exists(checkpoint_path):
+        return
+        
+    checkpoint = torch.load(checkpoint_path)
+    model.load_state_dict(checkpoint["model_state_dict"])
+    step = checkpoint['step']
+    model.to(device)
+    return step
+
+def load_checkpoint_wo_step(model, device, checkpoint_path):
+    if not os.path.exists(checkpoint_path):
+        return
+        
+    model.load_state_dict(torch.load(checkpoint_path))
+    model.to(device)
+    return
+
+
+#====================================================
+# TensorBoard への出力
+#====================================================
 def tensor_for_board(img_tensor):
     # map into [0,1]
     tensor = (img_tensor.clone()+1) * 0.5

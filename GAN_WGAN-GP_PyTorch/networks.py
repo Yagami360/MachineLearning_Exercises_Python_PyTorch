@@ -2,6 +2,15 @@
 import torch
 import torch.nn as nn
 
+def weights_init(m):
+    classname = m.__class__.__name__
+    if classname.find('Conv') != -1:
+        nn.init.normal_(m.weight.data, 0.0, 0.02)
+    elif classname.find('BatchNorm') != -1:
+        nn.init.normal_(m.weight.data, 1.0, 0.02)
+        nn.init.constant_(m.bias.data, 0)
+
+
 class Generator( nn.Module ):
     """
     WGAN の生成器 G [Generator] 側のネットワーク構成を記述したモデル。
@@ -38,17 +47,13 @@ class Generator( nn.Module ):
             nn.ReLU(inplace=True),
 
             nn.ConvTranspose2d( n_fmaps, n_channels, kernel_size=4, stride=2, padding=1, bias=False ),
-            nn.Tanh()
+            nn.Tanh(),
+            #nn.Sigmoid(),
         )
 
-        self.init_weight()
+        #weights_init(self)
         return
 
-    def init_weight( self ):
-        """
-        独自の重みの初期化処理
-        """
-        return
 
     def forward( self, input ):
         """
@@ -98,14 +103,7 @@ class Critic( nn.Module ):
             nn.Conv2d(n_fmaps*8, 1, kernel_size=4, stride=1, padding=0, bias=False),
         )
 
-        self.init_weight()
-
-        return
-
-    def init_weight( self ):
-        """
-        独自の重みの初期化処理
-        """
+        #weights_init(self)
         return
 
     def forward(self, input):
