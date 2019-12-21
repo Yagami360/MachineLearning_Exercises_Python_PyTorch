@@ -18,21 +18,21 @@ from torchvision.utils import save_image
 from tensorboardX import SummaryWriter
 
 # 自作クラス
-from networks import Generator, Discriminator, PatchGANDiscriminator
-from losses import calc_gradient_penalty
+from networks import CGANGenerator, CGANDiscriminator, CGANPatchGANDiscriminator
 from utils import save_checkpoint, load_checkpoint
 from utils import board_add_image, board_add_images
 from utils import save_image_historys_gif
 
 if __name__ == '__main__':
     """
-    WGAN-GP による学習処理
+    cGAN による学習処理
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument("--exper_name", default="WGANGP_train", help="実験名")
+    parser.add_argument("--exper_name", default="CGAN_train", help="実験名")
     parser.add_argument('--device', choices=['cpu', 'gpu'], default="gpu", help="使用デバイス (CPU or GPU)")
     #parser.add_argument('--gpu_ids', type=str, default='0', help='gpu ids: e.g. 0  0,1,2, 0,2. use -1 for CPU') 
-    parser.add_argument('--dataset', choices=['mnist', 'cifar-10'], default="mnist", help="データセットの種類（MNIST or CIFAR-10）")
+    parser.add_argument('--dataset', choices=['mnist', 'cifar-10'], default="mnist", help="データセットの種類")
+    parser.add_argument('--n_classes', type=int, default=10, help="クラスラベルの数（MNIST:10, CIFAR-10:10）")
     parser.add_argument('--dataset_dir', type=str, default="dataset", help="データセットのディレクトリ")
     parser.add_argument('--results_dir', type=str, default="results", help="生成画像の出力ディレクトリ")
     parser.add_argument('--save_checkpoints_dir', type=str, default="checkpoints", help="モデルの保存ディレクトリ")
@@ -48,11 +48,10 @@ if __name__ == '__main__':
     parser.add_argument('--image_size', type=int, default=64, help="入力画像のサイズ（pixel単位）")
     parser.add_argument('--n_fmaps', type=int, default=64, help="特徴マップの枚数")
     parser.add_argument('--n_input_noize_z', type=int, default=100, help="生成器に入力するノイズ z の次数")
+    parser.add_argument('--gan_type', choices=['vanilla','LSGAN'], default="vanilla", help="GAN の種類")
     parser.add_argument('--networkD_type', choices=['vanilla','PatchGAN' ], default="PatchGAN", help="GAN の識別器の種類")
-    parser.add_argument('--n_critic', type=int, default=5, help="クリティックの更新回数")
-    parser.add_argument('--lambda_wgangp', type=float, default=10.0, help="WAGAN-GP の勾配ペナルティー係数")
-    parser.add_argument('--n_display_step', type=int, default=100, help="tensorboard への表示間隔")
-    parser.add_argument('--n_display_test_step', type=int, default=1000, help="test データの tensorboard への表示間隔")
+    parser.add_argument('--n_display_step', type=int, default=50, help="tensorboard への表示間隔")
+    parser.add_argument('--n_display_test_step', type=int, default=500, help="test データの tensorboard への表示間隔")
     parser.add_argument("--n_save_step", type=int, default=5000, help="モデルのチェックポイントの保存間隔")
     parser.add_argument("--seed", type=int, default=8, help="乱数シード値")
     parser.add_argument('--debug', action='store_true', help="デバッグモード有効化")
@@ -165,6 +164,7 @@ if __name__ == '__main__':
             target_transform = None,
             download = True
         )
+
     else:
         raise NotImplementedError('dataset %s not implemented' % args.dataset)
 
@@ -174,28 +174,29 @@ if __name__ == '__main__':
         batch_size = args.batch_size,
         shuffle = True
     )
-
+        
     dloader_test = DataLoader(
         dataset = ds_test,
         batch_size = args.batch_size_test,
         shuffle = False
     )
-    
-    print( "ds_train :\n", ds_train ) # MNIST : torch.Size([60000, 28, 28]) , CIFAR-10 : (50000, 32, 32, 3)
-    print( "ds_test :\n", ds_test )
+
+    if( args.debug ):
+        print( "ds_train :\n", ds_train )
+        print( "ds_test :\n", ds_test )
 
     #======================================================================
     # モデルの構造を定義する。
     #======================================================================
     # Genrator
     if( args.dataset == "mnist" ):
-        model_G = Generator( 
+        model_G = CGANGenerator( 
             n_input_noize_z = args.n_input_noize_z,
             n_channels = 1,         # グレースケールのチャンネル数 1
             n_fmaps = args.n_fmaps
         ).to( device )
     else:
-        model_G = Generator( 
+        model_G = CGANGenerator( 
             n_input_noize_z = args.n_input_noize_z,
             n_channels = 3,         # RGBのチャンネル数 3
             n_fmaps = args.n_fmaps
@@ -204,23 +205,23 @@ if __name__ == '__main__':
     # Discriminator
     if( args.dataset == "mnist" ):
         if( args.networkD_type == "PatchGAN" ):
-            model_D = PatchGANDiscriminator( 
+            model_D = CGANPatchGANDiscriminator( 
                 n_in_channels = 1,
                 n_fmaps = args.n_fmaps
             ).to( device )
         else:
-            model_D = Discriminator( 
+            model_D = CGANDiscriminator( 
                 n_channels = 1, 
                 n_fmaps = args.n_fmaps
             ).to( device )
     else:
         if( args.networkD_type == "PatchGAN" ):
-            model_D = PatchGANDiscriminator( 
+            model_D = CGANPatchGANDiscriminator( 
                 n_in_channels = 3,
                 n_fmaps = args.n_fmaps
             ).to( device )
         else:
-            model_D = Discriminator( 
+            model_D = CGANDiscriminator( 
                 n_channels = 3, 
                 n_fmaps = args.n_fmaps
             ).to( device )
@@ -250,17 +251,31 @@ if __name__ == '__main__':
     #======================================================================
     # loss 関数の設定
     #======================================================================
-    pass
-
+    if( args.gan_type == "LSGAN" ):
+        loss_fn = nn.MSELoss()
+    else:
+        #loss_fn = nn.BCELoss()             # when use sigmoid in Discriminator
+        loss_fn = nn.BCEWithLogitsLoss()    # when not use sigmoid in Discriminator
+    
     #======================================================================
     # モデルの学習処理
     #======================================================================
     # 入力ノイズ z
     input_noize_z = torch.rand( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
     input_noize_fix_z = torch.rand( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
-
     if( args.debug ):
         print( "input_noize_z.shape :", input_noize_z.shape )
+
+    # クラスラベル
+    # one-hot encoding 用の Tensor
+    # shape = [n_classes, n_clasees]
+    # [1,0,0,...,0]
+    # [0,1,0,...,0]
+    # ...
+    # [0,0,0,...,0]
+    eye_tsr = torch.eye( args.n_classes ).to( device )
+    if( args.debug ):
+        print( "eye_tsr.shape :", eye_tsr.shape )
 
     # 学習中の生成画像の履歴
     fake_images_historys = []
@@ -287,76 +302,87 @@ if __name__ == '__main__':
             # ミニバッチデータを GPU へ転送
             images = images.to( device )
 
+            # 識別器に入力するクラスラベルの画像 y（＝本物のラベル画像情報）
+            y_real_label = targets.to( device )
+            y_real_one_hot = eye_tsr[y_real_label].view( -1, args.n_classes, 1, 1 ).to( device )
+            y_real_image_label = y_real_one_hot.expand( args.batch_size, args.n_classes, images.shape[2], images.shape[3] ).to( device )
+            if( args.debug and n_print > 0 ):
+                print( "y_real_label.shape :", y_real_label.shape )
+                print( "y_real_one_hot.shape :", y_real_one_hot.shape )
+                print( "y_real_image_label.shape :", y_real_image_label.shape )
+
             #====================================================
-            # クリティック C の fitting 処理
+            # 識別器 D の fitting 処理
             #====================================================
-            # 無効化していたクリティック C のネットワークの勾配計算を有効化。
+            # 無効化していた識別器 D のネットワークの勾配計算を有効化。
             for param in model_D.parameters():
                 param.requires_grad = True
 
-            for n in range( args.n_critic ):
-                #----------------------------------------------------
-                # 学習用データをモデルに流し込む
-                # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
-                #----------------------------------------------------
-                # 生成器 G に入力するノイズ z
-                # Generatorの更新の前にノイズを新しく生成しなおす必要があり。
-                input_noize_z = torch.rand( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
+            #----------------------------------------------------
+            # 学習用データをモデルに流し込む
+            # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
+            #----------------------------------------------------
+            # 入力ノイズを再生成
+            input_noize_z = torch.rand( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
 
-                # E[C(x)] : 本物画像 x = image を入力したときのクリティックの出力 （平均化処理済み）
-                C_x = model_D( images )
+            # 生成器に入力するクラスラベル y（＝偽のラベル情報）
+            # 識別器と生成器の更新の前にノイズを新しく生成しなおす。
+            y_fake_label = torch.randint( args.n_classes, (args.batch_size,), dtype = torch.long ).to( device )
+            y_fake_one_hot = eye_tsr[y_fake_label].view( -1, args.n_classes, 1, 1 ).to( device )
+            y_fake_image_label = y_fake_one_hot.expand( args.batch_size, args.n_classes, images.shape[2], images.shape[3] ).to( device )
+            if( args.debug and n_print > 0 ):
+                print( "y_fake_label.shape :", y_fake_label.shape )
+                print( "y_fake_one_hot.shape :", y_fake_one_hot.shape )
+                print( "y_fake_image_label.shape :", y_fake_image_label.shape )
+
+            # D(x) : 本物画像 x = image を入力したときの識別器の出力
+            D_x = model_D( images, y_real_image_label )
+            if( args.debug and n_print > 0 ):
+                print( "D_x.size() :", D_x.size() )
+
+            # G(z) : 生成器から出力される偽物画像
+            with torch.no_grad():   # 生成器 G の更新が行われないようにする。
+                G_z = model_G( input_noize_z, y_fake_one_hot )
                 if( args.debug and n_print > 0 ):
-                    print( "C_x.size() :", C_x.size() )
-
-                with torch.no_grad():   # 生成器 G の更新が行われないようにする。
-                    # G(z) : 生成器から出力される偽物画像
-                    G_z = model_G( input_noize_z )
+                    print( "G_z.size() :", G_z.size() )
                 
-                if( args.debug and n_print > 0 ):
-                    print( "G_z.size() :", G_z.size() )     # torch.Size([128, 1, 28, 28])
+            # D( G(z) ) : 偽物画像を入力したときの識別器の出力
+            D_G_z = model_D( G_z.detach(), y_fake_image_label.detach() )    # detach して G_z を通じて、生成器に勾配が伝搬しないようにする
+            if( args.debug and n_print > 0 ):
+                print( "D_G_z.size() :", D_G_z.size() )
 
-                # E[ C( G(z) ) ] : 偽物画像を入力したときの識別器の出力 (平均化処理済み)
-                C_G_z = model_D( G_z )
-                if( args.debug and n_print > 0 ):
-                    print( "C_G_z.size() :", C_G_z.size() )
+            #----------------------------------------------------
+            # 損失関数を計算する
+            # 出力と教師データを損失関数に設定し、誤差 loss を計算
+            # この設定は、損失関数を __call__ をオーバライト
+            # loss は Pytorch の Variable として帰ってくるので、これをloss.data[0]で数値として見る必要があり
+            #----------------------------------------------------
+            # real ラベルを 1、fake ラベルを 0 として定義
+            real_ones_tsr =  torch.ones( D_x.shape ).to( device )
+            fake_zeros_tsr =  torch.zeros( D_x.shape ).to( device )
+            if( args.debug and n_print > 0 ):
+                print( "real_ones_tsr.shape :", real_ones_tsr.shape )
+                print( "fake_zeros_tsr.shape :", fake_zeros_tsr.shape )
 
-                #----------------------------------------------------
-                # 損失関数を計算する
-                # 出力と教師データを損失関数に設定し、誤差 loss を計算
-                # この設定は、損失関数を __call__ をオーバライト
-                # loss は Pytorch の Variable として帰ってくるので、これをloss.data[0]で数値として見る必要があり
-                #----------------------------------------------------
-                # E_x[ C(x) ]
-                loss_C_real = torch.mean( C_x )
-                
-                # E_z[ C(G(z) ]
-                loss_C_fake = torch.mean( C_G_z )
+            loss_D = loss_fn( D_x, real_ones_tsr ) + loss_fn( D_G_z, fake_zeros_tsr )
 
-                # WGAN-GP の勾配項（制約項）
-                gradient_penalty_loss = calc_gradient_penalty(
-                    model_D, images, G_z, device, 'mixed', 1.0, args.lambda_wgangp
-                )
+            #----------------------------------------------------
+            # ネットワークの更新処理
+            #----------------------------------------------------
+            # 勾配を 0 に初期化（この初期化処理が必要なのは、勾配がイテレーション毎に加算される仕様のため）
+            optimizer_D.zero_grad()
 
-                # クリティック C の損失関数
-                loss_C = - loss_C_real + loss_C_fake + gradient_penalty_loss
+            # 勾配計算
+            #loss_D.backward(retain_graph=True)
+            loss_D.backward()
 
-                #----------------------------------------------------
-                # ネットワークの更新処理
-                #----------------------------------------------------
-                # 勾配を 0 に初期化（この初期化処理が必要なのは、勾配がイテレーション毎に加算される仕様のため）
-                optimizer_D.zero_grad()
-
-                # 勾配計算
-                loss_C.backward(retain_graph=True)
-                #loss_C.backward()
-
-                # backward() で計算した勾配を元に、設定した optimizer に従って、重みを更新
-                optimizer_D.step()
+            # backward() で計算した勾配を元に、設定した optimizer に従って、重みを更新
+            optimizer_D.step()
 
             #====================================================
             # 生成器 G の fitting 処理
             #====================================================
-            # クリティック C のネットワークの勾配計算を行わないようにする。
+            # 識別器 D のネットワークの勾配計算を行わないようにする。
             for param in model_D.parameters():
                 param.requires_grad = False
 
@@ -364,26 +390,30 @@ if __name__ == '__main__':
             # 学習用データをモデルに流し込む
             # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
             #----------------------------------------------------
-            # 生成器 G に入力するノイズ z
-            # Generatorの更新の前にノイズを新しく生成しなおす必要があり。
+            # 入力ノイズを再生成
             input_noize_z = torch.rand( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
 
+            # 生成器に入力するクラスラベル y（＝偽のラベル情報）
+            # 識別器と生成器の更新の前にノイズを新しく生成しなおす。
+            y_fake_label = torch.randint( args.n_classes, (args.batch_size,), dtype = torch.long ).to( device )
+            y_fake_one_hot = eye_tsr[y_fake_label].view( -1, args.n_classes, 1, 1 ).to( device )
+            y_fake_image_label = y_fake_one_hot.expand( args.batch_size, args.n_classes, images.shape[2], images.shape[3] ).to( device )
+
             # G(z) : 生成器から出力される偽物画像
-            G_z = model_G( input_noize_z )
+            G_z = model_G( input_noize_z, y_fake_one_hot )
             if( args.debug and n_print > 0 ):
                 print( "G_z.size() :", G_z.size() )
-                #print( "G_z :", G_z )
 
-            # E[C( G(z) )] : 偽物画像を入力したときのクリティックの出力（平均化処理済み）
-            C_G_z = model_D( G_z )
+            # D( G(z) ) : 偽物画像を入力したときの識別器の出力
+            #with torch.no_grad():  # param.requires_grad = False しているので不要
+            D_G_z = model_D( G_z, y_fake_image_label )
             if( args.debug and n_print > 0 ):
-                print( "C_G_z.size() :", C_G_z.size() )
+                print( "D_G_z.size() :", D_G_z.size() )
 
             #----------------------------------------------------
             # 損失関数を計算する
             #----------------------------------------------------
-            # L_G = E_z[ C(G(z) ]
-            loss_G = - torch.mean( C_G_z )
+            loss_G = loss_fn( D_G_z, real_ones_tsr )
 
             #----------------------------------------------------
             # ネットワークの更新処理
@@ -402,13 +432,9 @@ if __name__ == '__main__':
             #====================================================
             if( step == 0 or ( step % args.n_display_step == 0 ) ):
                 board_train.add_scalar('Generater/loss_G', loss_G.item(), iterations)
-                board_train.add_scalar('Discriminator/loss_D', loss_C.item(), iterations)
-                board_train.add_scalar('Discriminator/loss_D_real', loss_C_real.item(), iterations)
-                board_train.add_scalar('Discriminator/loss_D_fake', loss_C_fake.item(), iterations)
-                board_train.add_scalar('Discriminator/gradient_penalty', gradient_penalty_loss.item(), iterations)
-
+                board_train.add_scalar('Discriminator/loss_D', loss_D.item(), iterations)
                 board_add_image(board_train, 'fake image', G_z, iterations+1)
-                print( "epoch={}, iters={}, loss_G={:.5f}, loss_C={:.5f}".format(epoch, iterations, loss_G, loss_C) )
+                print( "epoch={}, iters={}, loss_G={:.5f}, loss_D={:.5f}".format(epoch, iterations, loss_G, loss_D) )
 
             #====================================================
             # test loss の表示
@@ -420,13 +446,10 @@ if __name__ == '__main__':
                 # 入力ノイズは固定
                 input_noize_z = torch.rand( size = (args.batch_size_test, args.n_input_noize_z,1,1) ).to( device )
 
-                loss_C_real_total = 0
-                loss_C_fake_total = 0
-                gradient_penalty_loss_total = 0
-                loss_C_total = 0
-                loss_G_total = 0
                 n_test_loop = 0
                 test_iterations = 0
+                loss_D_total = 0
+                loss_G_total = 0
                 for (test_images,test_targets) in dloader_test :
                     if test_images.size()[0] != args.batch_size_test:
                         break
@@ -438,41 +461,46 @@ if __name__ == '__main__':
                     # 入力データをセット
                     #----------------------------------------------------
                     test_images = test_images.to( device )
-
+                    
                     #----------------------------------------------------
                     # テスト用データをモデルに流し込む
                     #----------------------------------------------------
+                    # 識別器に入力するクラスラベルの画像 y（＝本物のラベル画像情報）
+                    y_real_label = test_targets.to( device )
+                    y_real_one_hot = eye_tsr[y_real_label].view( -1, args.n_classes, 1, 1 ).to( device )
+                    y_real_image_label = y_real_one_hot.expand( args.batch_size_test, args.n_classes, test_images.shape[2], test_images.shape[3] ).to( device )
+
+                    # 生成器に入力するクラスラベル y（＝偽のラベル情報）
+                    y_fake_label = torch.randint( args.n_classes, (args.batch_size_test,), dtype = torch.long ).to( device )
+                    y_fake_one_hot = eye_tsr[y_fake_label].view( -1, args.n_classes, 1, 1 ).to( device )
+                    y_fake_image_label = y_fake_one_hot.expand( args.batch_size_test, args.n_classes, test_images.shape[2], test_images.shape[3] ).to( device )
+
                     with torch.no_grad():
-                        C_x = model_D( test_images )
-                        G_z = model_G( input_noize_z )
-                        C_G_z = model_D( G_z )
+                        D_x = model_D( test_images, y_real_image_label )
+                        G_z = model_G( input_noize_z, y_fake_one_hot )
+                        D_G_z = model_D( G_z, y_fake_image_label )
 
                     #----------------------------------------------------
                     # 損失関数を計算する
                     #----------------------------------------------------
-                    test_loss_C_real = torch.mean( C_x )
-                    test_loss_C_fake = torch.mean( C_G_z )
-                    test_gradient_penalty_loss = calc_gradient_penalty(
-                        model_D, test_images, G_z, device, 'mixed', 1.0, args.lambda_wgangp
-                    )  
+                    real_ones_tsr =  torch.ones( D_x.shape ).to( device )
+                    fake_zeros_tsr =  torch.zeros( D_x.shape ).to( device )
 
-                    test_loss_C = - test_loss_C_real + test_loss_C_fake + test_gradient_penalty_loss
-                    test_loss_G = - torch.mean( C_G_z )
+                    # Discriminator
+                    loss_D = loss_fn( D_x, real_ones_tsr ) + loss_fn( D_G_z, fake_zeros_tsr )
 
-                    loss_C_real_total += test_loss_C_real.item()
-                    loss_C_fake_total += test_loss_C_fake.item()
-                    loss_C_total += test_loss_C.item()
-                    loss_G_total += test_loss_G.item()
+                    # Generator
+                    loss_G = loss_fn( D_G_z, real_ones_tsr )
 
-                    if( n_test_loop > args.n_test ):
+                    # total
+                    loss_D_total += loss_D.item()
+                    loss_G_total += loss_G.item()
+
+                    if( test_iterations > args.n_test ):
                         break
 
-                board_test.add_scalar('Generater/loss_G', loss_G_total/n_test_loop, iterations)
-                board_test.add_scalar('Discriminator/loss_D', loss_C_total/n_test_loop, iterations)
-                board_test.add_scalar('Discriminator/loss_D_real', loss_C_real_total/n_test_loop, iterations)
-                board_test.add_scalar('Discriminator/loss_D_fake', loss_C_fake_total/n_test_loop, iterations)
-                board_test.add_scalar('Discriminator/gradient_penalty', gradient_penalty_loss_total/n_test_loop, iterations)
-                board_add_image(board_test, 'fake image', G_z, iterations+1)
+                board_test.add_scalar('Generater/loss_G', (loss_G_total/n_test_loop), iterations)
+                board_test.add_scalar('Discriminator/loss_D', (loss_D_total/n_test_loop), iterations)
 
             #====================================================
             # モデルの保存
@@ -485,21 +513,26 @@ if __name__ == '__main__':
                 print( "saved checkpoints" )
 
             n_print -= 1
-
+        
         #====================================================
         # 各 Epoch 終了後の処理
         #====================================================
-        # 出力画像の生成＆保存
-        model_G.eval()
-        with torch.no_grad():
-            G_z = model_G( input_noize_fix_z )
+        for y_lable in range(args.n_classes):
+            eye_tsr = torch.eye( args.n_classes ).to( device )
+            y_fake_label = torch.full( (1,), y_label ).long().to( device )
+            y_fake_one_hot = eye_tsr[y_fake_label].view( -1, args.n_classes, 1, 1 ).to( device )
 
-        save_image( tensor = G_z[0], filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}_iters{}_batch0.png".format( epoch, iterations ) )
-        save_image( tensor = G_z, filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}_iters{}_batchAll.png".format( epoch, iterations ) )
+            # 出力画像の生成＆保存
+            model_G.eval()
+            with torch.no_grad():
+                G_z = model_G( input_noize_fix_z, y_fake_one_hot )
 
-        # [batch_size, n_channels, height, width] → [height, width, n_channels]
-        fake_images_historys.append(G_z[0].transpose( 0 ,2 ).cpu().clone().numpy())
-        save_image_historys_gif( fake_images_historys, os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}_iters{}.gif".format( epoch, iterations ) )        
+            save_image( tensor = G_z[0], filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_label{}_epoches{}_iters{}_batch0.png".format( y_lable, epoch, iterations ) )
+            save_image( tensor = G_z, filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_label{}_epoches{}_iters{}_batchAll.png".format( y_lable, epoch, iterations ) )
+
+            # [batch_size, n_channels, height, width] → [height, width, n_channels]
+            fake_images_historys.append(G_z[0].transpose( 0 ,2 ).cpu().clone().numpy())
+            save_image_historys_gif( fake_images_historys, os.path.join(args.results_dir, args.exper_name) + "/fake_image_label{}_epoches{}_iters{}.gif".format( y_lable, epoch, iterations ) )        
 
     save_checkpoint( model_G, device, os.path.join(args.save_checkpoints_dir, args.exper_name, "G", 'G_final.pth'), iterations )
     save_checkpoint( model_D, device, os.path.join(args.save_checkpoints_dir, args.exper_name, "D", 'D_final.pth'), iterations )

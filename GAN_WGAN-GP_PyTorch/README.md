@@ -19,7 +19,7 @@ WGAN-GPの PyTorch での実装。（実装中...）
 
 - 学習処理
   ```sh
-  # （例１） WGAN-GP for MNIST datset using GPU0
+  # （例１） train WGAN-GP for MNIST datset using GPU0
   $ python train.py \
     --exper_name WGANGP_train \
     --dataset mnist --image_size 64

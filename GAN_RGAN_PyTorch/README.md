@@ -1,6 +1,9 @@
 # GAN_RGAN-GP_PyTorch
 RSGAN, RaSGAN, RaLSGAN の PyTorch での実装。
 
+- 参考コード
+  - [Github/AlexiaJM/RelativisticGAN](https://github.com/AlexiaJM/RelativisticGAN)
+
 ## ■ 項目 [Contents]
 1. [動作環境](#動作環境)
 1. [使用法](#使用法)
@@ -18,7 +21,7 @@ RSGAN, RaSGAN, RaLSGAN の PyTorch での実装。
 
 - 学習処理
   ```sh
-  # （例１） RSGAN for MNIST datset using GPU0
+  # （例１） train RSGAN for MNIST datset using GPU0
   $ python train.py \
     --exper_name RSGAN_train \
     --dataset mnist --image_size 64 \
@@ -26,7 +29,7 @@ RSGAN, RaSGAN, RaLSGAN の PyTorch での実装。
   ```
 
   ```sh
-  # （例２） RaSGAN for MNIST datset using GPU0
+  # （例２） train RaSGAN for MNIST datset using GPU0
   $ python train.py \
     --exper_name RaSGAN_train \
     --dataset mnist --image_size 64 \
@@ -34,7 +37,7 @@ RSGAN, RaSGAN, RaLSGAN の PyTorch での実装。
   ```
 
   ```sh
-  # （例３） RaLSGAN for MNIST datset using GPU0
+  # （例３） train RaLSGAN for MNIST datset using GPU0
   $ python train.py \
     --exper_name RaLSGAN_train \
     --dataset mnist --image_size 64 \

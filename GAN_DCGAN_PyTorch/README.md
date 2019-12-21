@@ -4,7 +4,7 @@ DCGAN の PyTorch での実装。
 - 参考コード
     - [PyTorch/Tutorials >  DCGAN Tutorial](https://pytorch.org/tutorials/beginner/dcgan_faces_tutorial.html)
     - [PyTorch (12) Generative Adversarial Networks (MNIST) - 人工知能に関する断創録](http://aidiary.hatenablog.com/entry/20180304/1520172429)
-
+    
 ## ■ 項目 [Contents]
 1. [動作環境](#動作環境)
 1. [使用法](#使用法)
@@ -13,208 +13,178 @@ DCGAN の PyTorch での実装。
 
 ## ■ 動作環境
 
-- Windows 10
-- Geforce GTX1050 / VRAM:2GB
+- Mac OS / ubuntu server
 - Python : 3.6
 - Anaconda : 5.0.1
-- PyTorch : 1.0.1
+- PyTorch : 1.1.0
 
 ## ■ 使用法
 
-- 使用法
-```
-$ python main.py
-```
+- 学習処理
+  ```sh
+  # （例１） train DCGAN for MNIST datset using GPU0, using networks only for mnist
+  $ python train.py \
+    --exper_name DCGAN_MNISTNet_train \
+    --dataset mnist --image_size 64 \
+    --networkG_type mnist --networkD_type mnist \
+    --n_input_noize_z 62
+  ```
 
-- 設定可能な定数
+  ```sh
+  # （例２） train DCGAN for MNIST datset using GPU0, using networks for general purpose
+  $ python train.py \
+    --exper_name DCGAN_train \
+    --dataset mnist --image_size 64 \
+    --networkG_type vanilla --networkD_type PatchGAN
+  ```
 
-```python
-[main_mnist.py]
-#DEVICE = "CPU"               # 使用デバイス ("CPU" or "GPU")
-DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
-DATASET_PATH = "./dataset"    # 学習用データセットへのパス
-RESULT_PATH = "./result_forMNIST"   # 結果を保存するディレクトリ
-NUM_SAVE_STEP = 100           # 自動生成画像の保存間隔（イテレーション単位）
+  ```sh
+  # （例３） train DCGAN for cifar10 datset using GPU0
+  $ python train.py \
+    --exper_name DCGAN_train \
+    --dataset cifar-10 --image_size 64 \
+    --networkG_type vanilla --networkD_type PatchGAN
+  ```
 
-NUM_EPOCHES = 10              # エポック数（学習回数）
-LEARNING_RATE = 0.0002        # 学習率
-NUM_FEATURE_MAPS = 64         # 特徴マップの枚数
-BATCH_SIZE = 128              # ミニバッチサイズ
-NUM_INPUT_NOIZE_Z = 62        # 生成器に入力するノイズ z の次数
-```
+- 推論処理（実装中...）
+  ```sh
+  $ python test.py
+  ```
 
+- TensorBoard
+  ```sh
+  $ tensorboard --logdir ${TENSOR_BOARD_DIR} --port ${AVAILABLE_POOT}
+  ```
 
-```python
-[main.py]
-#DEVICE = "CPU"               # 使用デバイス ("CPU" or "GPU")
-DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
-DATASET = "MNIST"            # データセットの種類（"MNIST" or "CIFAR-10"）
-#DATASET = "CIFAR-10"          # データセットの種類（"MNIST" or "CIFAR-10"）
-DATASET_PATH = "./dataset"    # 学習用データセットへのパス
-RESULT_PATH = "./result_" + DATASET      # 結果を保存するディレクトリ
-NUM_SAVE_STEP = 100             # 自動生成画像の保存間隔（イテレーション単位）
-
-NUM_EPOCHES = 50              # エポック数（学習回数）
-LEARNING_RATE = 0.00005       # 学習率
-IMAGE_SIZE = 64               # 入力画像のサイズ（pixel単位）
-NUM_CHANNELS = 1              # 入力画像のチャンネル数
-NUM_FEATURE_MAPS = 64         # 特徴マップの枚数
-BATCH_SIZE = 128              # ミニバッチサイズ
-NUM_INPUT_NOIZE_Z = 100       # 生成器に入力するノイズ z の次数
-```
-
+  ```sh
+  #（例）
+  $ tensorboard --logdir tensorboard --port 6006
+  ```
 
 <a id="コードの実行結果"></a>
 
-## ■ コードの実行結果：`main_mnist.py`
+## ■ コードの実行結果
 
-|パラメータ名|値（実行条件１）|
-|---|---|
-|使用デバイス：`DEVICE`|GPU|
-|シード値|`random.seed(8)`<br>`np.random.seed(8)`<br>`torch.manual_seed(8)`|
-|エポック数：`NUM_EPOCHES`|10|
-|バッチサイズ：`BATCH_SIZE`|128|
-|最適化アルゴリズム|Adam|
-|学習率：`LEARNING_RATE`|0.0002|
-|減衰率 beta1|0.5|
-|生成器に入力するノイズ z の次数：`NUM_INPUT_NOIZE_Z`|62|
-|特徴マップの枚数：`NUM_FEATURE_MAPS`|64|
-
-### ◎ 損失関数のグラフ（実行条件１）：`main_mnist.py`
-![DCGANforMNIST_Loss_epoches10_lr0 0002_batchsize128](https://user-images.githubusercontent.com/25688193/56814818-eb084f80-687a-11e9-967f-062388b8d90a.png)<br>
-
-### ◎ 生成器から生成された自動生成画像（実行条件１）：`main_mnist.py`
-
-- エポック数 : 1 / イテレーション回数：100<br>
-![DCGANforMNIST_Image_epoches0_iters100](https://user-images.githubusercontent.com/25688193/57061214-0d74ef80-6cf7-11e9-8022-3f3f4b5b3d6b.png)<br>
-
-- エポック数 : 1 / イテレーション回数：200<br>
-![DCGANforMNIST_Image_epoches0_iters200](https://user-images.githubusercontent.com/25688193/57061213-0cdc5900-6cf7-11e9-8046-5a6f25fb112f.png)<br>
-
-- エポック数 : 1 / イテレーション回数：500<br>
-![DCGANforMNIST_Image_epoches1_iters500](https://user-images.githubusercontent.com/25688193/57061220-0fd74980-6cf7-11e9-8200-78dc4b036c16.png)<br>
-
-- エポック数 : 3 / イテレーション回数：1000<br>
-![DCGANforMNIST_Image_epoches2_iters1000](https://user-images.githubusercontent.com/25688193/57061224-136ad080-6cf7-11e9-86d5-830c55e5d3b5.png)
-
-- エポック数 : 4 / イテレーション回数：1500<br>
-![DCGANforMNIST_Image_epoches3_iters1500](https://user-images.githubusercontent.com/25688193/57061316-588f0280-6cf7-11e9-8dba-fef271a1896e.png)
-
-- エポック数 : 5 / イテレーション回数：2000<br>
-![DCGANforMNIST_Image_epoches4_iters2000](https://user-images.githubusercontent.com/25688193/57061317-5af15c80-6cf7-11e9-9297-4c02218002ed.png)
-
-- エポック数 : 6 / イテレーション回数：2500<br>
-![DCGANforMNIST_Image_epoches5_iters2500](https://user-images.githubusercontent.com/25688193/57061395-a146bb80-6cf7-11e9-97df-6f035c3dc2bc.png)
-
-- エポック数 : 7 / イテレーション回数：3000<br>
-![DCGANforMNIST_Image_epoches6_iters3000](https://user-images.githubusercontent.com/25688193/57061474-ef5bbf00-6cf7-11e9-85d0-8ecaf34e8a3c.png)
-
-- エポック数 : 8 / イテレーション回数：3500<br>
-![DCGANforMNIST_Image_epoches7_iters3500](https://user-images.githubusercontent.com/25688193/57061477-f08cec00-6cf7-11e9-8418-1f31757539ea.png)
-
-- エポック数 : 9 / イテレーション回数：4000<br>
-![DCGANforMNIST_Image_epoches8_iters4000](https://user-images.githubusercontent.com/25688193/57069829-ae23d900-6d10-11e9-88e9-ed4734bffb8b.png)
-
-- エポック数 : 10 / イテレーション回数：4500<br>
-![DCGANforMNIST_Image_epoches9_iters4500](https://user-images.githubusercontent.com/25688193/57069831-af550600-6d10-11e9-92ea-6e4c92c6c336.png)
-
-
-## ■ コードの実行結果：`main.py`
+<!--
 
 |パラメータ名|値（実行条件１）|値（実行条件２）|
 |---|---|---|
-|学習用データセット：`DATASET`|"MNIST"|"CIFAR-10"|
-|使用デバイス：`DEVICE`|GPU|←|
+|実験名：<br>`args.exper_name`|""|""|
+|学習用データセット：`args.dataset`|"mnist"|"cifar-10"|
+|使用デバイス：<br>`args.device`|"gpu"|←|
 |シード値|`random.seed(8)`<br>`np.random.seed(8)`<br>`torch.manual_seed(8)`|←|
-|エポック数：`NUM_EPOCHES`|10|←|
-|バッチサイズ：`BATCH_SIZE`|128|←|
+|エポック数：<br>`args.n_epoches`|10|50|
+|バッチサイズ：<br>`args.batch_size`|64|64|
+|生成器に入力するノイズ z の次数：<br>`args.n_input_noize_z`|100|100|
+|入力画像のサイズ：<br>`args.image_size`|64|64|
+|入力画像のチャンネル数：<br>`args.n_channels`|1|3|
+|特徴マップの枚数：<br>`args.n_fmaps`|64|64|
 |最適化アルゴリズム|Adam|←|
-|学習率：`LEARNING_RATE`|0.00005|←|
-|減衰率 beta1|0.5|←|
-|生成器に入力するノイズ z の次数：`NUM_INPUT_NOIZE_Z`|100|100|
-|入力画像のサイズ：`IMAGE_SIZE`|64|64|
-|入力画像のチャンネル数：`NUM_CHANNELS`|1|3|
-|特徴マップの枚数：`NUM_FEATURE_MAPS`|64|64|
+|学習率：<br>`args.lr`|0.00005|←|
+|クリティックの更新回数：<br>`args.n_critic`|5|←|
+|重みクリッピングの下限値：<br>`args.w_clamp_lower`|-0.01|←|
+|重みクリッピングの上限値：<br>`args.w_clamp_upper`|0.01|←|
 
-### ◎ 損失関数のグラフ（実行条件１）
-![DCGAN_Loss_epoches10_lr5e-05_batchsize128](https://user-images.githubusercontent.com/25688193/57061669-b53eed00-6cf8-11e9-8ece-f9d9c9e8563e.png)<br>
-
-### ◎ 生成器から生成された自動生成画像（実行条件１）
-
-![DCGAN_Image_epoches9_iters4680](https://user-images.githubusercontent.com/25688193/57061695-c7b92680-6cf8-11e9-967c-7c09fa3b05bf.gif)<br>
-
-<!--
-- エポック数 : 1 / イテレーション回数：468<br>
-![DCGAN_Image_epoches0_iters468](https://user-images.githubusercontent.com/25688193/56815729-02e0d300-687d-11e9-8dea-a2bdce4ae4b9.png)<br>
-
-- エポック数 : 2 / イテレーション回数：936<br>
-![DCGAN_Image_epoches1_iters936](https://user-images.githubusercontent.com/25688193/56815628-cdd48080-687c-11e9-973c-bc0e6d188034.png)<br>
-
-- エポック数 : 3 / イテレーション回数：1404<br>
-<br>
-
-- エポック数 : 4 / イテレーション回数：1872<br>
-<br>
-
-- エポック数 : 5 / イテレーション回数 : 2340<br>
-<br>
-
-- エポック数 : 6 / イテレーション回数 : 2808<br>
-<br>
-
-- エポック数 : 7 / イテレーション回数 : 3276<br>
-<br>
-
-- エポック数 : 8 / イテレーション回数 : 3744<br>
-<br>
-
-- エポック数 : 9 / イテレーション回数 : 4212<br>
-<br>
-
-- エポック数 : 10 / イテレーション回数 : 4680<br>
-<br>
 -->
 
-## デバッグ情報
+### ◎ 損失関数のグラフ
 
-- 422 : G_z.detach() 有り/ 無し
 
-```python
-                D_G_z = self._dicriminator( G_z.detach() )
-                #print( "D_G_z.size() :", D_G_z.size() )
+### ◎ 生成器から生成された自動生成画像
 
-```
-- 識別器での再度の入力ノイズ z 設定有りなし
+
+## ■ デバッグ情報
 
 ```python
-                # 生成器 G に入力するノイズ z
-                #input_noize_z = torch.rand( (self._batch_size, self._n_input_noize_z, 1, 1) ).to( self._device )
-
-                ...
-                # G(z) : 生成器から出力される偽物画像
-                #G_z = self._generator( input_noize_z )
+[Generator]
+model_G :
+ Generator(
+  (layer): Sequential(
+    (0): ConvTranspose2d(100, 512, kernel_size=(4, 4), stride=(1, 1), bias=False)
+    (1): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): ReLU(inplace)
+    (3): ConvTranspose2d(512, 256, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1), bias=False)
+    (4): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (5): ReLU(inplace)
+    (6): ConvTranspose2d(256, 128, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1), bias=False)
+    (7): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (8): ReLU(inplace)
+    (9): ConvTranspose2d(128, 64, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1), bias=False)
+    (10): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (11): ReLU(inplace)
+    (12): ConvTranspose2d(64, 1, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1), bias=False)
+    (13): Tanh()
+  )
+)
 ```
-
-- xxx
 
 ```python
-                """
-                # Train with all-real batch
-                # D(x) : 本物画像 x = image を入力したときの識別器の出力 (0.0 ~ 1.0)
-                D_x = self._dicriminator( images )
-                # E[ log{D(x)} ]
-                loss_D_real = self._loss_fn( D_x, ones_tsr )
-
-                # Train with all-fake batch
-                # G(z) : 生成器から出力される偽物画像
-                G_z = self._generator( input_noize_z )
-
-                # D( G(z) ) : 偽物画像を入力したときの識別器の出力 (0.0 ~ 1.0)
-                # 識別器 D のみ学習を行っている段階ので、生成器からの出力 G_z を deatch() して、生成器側に勾配が伝わらないようにする。
-                D_G_z = self._dicriminator( G_z.detach() )
-                # E[ 1 - log{D(G(z))} ]
-                loss_D_fake = self._loss_fn( D_G_z, zeros_tsr )
-                """
+[Generator for MNIST]
+model_G :
+ MNISTGenerator(
+  (fc_layer): Sequential(
+    (0): Linear(in_features=100, out_features=1024, bias=True)
+    (1): BatchNorm1d(1024, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): ReLU()
+    (3): Linear(in_features=1024, out_features=6272, bias=True)
+    (4): BatchNorm1d(6272, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (5): ReLU()
+  )
+  (deconv_layer): Sequential(
+    (0): ConvTranspose2d(128, 64, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
+    (1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): ReLU()
+    (3): ConvTranspose2d(64, 1, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
+    (4): Sigmoid()
+  )
+)
 ```
 
-- weight の初期化の有無
+```python
+model_D :
+ PatchGANDiscriminator(
+  (layer1): Sequential(
+    (0): Conv2d(1, 64, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
+    (1): LeakyReLU(negative_slope=0.2, inplace)
+  )
+  (layer2): Sequential(
+    (0): Conv2d(64, 128, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
+    (1): InstanceNorm2d(128, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
+    (2): LeakyReLU(negative_slope=0.2, inplace)
+  )
+  (layer3): Sequential(
+    (0): Conv2d(128, 256, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
+    (1): InstanceNorm2d(256, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
+    (2): LeakyReLU(negative_slope=0.2, inplace)
+  )
+  (layer4): Sequential(
+    (0): Conv2d(256, 512, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
+    (1): InstanceNorm2d(512, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
+    (2): LeakyReLU(negative_slope=0.2, inplace)
+  )
+  (output_layer): Sequential(
+    (0): ZeroPad2d(padding=(1, 0, 1, 0), value=0.0)
+    (1): Conv2d(512, 1, kernel_size=(4, 4), stride=(1, 1), padding=(1, 1), bias=False)
+  )
+)
+```
+
+```python
+model_D :
+ MNISTDiscriminator(
+  (conv_layer): Sequential(
+    (0): Conv2d(1, 64, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
+    (1): LeakyReLU(negative_slope=0.2, inplace)
+    (2): Conv2d(64, 128, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1))
+    (3): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (4): LeakyReLU(negative_slope=0.2, inplace)
+  )
+  (fc_layer): Sequential(
+    (0): Linear(in_features=6272, out_features=1024, bias=True)
+    (1): BatchNorm1d(1024, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): LeakyReLU(negative_slope=0.2)
+    (3): Linear(in_features=1024, out_features=1, bias=True)
+    (4): Sigmoid()
+  )
+)
+```

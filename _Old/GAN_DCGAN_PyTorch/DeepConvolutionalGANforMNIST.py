@@ -138,7 +138,9 @@ class Discriminator( nn.Module ):
         return
 
     def forward(self, input):
+        print("input.shape :", input.shape)
         x = self._conv_layer(input)
+        print("x.shape :", x.shape)
         x = x.view(-1, 128 * 7 * 7)
         output = self._fc_layer(x)
         return output
@@ -351,7 +353,7 @@ class DeepConvolutionalGANforMNIST( object ):
                 # 識別器 D の fitting 処理
                 #====================================================
                 # 生成器 G に入力するノイズ z
-                #input_noize_z = torch.rand( size = (self._batch_size, self._n_input_noize_z) ).to( self._device )
+                input_noize_z = torch.rand( size = (self._batch_size, self._n_input_noize_z) ).to( self._device )
 
                 #----------------------------------------------------
                 # 勾配を 0 に初期化

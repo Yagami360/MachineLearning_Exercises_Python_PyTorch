@@ -1,6 +1,10 @@
 # GAN_WGAN_PyTorch
 WGAN の PyTorch での実装。
 
+- 参考コード
+  - [Github/eriklindernoren/PyTorch-GAN](https://github.com/eriklindernoren/PyTorch-GAN/blob/master/implementations/wgan/wgan.py)
+
+
 ## ■ 項目 [Contents]
 1. [動作環境](#動作環境)
 1. [使用法](#使用法)
@@ -18,7 +22,7 @@ WGAN の PyTorch での実装。
 
 - 学習処理
   ```sh
-  # （例１） WGAN for MNIST datset using GPU0
+  # （例１） train WGAN for MNIST datset using GPU0
   $ python train.py \
     --exper_name WGAN_train \
     --dataset mnist --image_size 64

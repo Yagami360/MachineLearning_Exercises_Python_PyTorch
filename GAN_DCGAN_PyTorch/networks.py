@@ -1,0 +1,350 @@
+# -*- coding:utf-8 -*-
+import os
+import torch
+import torch.nn as nn
+
+def weights_init(m):
+    classname = m.__class__.__name__
+    if classname.find('Conv') != -1:
+        nn.init.normal_(m.weight.data, 0.0, 0.02)
+    elif classname.find('BatchNorm') != -1:
+        nn.init.normal_(m.weight.data, 1.0, 0.02)
+        nn.init.constant_(m.bias.data, 0)
+
+#====================================
+# Generators
+#====================================
+class Generator( nn.Module ):
+    """
+    生成器 G [Generator] 側のネットワーク構成を記述したモデル。
+    """
+    def __init__(
+        self,
+        n_input_noize_z = 100,
+        n_channels = 3,
+        n_fmaps = 64
+    ):
+        super( Generator, self ).__init__()
+        
+        self.layer = nn.Sequential(
+            # layer1
+            nn.ConvTranspose2d(n_input_noize_z, n_fmaps*8, kernel_size=4, stride=1, padding=0, bias=False),
+            nn.BatchNorm2d(n_fmaps*8),
+            nn.ReLU(inplace=True),
+
+            # layer2
+            nn.ConvTranspose2d( n_fmaps*8, n_fmaps*4, kernel_size=4, stride=2, padding=1, bias=False ),
+            nn.BatchNorm2d(n_fmaps*4),
+            nn.ReLU(inplace=True),
+
+            # layer3
+            nn.ConvTranspose2d( n_fmaps*4, n_fmaps*2, kernel_size=4, stride=2, padding=1, bias=False ),
+            nn.BatchNorm2d(n_fmaps*2),
+            nn.ReLU(inplace=True),
+
+            # layer4
+            nn.ConvTranspose2d( n_fmaps*2, n_fmaps, kernel_size=4, stride=2, padding=1, bias=False ),
+            nn.BatchNorm2d(n_fmaps),
+            nn.ReLU(inplace=True),
+
+            # output layer
+            nn.ConvTranspose2d( n_fmaps, n_channels, kernel_size=4, stride=2, padding=1, bias=False ),
+            nn.Tanh()
+        )
+
+        #weights_init( self )
+        return
+
+    def forward( self, input ):
+        """
+        ネットワークの順方向での更新処理
+        ・nn.Module クラスのメソッドをオーバライト
+
+        [Args]
+            input : <Tensor> ネットワークに入力されるデータ（ノイズデータ等）
+        [Returns]
+            output : <Tensor> ネットワークからのテンソルの出力
+        """
+        output = self.layer(input)
+        return output
+
+
+class MNISTGenerator( nn.Module ):
+    """
+    DCGAN の生成器 G [Generator] 側のネットワーク構成を記述したモデル。
+    ・MNIST のデータ構造に最適化されている。
+    """
+    def __init__(
+        self,
+        n_input_noize_z = 62
+    ):
+        super( MNISTGenerator, self ).__init__()
+
+        # 全結合層 [fully connected layer]
+        # 入力ノイズ z を、6272 = 128 * 7 * 7 の次元まで拡張
+        self.fc_layer = nn.Sequential(
+            nn.Linear(n_input_noize_z, 1024),
+            nn.BatchNorm1d(1024),
+            nn.ReLU(),
+            nn.Linear(1024, 128 * 7 * 7),
+            nn.BatchNorm1d(128 * 7 * 7),
+            nn.ReLU(),
+        )
+
+        # DeConv 処理を行う層
+        # 7 * 7 * 128 → 14 * 14 * 64 → 28 * 28 * 1
+        self.deconv_layer = nn.Sequential(
+            nn.ConvTranspose2d(128, 64, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(),
+            nn.ConvTranspose2d(64, 1, kernel_size=4, stride=2, padding=1),
+            nn.Sigmoid(),
+        )
+
+        return
+
+    def forward( self, input ):
+        x = self.fc_layer(input)
+        x = x.view(-1, 128, 7, 7)
+        output = self.deconv_layer(x)
+        return output
+
+
+class UNetGenerator( nn.Module ):
+    """
+    UNet 構造での生成器
+    """
+    def __init__(
+        self,
+        n_in_channels = 3,
+        n_out_channels = 3,
+        n_fmaps = 64
+    ):
+        super( UNetGenerator, self ).__init__()
+
+        def conv_block( in_dim, out_dim ):
+            model = nn.Sequential(
+                nn.Conv2d( in_dim, out_dim, kernel_size=3, stride=1, padding=1 ),
+                nn.BatchNorm2d( out_dim ),
+                nn.LeakyReLU( 0.2, inplace=True ),
+
+                nn.Conv2d( out_dim, out_dim, kernel_size=3, stride=1, padding=1 ),
+                nn.BatchNorm2d( out_dim ),
+            )
+            return model
+
+        def dconv_block( in_dim, out_dim ):
+            model = nn.Sequential(
+                nn.ConvTranspose2d( in_dim, out_dim, kernel_size=3, stride=2, padding=1,output_padding=1 ),
+                nn.BatchNorm2d(out_dim),
+                nn.LeakyReLU( 0.2, inplace=True )
+            )
+            return model
+
+        # Encoder（ダウンサンプリング）
+        self.conv1 = conv_block( n_in_channels, n_fmaps )
+        self.pool1 = nn.MaxPool2d( kernel_size=2, stride=2, padding=0 )
+        self.conv2 = conv_block( n_fmaps*1, n_fmaps*2 )
+        self.pool2 = nn.MaxPool2d( kernel_size=2, stride=2, padding=0 )
+        self.conv3 = conv_block( n_fmaps*2, n_fmaps*4 )
+        self.pool3 = nn.MaxPool2d( kernel_size=2, stride=2, padding=0 )
+        self.conv4 = conv_block( n_fmaps*4, n_fmaps*8 )
+        self.pool4 = nn.MaxPool2d( kernel_size=2, stride=2, padding=0 )
+
+        #
+        self.bridge=conv_block( n_fmaps*8, n_fmaps*16 )
+
+        # Decoder（アップサンプリング）
+        self.dconv1 = dconv_block( n_fmaps*16, n_fmaps*8 )
+        self.up1 = conv_block( n_fmaps*16, n_fmaps*8 )
+        self.dconv2 = dconv_block( n_fmaps*8, n_fmaps*4 )
+        self.up2 = conv_block( n_fmaps*8, n_fmaps*4 )
+        self.dconv3 = dconv_block( n_fmaps*4, n_fmaps*2 )
+        self.up3 = conv_block( n_fmaps*4, n_fmaps*2 )
+        self.dconv4 = dconv_block( n_fmaps*2, n_fmaps*1 )
+        self.up4 = conv_block( n_fmaps*2, n_fmaps*1 )
+
+        # 出力層
+        self.out_layer = nn.Sequential(
+		    nn.Conv2d( n_fmaps, n_out_channels, 3, 1, 1 ),
+		    nn.Tanh(),
+		)
+
+        return
+
+    def forward( self, input ):
+        # Encoder（ダウンサンプリング）
+        conv1 = self.conv1( input )
+        pool1 = self.pool1( conv1 )
+        conv2 = self.conv2( pool1 )
+        pool2 = self.pool2( conv2 )
+        conv3 = self.conv3( pool2 )
+        pool3 = self.pool3( conv3 )
+        conv4 = self.conv4( pool3 )
+        pool4 = self.pool4( conv4 )
+
+        #
+        bridge = self.bridge( pool4 )
+
+        # Decoder（アップサンプリング）& skip connection
+        dconv1 = self.dconv1(bridge)
+
+        #print( "bridge.shape :", bridge.shape)
+        #print( "dconv1.shape :", dconv1.shape)
+        #print( "conv4.shape :", conv4.shape)
+
+        concat1 = torch.cat( [dconv1,conv4], dim=1 )
+        up1 = self.up1(concat1)
+
+        dconv2 = self.dconv2(up1)
+        concat2 = torch.cat( [dconv2,conv3], dim=1 )
+
+        up2 = self.up2(concat2)
+        dconv3 = self.dconv3(up2)
+        concat3 = torch.cat( [dconv3,conv2], dim=1 )
+
+        up3 = self.up3(concat3)
+        dconv4 = self.dconv4(up3)
+        concat4 = torch.cat( [dconv4,conv1], dim=1 )
+
+        up4 = self.up4(concat4)
+
+        # 出力層
+        output = self.out_layer( up4 )
+
+        return output
+
+#====================================
+# Discriminators
+#====================================
+class Discriminator( nn.Module ):
+    """
+    識別器側のネットワーク構成を記述したモデル。
+    """
+    def __init__(
+       self,
+       n_channels = 3,
+       n_fmaps = 64
+    ):
+        super( Discriminator, self ).__init__() 
+               
+        self.layer = nn.Sequential(
+            nn.Conv2d(n_channels, n_fmaps, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
+
+            nn.Conv2d(n_fmaps, n_fmaps*2, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(n_fmaps*2),
+            nn.LeakyReLU(0.2, inplace=True),
+
+            nn.Conv2d(n_fmaps*2, n_fmaps*4, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(n_fmaps*4),
+            nn.LeakyReLU(0.2, inplace=True),
+
+            nn.Conv2d(n_fmaps*4, n_fmaps*8, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(n_fmaps*8),
+            nn.LeakyReLU(0.2, inplace=True),
+
+            nn.Conv2d(n_fmaps*8, 1, kernel_size=4, stride=1, padding=0, bias=False),
+        )
+
+        #weights_init( self )        
+        return
+
+    def forward(self, input):
+        output = self.layer( input )
+        return output.view(-1)
+
+class MNISTDiscriminator( nn.Module ):
+    """
+    DCGAN の識別器 D [Generator] 側のネットワーク構成を記述したモデル。
+    ・MNIST のデータ構造に最適化されている。
+    """
+    def __init__(
+       self,
+    ):
+        super( MNISTDiscriminator, self ).__init__()
+
+        self.conv_layer = nn.Sequential(
+            nn.Conv2d(                  # shape = [batch_size, n_channels, height, width]
+                in_channels = 1,        # インプットのチャンネルの数 
+                out_channels = 64,      # アウトプットのチャンネルの数
+                kernel_size = 4,        # カーネルのサイズ（＝重み行列の行数と列数）     
+                stride = 2,             # ストライド幅
+                padding = 1             #  Zero-padding added to both sides of the input. Default: 0
+            ),
+            nn.LeakyReLU(0.2, inplace=True),
+
+            nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1),
+            nn.BatchNorm2d(128),
+            nn.LeakyReLU(0.2, inplace=True),            
+        )
+
+        self.fc_layer = nn.Sequential(
+            nn.Linear(128 * 7 * 7, 1024),
+            nn.BatchNorm1d(1024),
+            nn.LeakyReLU(0.2),
+            nn.Linear(1024, 1),
+            nn.Sigmoid(),
+        )
+
+        weights_init( self )
+        return
+
+    def forward(self, input):
+        x = self.conv_layer(input)
+        x = x.view(-1, 128 * 7 * 7)
+        output = self.fc_layer(x)
+        return output
+
+
+class PatchGANDiscriminator( nn.Module ):
+    """
+    PatchGAN の識別器
+    """
+    def __init__(
+        self,
+        n_in_channels = 3,
+        n_fmaps = 32
+    ):
+        super( PatchGANDiscriminator, self ).__init__()
+
+        # 識別器のネットワークでは、Patch GAN を採用するが、
+        # patchを切り出したり、ストライドするような処理は、直接的には行わない
+        # その代りに、これを畳み込みで表現する。
+        # つまり、CNNを畳み込んで得られる特徴マップのある1pixelは、入力画像のある領域(Receptive field)の影響を受けた値になるが、
+        # 裏を返せば、ある1pixelに影響を与えられるのは、入力画像のある領域だけ。
+        # そのため、「最終出力をあるサイズをもった特徴マップにして、各pixelにて真偽判定をする」ことと 、「入力画像をpatchにして、各patchの出力で真偽判定をする」ということが等価になるためである。
+        def discriminator_block1( in_dim, out_dim ):
+            model = nn.Sequential(
+                nn.Conv2d( in_dim, out_dim, 4, stride=2, padding=1 ),
+                nn.LeakyReLU( 0.2, inplace=True )
+            )
+            return model
+
+        def discriminator_block2( in_dim, out_dim ):
+            model = nn.Sequential(
+                nn.Conv2d( in_dim, out_dim, 4, stride=2, padding=1 ),
+                nn.InstanceNorm2d( out_dim ),
+                nn.LeakyReLU( 0.2, inplace=True )
+            )
+            return model
+
+        self.layer1 = discriminator_block1( n_in_channels, n_fmaps )
+        self.layer2 = discriminator_block2( n_fmaps, n_fmaps*2 )
+        self.layer3 = discriminator_block2( n_fmaps*2, n_fmaps*4 )
+        self.layer4 = discriminator_block2( n_fmaps*4, n_fmaps*8 )
+
+        self.output_layer = nn.Sequential(
+            nn.ZeroPad2d( (1, 0, 1, 0) ),
+            nn.Conv2d( n_fmaps*8, 1, 4, padding=1, bias=False )
+        )
+
+
+    def forward(self, x):
+        output = self.layer1( x )
+        output = self.layer2( output )
+        output = self.layer3( output )
+        output = self.layer4( output )
+        output = self.output_layer( output )
+        output = output.view(-1)
+        return output
