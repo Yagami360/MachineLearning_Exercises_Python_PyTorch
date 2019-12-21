@@ -1,13 +1,15 @@
 # -*- coding:utf-8 -*-
 import os
 from PIL import Image
+import imageio
 
 import torch
 import torch.nn as nn
+from torchvision.utils import save_image
 from tensorboardX import SummaryWriter
 
 #====================================================
-# モデルの保存＆読み込み
+# モデルの保存＆読み込み関連
 #====================================================
 def save_checkpoint(model, device, save_path, step):
     if not os.path.exists(os.path.dirname(save_path)):
@@ -48,9 +50,18 @@ def load_checkpoint_wo_step(model, device, checkpoint_path):
     model.to(device)
     return
 
+#====================================================
+# 画像の保存関連
+#====================================================
+def save_image_historys_gif( images_historys, file_name = "images_historys.gif" ):
+    """
+    画像履歴を gif ファイルで保存
+    """
+    imageio.mimsave( file_name, images_historys )
+    return
 
 #====================================================
-# TensorBoard への出力
+# TensorBoard への出力関連
 #====================================================
 def tensor_for_board(img_tensor):
     # map into [0,1]

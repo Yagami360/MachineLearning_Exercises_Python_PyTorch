@@ -1,6 +1,5 @@
-# GAN_WGAN2_PyTorch （実装中...）
+# GAN_WGAN_PyTorch
 WGAN の PyTorch での実装。
-
 
 ## ■ 項目 [Contents]
 1. [動作環境](#動作環境)
@@ -18,19 +17,27 @@ WGAN の PyTorch での実装。
 ## ■ 使用法
 
 - 学習処理
-```sh
-$ python train.py
-```
+  ```sh
+  # （例１） WGAN for MNIST datset using GPU0
+  $ python train.py \
+    --exper_name WGAN_train \
+    --dataset mnist --image_size 64
+  ```
 
-- 推論処理
-```sh
-$ python test.py
-```
+- 推論処理（実装中）
+    ```sh
+    $ python test.py
+    ```
 
 - TensorBoard
-```sh
-$ tensorboard --logdir tensorboard --port 6006
-```
+  ```sh
+  $ tensorboard --logdir ${TENSOR_BOARD_DIR} --port ${AVAILABLE_POOT}
+  ```
+
+  ```sh
+  #（例）
+  $ tensorboard --logdir tensorboard --port 6006
+  ```
 
 <a id="コードの実行結果"></a>
 
