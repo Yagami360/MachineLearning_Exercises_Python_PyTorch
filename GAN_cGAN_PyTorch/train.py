@@ -261,8 +261,9 @@ if __name__ == '__main__':
     # モデルの学習処理
     #======================================================================
     # 入力ノイズ z
-    input_noize_z = torch.rand( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
-    input_noize_fix_z = torch.rand( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
+    input_noize_z = torch.randn( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
+    input_noize_fix_z = torch.randn( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
+    input_noize_fix_z_test = torch.randn( size = (args.batch_size_test, args.n_input_noize_z,1,1) ).to( device )
     if( args.debug ):
         print( "input_noize_z.shape :", input_noize_z.shape )
 
@@ -323,7 +324,7 @@ if __name__ == '__main__':
             # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
             #----------------------------------------------------
             # 入力ノイズを再生成
-            input_noize_z = torch.rand( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
+            input_noize_z = torch.randn( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
 
             # 生成器に入力するクラスラベル y（＝偽のラベル情報）
             # 識別器と生成器の更新の前にノイズを新しく生成しなおす。
@@ -391,7 +392,7 @@ if __name__ == '__main__':
             # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
             #----------------------------------------------------
             # 入力ノイズを再生成
-            input_noize_z = torch.rand( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
+            input_noize_z = torch.randn( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
 
             # 生成器に入力するクラスラベル y（＝偽のラベル情報）
             # 識別器と生成器の更新の前にノイズを新しく生成しなおす。
@@ -443,9 +444,6 @@ if __name__ == '__main__':
                 model_G.eval()
                 model_D.eval()
 
-                # 入力ノイズは固定
-                input_noize_z = torch.rand( size = (args.batch_size_test, args.n_input_noize_z,1,1) ).to( device )
-
                 n_test_loop = 0
                 test_iterations = 0
                 loss_D_total = 0
@@ -477,7 +475,7 @@ if __name__ == '__main__':
 
                     with torch.no_grad():
                         D_x = model_D( test_images, y_real_image_label )
-                        G_z = model_G( input_noize_z, y_fake_one_hot )
+                        G_z = model_G( input_noize_fix_z_test, y_fake_one_hot )
                         D_G_z = model_D( G_z, y_fake_image_label )
 
                     #----------------------------------------------------
@@ -501,7 +499,8 @@ if __name__ == '__main__':
 
                 board_test.add_scalar('Generater/loss_G', (loss_G_total/n_test_loop), iterations)
                 board_test.add_scalar('Discriminator/loss_D', (loss_D_total/n_test_loop), iterations)
-
+                board_add_image(board_test, 'fake_image_test', G_z, iterations)
+                
             #====================================================
             # モデルの保存
             #====================================================
@@ -517,22 +516,21 @@ if __name__ == '__main__':
         #====================================================
         # 各 Epoch 終了後の処理
         #====================================================
-        for y_lable in range(args.n_classes):
+        for y_label in range(args.n_classes):
             eye_tsr = torch.eye( args.n_classes ).to( device )
-            y_fake_label = torch.full( (1,), y_label ).long().to( device )
+            y_fake_label = torch.full( (args.batch_size,), y_label ).long().to( device )
             y_fake_one_hot = eye_tsr[y_fake_label].view( -1, args.n_classes, 1, 1 ).to( device )
-
+            
             # 出力画像の生成＆保存
             model_G.eval()
             with torch.no_grad():
                 G_z = model_G( input_noize_fix_z, y_fake_one_hot )
 
-            save_image( tensor = G_z[0], filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_label{}_epoches{}_iters{}_batch0.png".format( y_lable, epoch, iterations ) )
-            save_image( tensor = G_z, filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_label{}_epoches{}_iters{}_batchAll.png".format( y_lable, epoch, iterations ) )
+            save_image( tensor = G_z[0], filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_label{}_epoches{}_batch0.png".format( y_lable, epoch ) )
+            save_image( tensor = G_z, filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_label{}_epoches{}_batchAll.png".format( y_lable, epoch ) )
 
-            # [batch_size, n_channels, height, width] → [height, width, n_channels]
-            fake_images_historys.append(G_z[0].transpose( 0 ,2 ).cpu().clone().numpy())
-            save_image_historys_gif( fake_images_historys, os.path.join(args.results_dir, args.exper_name) + "/fake_image_label{}_epoches{}_iters{}.gif".format( y_lable, epoch, iterations ) )        
+            fake_images_historys.append(G_z[0].transpose(0,1).transpose(1,2).cpu().clone().numpy())
+            save_image_historys_gif( fake_images_historys, os.path.join(args.results_dir, args.exper_name) + "/fake_image_label{}_epoches{}.gif".format( y_lable, epoch, iterations ) )        
 
     save_checkpoint( model_G, device, os.path.join(args.save_checkpoints_dir, args.exper_name, "G", 'G_final.pth'), iterations )
     save_checkpoint( model_D, device, os.path.join(args.save_checkpoints_dir, args.exper_name, "D", 'D_final.pth'), iterations )

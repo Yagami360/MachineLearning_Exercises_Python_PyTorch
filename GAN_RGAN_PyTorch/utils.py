@@ -90,16 +90,15 @@ def tensor_list_for_board(img_tensors_list):
 
     return canvas
 
-def board_add_image(board, tag_name, img_tensor, step_count):
+def board_add_image(board, tag_name, img_tensor, step_count, n_max_images = 32):
     tensor = tensor_for_board(img_tensor)
-
+    tensor = tensor[0:min(tensor.shape[0],n_max_images)]
     for i, img in enumerate(tensor):
         board.add_image('%s/%03d' % (tag_name, i), img, step_count)
 
-
-def board_add_images(board, tag_name, img_tensors_list, step_count):
+def board_add_images(board, tag_name, img_tensors_list, step_count, n_max_images = 32):
     tensor = tensor_list_for_board(img_tensors_list)
-
+    tensor = tensor[0:min(tensor.shape[0],n_max_images)]
     for i, img in enumerate(tensor):
         board.add_image('%s/%03d' % (tag_name, i), img, step_count)
 

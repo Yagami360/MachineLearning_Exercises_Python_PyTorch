@@ -49,7 +49,7 @@ if __name__ == '__main__':
     parser.add_argument('--n_input_noize_z', type=int, default=100, help="生成器に入力するノイズ z の次数")
     #parser.add_argument('--gan_type', choices=['RSGAN','RSGAN-GP','RaSGAN','RaLSGAN','RaSGAN-GP' ], default="RSGAN", help="GAN の種類")
     parser.add_argument('--gan_type', choices=['RSGAN','RaSGAN','RaLSGAN',], default="RSGAN", help="GAN の種類")
-    parser.add_argument('--networkD_type', choices=['vanilla','PatchGAN' ], default="PatchGAN", help="GAN の識別器の種類")
+    parser.add_argument('--networkD_type', choices=['vanilla','PatchGAN' ], default="vanilla", help="GAN の識別器の種類")
     parser.add_argument('--n_critic', type=int, default=1, help="クリティックの更新回数")
     #parser.add_argument('--lambda_wgangp', type=float, default=10.0, help="WAGAN-GP の勾配ペナルティー係数")
     parser.add_argument('--n_display_step', type=int, default=50, help="tensorboard への表示間隔")
@@ -314,8 +314,9 @@ if __name__ == '__main__':
     # モデルの学習処理
     #======================================================================
     # 入力ノイズ z
-    input_noize_z = torch.rand( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
-    input_noize_fix_z = torch.rand( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
+    input_noize_z = torch.randn( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
+    input_noize_fix_z = torch.randn( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
+    input_noize_fix_z_test = torch.randn( size = (args.batch_size_test, args.n_input_noize_z,1,1) ).to( device )
     if( args.debug ):
         print( "input_noize_z.shape :", input_noize_z.shape )
 
@@ -345,7 +346,7 @@ if __name__ == '__main__':
             images = images.to( device )
 
             # 入力ノイズを再生成 
-            input_noize_z = torch.rand( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
+            #input_noize_z = torch.randn( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
 
             #====================================================
             # 識別器 D の fitting 処理
@@ -359,7 +360,7 @@ if __name__ == '__main__':
                 # 学習用データをモデルに流し込む
                 # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
                 #----------------------------------------------------
-                input_noize_z = torch.rand( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
+                input_noize_z = torch.randn( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
 
                 # D(x) : 本物画像 x = image を入力したときの識別器の出力
                 D_x = model_D( images )
@@ -421,7 +422,7 @@ if __name__ == '__main__':
             # 学習用データをモデルに流し込む
             # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
             #----------------------------------------------------
-            input_noize_z = torch.rand( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
+            input_noize_z = torch.randn( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
 
             # G(z) : 生成器から出力される偽物画像
             G_z = model_G( input_noize_z )
@@ -476,7 +477,7 @@ if __name__ == '__main__':
                 model_D.eval()
 
                 # 入力ノイズは固定
-                input_noize_z = torch.rand( size = (args.batch_size_test, args.n_input_noize_z,1,1) ).to( device )
+                #input_noize_z = torch.randn( size = (args.batch_size_test, args.n_input_noize_z,1,1) ).to( device )
 
                 n_test_loop = 0
                 test_iterations = 0
@@ -499,7 +500,7 @@ if __name__ == '__main__':
                     #----------------------------------------------------
                     with torch.no_grad():
                         D_x = model_D( test_images )
-                        G_z = model_G( input_noize_z )
+                        G_z = model_G( input_noize_fix_z_test )
                         D_G_z = model_D( G_z )
 
                     #----------------------------------------------------
@@ -539,7 +540,8 @@ if __name__ == '__main__':
 
                 board_test.add_scalar('Generater/loss_G', (loss_G_total/n_test_loop), iterations)
                 board_test.add_scalar('Discriminator/loss_D', (loss_D_total/n_test_loop), iterations)
-
+                board_add_image(board_test, 'fake_image_test', G_z, iterations)
+                
             #====================================================
             # モデルの保存
             #====================================================
@@ -560,12 +562,12 @@ if __name__ == '__main__':
         with torch.no_grad():
             G_z = model_G( input_noize_fix_z )
 
-        save_image( tensor = G_z[0], filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}_iters{}_batch0.png".format( epoch, iterations ) )
-        save_image( tensor = G_z, filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}_iters{}_batchAll.png".format( epoch, iterations ) )
+        save_image( tensor = G_z[0], filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}_batch0.png".format( epoch ) )
+        save_image( tensor = G_z, filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}_batchAll.png".format( epoch ) )
 
         # [batch_size, n_channels, height, width] → [height, width, n_channels]
-        fake_images_historys.append(G_z[0].transpose( 0 ,2 ).cpu().clone().numpy())
-        save_image_historys_gif( fake_images_historys, os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}_iters{}.gif".format( epoch, iterations ) )        
+        fake_images_historys.append(G_z[0].transpose(0,1).transpose(1,2).cpu().clone().numpy())
+        save_image_historys_gif( fake_images_historys, os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}.gif".format( epoch ) )        
 
     save_checkpoint( model_G, device, os.path.join(args.save_checkpoints_dir, args.exper_name, "G", 'G_final.pth'), iterations )
     save_checkpoint( model_D, device, os.path.join(args.save_checkpoints_dir, args.exper_name, "D", 'D_final.pth'), iterations )

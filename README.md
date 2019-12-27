@@ -21,7 +21,6 @@ PyTorch 実装の練習コード集。<br>
 
 ## ■ 項目（フォルダ別）
 
-1. [./Processing_PyTorch](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/Processing_PyTorch)
 1. [ResNet](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/ResNet_PyTorch)
 1. [UNet](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/UNet_PyTorch)
 1. GANs

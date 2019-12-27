@@ -18,21 +18,20 @@ from torchvision.utils import save_image
 from tensorboardX import SummaryWriter
 
 # 自作クラス
-from networks import Generator, Discriminator, PatchGANDiscriminator
-from losses import calc_gradient_penalty
+from networks import Generator, MNISTGenerator, Discriminator, MNISTDiscriminator, PatchGANDiscriminator
 from utils import save_checkpoint, load_checkpoint
 from utils import board_add_image, board_add_images
 from utils import save_image_historys_gif
 
 if __name__ == '__main__':
     """
-    WGAN-GP による学習処理
+    DCGAN による学習処理
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument("--exper_name", default="WGANGP_train", help="実験名")
+    parser.add_argument("--exper_name", default="DCGAN_train", help="実験名")
     parser.add_argument('--device', choices=['cpu', 'gpu'], default="gpu", help="使用デバイス (CPU or GPU)")
     #parser.add_argument('--gpu_ids', type=str, default='0', help='gpu ids: e.g. 0  0,1,2, 0,2. use -1 for CPU') 
-    parser.add_argument('--dataset', choices=['mnist', 'cifar-10'], default="mnist", help="データセットの種類（MNIST or CIFAR-10）")
+    parser.add_argument('--dataset', choices=['mnist', 'cifar-10'], default="mnist", help="データセットの種類")
     parser.add_argument('--dataset_dir', type=str, default="dataset", help="データセットのディレクトリ")
     parser.add_argument('--results_dir', type=str, default="results", help="生成画像の出力ディレクトリ")
     parser.add_argument('--save_checkpoints_dir', type=str, default="checkpoints", help="モデルの保存ディレクトリ")
@@ -42,17 +41,16 @@ if __name__ == '__main__':
     parser.add_argument('--n_epoches', type=int, default=100, help="エポック数")
     parser.add_argument('--batch_size', type=int, default=64, help="バッチサイズ")
     parser.add_argument('--batch_size_test', type=int, default=4, help="test データのバッチサイズ")
-    parser.add_argument('--lr', type=float, default=0.0002, help="学習率")
+    parser.add_argument('--lr', type=float, default=0.0001, help="学習率")
     parser.add_argument('--beta1', type=float, default=0.5, help="学習率の減衰率")
     parser.add_argument('--beta2', type=float, default=0.999, help="学習率の減衰率")
     parser.add_argument('--image_size', type=int, default=64, help="入力画像のサイズ（pixel単位）")
     parser.add_argument('--n_fmaps', type=int, default=64, help="特徴マップの枚数")
     parser.add_argument('--n_input_noize_z', type=int, default=100, help="生成器に入力するノイズ z の次数")
-    parser.add_argument('--networkD_type', choices=['vanilla','PatchGAN' ], default="vanilla", help="GAN の識別器の種類")
-    parser.add_argument('--n_critic', type=int, default=5, help="クリティックの更新回数")
-    parser.add_argument('--lambda_wgangp', type=float, default=10.0, help="WAGAN-GP の勾配ペナルティー係数")
-    parser.add_argument('--n_display_step', type=int, default=100, help="tensorboard への表示間隔")
-    parser.add_argument('--n_display_test_step', type=int, default=1000, help="test データの tensorboard への表示間隔")
+    parser.add_argument('--networkG_type', choices=['vanilla','mnist' ], default="vanilla", help="GAN の生成器の種類")
+    parser.add_argument('--networkD_type', choices=['vanilla','mnist','PatchGAN' ], default="vanilla", help="GAN の識別器の種類")
+    parser.add_argument('--n_display_step', type=int, default=50, help="tensorboard への表示間隔")
+    parser.add_argument('--n_display_test_step', type=int, default=500, help="test データの tensorboard への表示間隔")
     parser.add_argument("--n_save_step", type=int, default=5000, help="モデルのチェックポイントの保存間隔")
     parser.add_argument("--seed", type=int, default=8, help="乱数シード値")
     parser.add_argument('--debug', action='store_true', help="デバッグモード有効化")
@@ -110,19 +108,35 @@ if __name__ == '__main__':
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
 
+    # 有効な組み合わせ確認
+    if(
+        ( args.dataset != "mnist" and args.networkD_type == "mnist" ) or
+        ( args.dataset != "mnist" and args.networkG_type == "mnist" ) or
+        ( args.networkG_type == "mnist" and args.networkD_type != "mnist" ) or
+        ( args.networkG_type != "mnist" and args.networkD_type == "mnist" )
+    ):
+        raise NotImplementedError('dataset=%s and network_G=%s and network_D=%s not implemented' % (args.dataset, args.networkG_type, args.networkD_type) )
+
     #======================================================================
     # データセットを読み込み or 生成
     # データの前処理
     #======================================================================
     if( args.dataset == "mnist" ):
-        # データをロードした後に行う各種前処理の関数を構成を指定する。
-        transform = transforms.Compose(
-            [
-                transforms.Resize(args.image_size, interpolation=Image.LANCZOS ),
-                transforms.ToTensor(),   # Tensor に変換]
-                transforms.Normalize((0.5,), (0.5,)),   # 1 channel 分
-            ]
-        )
+        if( args.networkD_type == "mnist" or args.networkG_type == "mnist" ):
+            transform = transforms.Compose(
+                [
+                    transforms.ToTensor(),   # Tensor に変換
+                ]
+            )
+        else:
+            # データをロードした後に行う各種前処理の関数を構成を指定する。
+            transform = transforms.Compose(
+                [
+                    transforms.Resize(args.image_size, interpolation=Image.LANCZOS ),
+                    transforms.ToTensor(),   # Tensor に変換]
+                    transforms.Normalize((0.5,), (0.5,)),   # 1 channel 分
+                ]
+            )
 
         # data と label をセットにした TensorDataSet の作成
         ds_train = torchvision.datasets.MNIST(
@@ -140,7 +154,6 @@ if __name__ == '__main__':
             target_transform = None,
             download = True
         )
-
     elif( args.dataset == "cifar-10" ):
         transform = transforms.Compose(
             [
@@ -174,26 +187,32 @@ if __name__ == '__main__':
         batch_size = args.batch_size,
         shuffle = True
     )
-
+        
     dloader_test = DataLoader(
         dataset = ds_test,
         batch_size = args.batch_size_test,
         shuffle = False
     )
-    
-    print( "ds_train :\n", ds_train ) # MNIST : torch.Size([60000, 28, 28]) , CIFAR-10 : (50000, 32, 32, 3)
-    print( "ds_test :\n", ds_test )
+
+    if( args.debug ):
+        print( "ds_train :\n", ds_train )
+        print( "ds_test :\n", ds_test )
 
     #======================================================================
     # モデルの構造を定義する。
     #======================================================================
     # Genrator
     if( args.dataset == "mnist" ):
-        model_G = Generator( 
-            n_input_noize_z = args.n_input_noize_z,
-            n_channels = 1,         # グレースケールのチャンネル数 1
-            n_fmaps = args.n_fmaps
-        ).to( device )
+        if( args.networkG_type == "mnist" ):
+            model_G = MNISTGenerator( 
+                n_input_noize_z = args.n_input_noize_z,
+            ).to( device )
+        else:
+            model_G = Generator( 
+                n_input_noize_z = args.n_input_noize_z,
+                n_channels = 1,         # グレースケールのチャンネル数 1
+                n_fmaps = args.n_fmaps
+            ).to( device )
     else:
         model_G = Generator( 
             n_input_noize_z = args.n_input_noize_z,
@@ -203,7 +222,10 @@ if __name__ == '__main__':
 
     # Discriminator
     if( args.dataset == "mnist" ):
-        if( args.networkD_type == "PatchGAN" ):
+        if( args.networkD_type == "mnist" ):
+            model_D = MNISTDiscriminator().to( device )
+
+        elif( args.networkD_type == "PatchGAN" ):
             model_D = PatchGANDiscriminator( 
                 n_in_channels = 1,
                 n_fmaps = args.n_fmaps
@@ -211,7 +233,8 @@ if __name__ == '__main__':
         else:
             model_D = Discriminator( 
                 n_channels = 1, 
-                n_fmaps = args.n_fmaps
+                n_fmaps = args.n_fmaps,
+                activate = True
             ).to( device )
     else:
         if( args.networkD_type == "PatchGAN" ):
@@ -222,7 +245,8 @@ if __name__ == '__main__':
         else:
             model_D = Discriminator( 
                 n_channels = 3, 
-                n_fmaps = args.n_fmaps
+                n_fmaps = args.n_fmaps,
+                activate = True
             ).to( device )
         
     if( args.debug ):
@@ -250,15 +274,23 @@ if __name__ == '__main__':
     #======================================================================
     # loss 関数の設定
     #======================================================================
-    pass
+    if( args.networkD_type == "mnist" or args.networkG_type == "mnist" ):
+        loss_fn = nn.BCELoss()             # when use sigmoid in Discriminator
+    else:
+        #loss_fn = nn.BCEWithLogitsLoss()    # when not use sigmoid in Discriminator
+        loss_fn = nn.BCELoss()
 
     #======================================================================
     # モデルの学習処理
     #======================================================================
     # 入力ノイズ z
-    input_noize_z = torch.randn( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
-    input_noize_fix_z = torch.randn( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
-    input_noize_fix_z_test = torch.randn( size = (args.batch_size_test, args.n_input_noize_z,1,1) ).to( device )
+    if( args.networkD_type == "mnist" or args.networkG_type == "mnist" ):
+        input_noize_z = torch.randn( size = (args.batch_size, args.n_input_noize_z) ).to( device )
+        input_noize_fix_z = torch.randn( size = (args.batch_size, args.n_input_noize_z) ).to( device )
+    else:
+        input_noize_z = torch.randn( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
+        input_noize_fix_z = torch.randn( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
+
     if( args.debug ):
         print( "input_noize_z.shape :", input_noize_z.shape )
 
@@ -288,108 +320,131 @@ if __name__ == '__main__':
             images = images.to( device )
 
             #====================================================
-            # クリティック C の fitting 処理
+            # 識別器 D の fitting 処理
             #====================================================
-            # 無効化していたクリティック C のネットワークの勾配計算を有効化。
+            """
+            # 無効化していた識別器 D のネットワークの勾配計算を有効化。
             for param in model_D.parameters():
                 param.requires_grad = True
-
-            for n in range( args.n_critic ):
-                #----------------------------------------------------
-                # 学習用データをモデルに流し込む
-                # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
-                #----------------------------------------------------
-                # 生成器 G に入力するノイズ z
-                # Generatorの更新の前にノイズを新しく生成しなおす必要があり。
-                input_noize_z = torch.randn( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
-
-                # E[C(x)] : 本物画像 x = image を入力したときのクリティックの出力 （平均化処理済み）
-                C_x = model_D( images )
-                if( args.debug and n_print > 0 ):
-                    print( "C_x.size() :", C_x.size() )
-
-                with torch.no_grad():   # 生成器 G の更新が行われないようにする。
-                    # G(z) : 生成器から出力される偽物画像
-                    G_z = model_G( input_noize_z )
-                
-                if( args.debug and n_print > 0 ):
-                    print( "G_z.size() :", G_z.size() )     # torch.Size([128, 1, 28, 28])
-
-                # E[ C( G(z) ) ] : 偽物画像を入力したときの識別器の出力 (平均化処理済み)
-                C_G_z = model_D( G_z )
-                if( args.debug and n_print > 0 ):
-                    print( "C_G_z.size() :", C_G_z.size() )
-
-                #----------------------------------------------------
-                # 損失関数を計算する
-                # 出力と教師データを損失関数に設定し、誤差 loss を計算
-                # この設定は、損失関数を __call__ をオーバライト
-                # loss は Pytorch の Variable として帰ってくるので、これをloss.data[0]で数値として見る必要があり
-                #----------------------------------------------------
-                # E_x[ C(x) ]
-                loss_C_real = torch.mean( C_x )
-                
-                # E_z[ C(G(z) ]
-                loss_C_fake = torch.mean( C_G_z )
-
-                # WGAN-GP の勾配項（制約項）
-                gradient_penalty_loss = calc_gradient_penalty(
-                    model_D, images, G_z, device, 'mixed', 1.0, args.lambda_wgangp
-                )
-
-                # クリティック C の損失関数
-                loss_C = - loss_C_real + loss_C_fake + gradient_penalty_loss
-
-                #----------------------------------------------------
-                # ネットワークの更新処理
-                #----------------------------------------------------
-                # 勾配を 0 に初期化（この初期化処理が必要なのは、勾配がイテレーション毎に加算される仕様のため）
-                optimizer_D.zero_grad()
-
-                # 勾配計算
-                loss_C.backward(retain_graph=True)
-                #loss_C.backward()
-
-                # backward() で計算した勾配を元に、設定した optimizer に従って、重みを更新
-                optimizer_D.step()
-
-            #====================================================
-            # 生成器 G の fitting 処理
-            #====================================================
-            # クリティック C のネットワークの勾配計算を行わないようにする。
-            for param in model_D.parameters():
-                param.requires_grad = False
+            """
+            # 勾配を 0 に初期化（この初期化処理が必要なのは、勾配がイテレーション毎に加算される仕様のため）
+            optimizer_D.zero_grad()
 
             #----------------------------------------------------
             # 学習用データをモデルに流し込む
             # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
             #----------------------------------------------------
-            # 生成器 G に入力するノイズ z
-            # Generatorの更新の前にノイズを新しく生成しなおす必要があり。
-            input_noize_z = torch.randn( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
+            # 入力ノイズを再生成
+            if( args.networkD_type == "mnist" or args.networkG_type == "mnist" ):
+                input_noize_z = torch.randn( size = (args.batch_size, args.n_input_noize_z) ).to( device )
+            else:
+                input_noize_z = torch.randn( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
+
+            # D(x) : 本物画像 x = image を入力したときの識別器の出力
+            D_x = model_D( images )
+            if( args.debug and n_print > 0 ):
+                print( "D_x.size() :", D_x.size() )
 
             # G(z) : 生成器から出力される偽物画像
+            """
+            with torch.no_grad():   # 生成器 G の更新が行われないようにする。
+                G_z = model_G( input_noize_z )
+                if( args.debug and n_print > 0 ):
+                    print( "G_z.size() :", G_z.size() )
+            """
             G_z = model_G( input_noize_z )
-            if( args.debug and n_print > 0 ):
-                print( "G_z.size() :", G_z.size() )
-                #print( "G_z :", G_z )
 
-            # E[C( G(z) )] : 偽物画像を入力したときのクリティックの出力（平均化処理済み）
-            C_G_z = model_D( G_z )
+            # D( G(z) ) : 偽物画像を入力したときの識別器の出力
+            D_G_z1 = model_D( G_z.detach()  )    # detach して G_z を通じて、生成器に勾配が伝搬しないようにする
             if( args.debug and n_print > 0 ):
-                print( "C_G_z.size() :", C_G_z.size() )
+                print( "D_G_z1.size() :", D_G_z1.size() )
 
             #----------------------------------------------------
             # 損失関数を計算する
+            # 出力と教師データを損失関数に設定し、誤差 loss を計算
+            # この設定は、損失関数を __call__ をオーバライト
+            # loss は Pytorch の Variable として帰ってくるので、これをloss.data[0]で数値として見る必要があり
             #----------------------------------------------------
-            # L_G = E_z[ C(G(z) ]
-            loss_G = - torch.mean( C_G_z )
+            # real ラベルを 1、fake ラベルを 0 として定義
+            real_ones_tsr =  torch.ones( D_x.shape ).to( device )
+            fake_zeros_tsr =  torch.zeros( D_x.shape ).to( device )
+            if( args.debug and n_print > 0 ):
+                print( "real_ones_tsr.shape :", real_ones_tsr.shape )
+                print( "fake_zeros_tsr.shape :", fake_zeros_tsr.shape )
+
+            loss_D_real = loss_fn( D_x, real_ones_tsr )
+            loss_D_real.backward()
+
+            loss_D_fake = loss_fn( D_G_z1, fake_zeros_tsr )
+            loss_D_fake.backward()
+
+            #loss_D = ( loss_fn( D_x, real_ones_tsr ) + loss_fn( D_G_z1, fake_zeros_tsr ) ) / 2
+            #loss_D = loss_fn( D_x, real_ones_tsr ) + loss_fn( D_G_z1, fake_zeros_tsr )
+            loss_D = loss_D_real + loss_D_fake
 
             #----------------------------------------------------
             # ネットワークの更新処理
             #----------------------------------------------------
+            """
+            # 勾配を 0 に初期化（この初期化処理が必要なのは、勾配がイテレーション毎に加算される仕様のため）
+            optimizer_D.zero_grad()
+            """
+
+            # 勾配計算
+            #loss_D.backward(retain_graph=True)
+            #loss_D.backward()
+
+            # backward() で計算した勾配を元に、設定した optimizer に従って、重みを更新
+            optimizer_D.step()
+
+            #====================================================
+            # 生成器 G の fitting 処理
+            #====================================================
+            """
+            # 識別器 D のネットワークの勾配計算を行わないようにする。
+            for param in model_D.parameters():
+                param.requires_grad = False
+            """
             # 勾配を 0 に初期化（この初期化処理が必要なのは、勾配がイテレーション毎に加算される仕様のため）
             optimizer_G.zero_grad()
+
+            #----------------------------------------------------
+            # 学習用データをモデルに流し込む
+            # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
+            #----------------------------------------------------
+            """
+            # 入力ノイズを再生成
+            if( args.networkD_type == "mnist" or args.networkG_type == "mnist" ):
+                input_noize_z = torch.rand( size = (args.batch_size, args.n_input_noize_z) ).to( device )
+            else:
+                input_noize_z = torch.rand( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
+            """
+
+            """
+            # G(z) : 生成器から出力される偽物画像
+            G_z = model_G( input_noize_z )
+            if( args.debug and n_print > 0 ):
+                print( "G_z.size() :", G_z.size() )
+            """
+
+            # D( G(z) ) : 偽物画像を入力したときの識別器の出力
+            #with torch.no_grad():  # param.requires_grad = False しているので不要
+            D_G_z2 = model_D( G_z )
+            if( args.debug and n_print > 0 ):
+                print( "D_G_z2.size() :", D_G_z2.size() )
+
+            #----------------------------------------------------
+            # 損失関数を計算する
+            #----------------------------------------------------
+            loss_G = loss_fn( D_G_z2, real_ones_tsr )
+
+            #----------------------------------------------------
+            # ネットワークの更新処理
+            #----------------------------------------------------
+            """
+            # 勾配を 0 に初期化（この初期化処理が必要なのは、勾配がイテレーション毎に加算される仕様のため）
+            optimizer_G.zero_grad()
+            """
 
             # 勾配計算
             loss_G.backward()
@@ -402,28 +457,28 @@ if __name__ == '__main__':
             #====================================================
             if( step == 0 or ( step % args.n_display_step == 0 ) ):
                 board_train.add_scalar('Generater/loss_G', loss_G.item(), iterations)
-                board_train.add_scalar('Discriminator/loss_D', loss_C.item(), iterations)
-                board_train.add_scalar('Discriminator/loss_D_real', loss_C_real.item(), iterations)
-                board_train.add_scalar('Discriminator/loss_D_fake', loss_C_fake.item(), iterations)
-                board_train.add_scalar('Discriminator/gradient_penalty', gradient_penalty_loss.item(), iterations)
-
+                board_train.add_scalar('Discriminator/loss_D', loss_D.item(), iterations)
                 board_add_image(board_train, 'fake image', G_z, iterations+1)
-                print( "epoch={}, iters={}, loss_G={:.5f}, loss_C={:.5f}".format(epoch, iterations, loss_G, loss_C) )
+                print( "epoch={}, iters={}, loss_G={:.5f}, loss_D={:.5f}".format(epoch, iterations, loss_G, loss_D) )
 
             #====================================================
             # test loss の表示
             #====================================================
+            """
             if( step == 0 or ( step % args.n_display_test_step == 0 ) ):
                 model_G.eval()
                 model_D.eval()
 
-                loss_C_real_total = 0
-                loss_C_fake_total = 0
-                gradient_penalty_loss_total = 0
-                loss_C_total = 0
-                loss_G_total = 0
+                # 入力ノイズは固定
+                if( args.networkD_type == "mnist" or args.networkG_type == "mnist" ):
+                    input_noize_z_test = torch.rand( size = (args.batch_size_test, args.n_input_noize_z) ).to( device )
+                else:
+                    input_noize_z_test = torch.rand( size = (args.batch_size_test, args.n_input_noize_z,1,1) ).to( device )
+
                 n_test_loop = 0
                 test_iterations = 0
+                loss_D_total = 0
+                loss_G_total = 0
                 for (test_images,test_targets) in dloader_test :
                     if test_images.size()[0] != args.batch_size_test:
                         break
@@ -435,42 +490,37 @@ if __name__ == '__main__':
                     # 入力データをセット
                     #----------------------------------------------------
                     test_images = test_images.to( device )
-
+                    
                     #----------------------------------------------------
                     # テスト用データをモデルに流し込む
                     #----------------------------------------------------
                     with torch.no_grad():
-                        C_x = model_D( test_images )
-                        G_z = model_G( input_noize_fix_z_test )
-                        C_G_z = model_D( G_z )
+                        D_x = model_D( test_images )
+                        G_z = model_G( input_noize_z_test )
+                        D_G_z = model_D( G_z )
 
                     #----------------------------------------------------
                     # 損失関数を計算する
                     #----------------------------------------------------
-                    test_loss_C_real = torch.mean( C_x )
-                    test_loss_C_fake = torch.mean( C_G_z )
-                    test_gradient_penalty_loss = calc_gradient_penalty(
-                        model_D, test_images, G_z, device, 'mixed', 1.0, args.lambda_wgangp
-                    )  
+                    real_ones_tsr =  torch.ones( D_x.shape ).to( device )
+                    fake_zeros_tsr =  torch.zeros( D_x.shape ).to( device )
 
-                    test_loss_C = - test_loss_C_real + test_loss_C_fake + test_gradient_penalty_loss
-                    test_loss_G = - torch.mean( C_G_z )
+                    # Discriminator
+                    loss_D = loss_fn( D_x, real_ones_tsr ) + loss_fn( D_G_z, fake_zeros_tsr )
 
-                    loss_C_real_total += test_loss_C_real.item()
-                    loss_C_fake_total += test_loss_C_fake.item()
-                    loss_C_total += test_loss_C.item()
-                    loss_G_total += test_loss_G.item()
+                    # Generator
+                    loss_G = loss_fn( D_G_z, real_ones_tsr )
 
-                    if( n_test_loop > args.n_test ):
+                    # total
+                    loss_D_total += loss_D.item()
+                    loss_G_total += loss_G.item()
+
+                    if( test_iterations > args.n_test ):
                         break
 
-                board_test.add_scalar('Generater/loss_G', loss_G_total/n_test_loop, iterations)
-                board_test.add_scalar('Discriminator/loss_D', loss_C_total/n_test_loop, iterations)
-                board_test.add_scalar('Discriminator/loss_D_real', loss_C_real_total/n_test_loop, iterations)
-                board_test.add_scalar('Discriminator/loss_D_fake', loss_C_fake_total/n_test_loop, iterations)
-                board_test.add_scalar('Discriminator/gradient_penalty', gradient_penalty_loss_total/n_test_loop, iterations)
-                board_add_image(board_test, 'fake image', G_z, iterations+1)
-
+                board_test.add_scalar('Generater/loss_G', (loss_G_total/n_test_loop), iterations)
+                board_test.add_scalar('Discriminator/loss_D', (loss_D_total/n_test_loop), iterations)
+            """
             #====================================================
             # モデルの保存
             #====================================================
@@ -482,7 +532,7 @@ if __name__ == '__main__':
                 print( "saved checkpoints" )
 
             n_print -= 1
-
+        
         #====================================================
         # 各 Epoch 終了後の処理
         #====================================================
@@ -491,12 +541,17 @@ if __name__ == '__main__':
         with torch.no_grad():
             G_z = model_G( input_noize_fix_z )
 
+        G_z = model_G( input_noize_fix_z )
+
         save_image( tensor = G_z[0], filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}_batch0.png".format( epoch ) )
         save_image( tensor = G_z, filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}_batchAll.png".format( epoch ) )
 
         # [batch_size, n_channels, height, width] → [height, width, n_channels]
-        fake_images_historys.append(G_z[0].transpose(0,1).transpose(1,2).cpu().clone().numpy())
-        save_image_historys_gif( fake_images_historys, os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}.gif".format( epoch ) )        
+        #print( "G_z[0].transpose(0,2).cpu().clone().numpy().shape", G_z[0].transpose(0,2).cpu().clone().numpy().shape )
+        #print( "G_z[0].transpose(0,1).transpose(1,2).cpu().clone().numpy().shape", G_z[0].transpose(0,1).transpose(1,2).cpu().clone().numpy().shape )
+        #print( "G_z[0].cpu().clone().numpy().shape", G_z[0].cpu().clone().numpy().shape )
+        fake_images_historys.append(G_z[0].transpose(0,1).transpose(1,2).cpu().detach().numpy())
+        save_image_historys_gif( fake_images_historys, os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}.gif".format( epoch ) )
 
     save_checkpoint( model_G, device, os.path.join(args.save_checkpoints_dir, args.exper_name, "G", 'G_final.pth'), iterations )
     save_checkpoint( model_D, device, os.path.join(args.save_checkpoints_dir, args.exper_name, "D", 'D_final.pth'), iterations )

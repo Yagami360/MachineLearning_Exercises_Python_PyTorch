@@ -63,51 +63,165 @@ RSGAN, RaSGAN, RaLSGAN の PyTorch での実装。
 
 ## ■ コードの実行結果
 
-<!--
-
-|パラメータ名|値（実行条件１）|値（実行条件２）|
-|---|---|---|
-|実験名：<br>`args.exper_name`|""|""|
-|学習用データセット：`args.dataset`|"mnist"|"cifar-10"|
-|使用デバイス：<br>`args.device`|"gpu"|←|
-|シード値|`random.seed(8)`<br>`np.random.seed(8)`<br>`torch.manual_seed(8)`|←|
-|エポック数：<br>`args.n_epoches`|10|50|
-|バッチサイズ：<br>`args.batch_size`|64|64|
-|生成器に入力するノイズ z の次数：<br>`args.n_input_noize_z`|100|100|
-|入力画像のサイズ：<br>`args.image_size`|64|64|
-|入力画像のチャンネル数：<br>`args.n_channels`|1|3|
-|特徴マップの枚数：<br>`args.n_fmaps`|64|64|
-|最適化アルゴリズム|Adam|←|
-|学習率：<br>`args.lr`|0.00005|←|
-|クリティックの更新回数：<br>`args.n_critic`|5|←|
-|重みクリッピングの下限値：<br>`args.w_clamp_lower`|-0.01|←|
-|重みクリッピングの上限値：<br>`args.w_clamp_upper`|0.01|←|
-
--->
-
 ### ◎ 損失関数のグラフ
 
-- RSGAN<br>
+#### ☆ RSGAN
+- 識別器側<br>
+  ![image](https://user-images.githubusercontent.com/25688193/71316691-1e0cec80-24b7-11ea-88f3-ef5b17b6652f.png)<br>
+- 生成器側<br>
+  ![image](https://user-images.githubusercontent.com/25688193/71316723-3d584980-24b8-11ea-800e-f292ca4624ac.png)<br>
+  - 学習データセットの loss 値（）
+  - テスト用データセットの loss 値（）
+   
+#### ☆ RaSGAN
+- 識別器側<br>
+  <br>
+
+- 生成器側<br>
+  <br>
+  - 学習データセットの loss 値（オレンジ）
+  - テスト用データセットの loss 値（青）
+
+#### ☆ RaLSGAN
+- 識別器側<br>
+  <br>
+- 生成器側<br>
+  <br>
+  - 学習データセットの loss 値（青）
+  - テスト用データセットの loss 値（茶色）
+
+### ◎ 生成器からの生成画像
+
+#### ☆ RSGAN
+- Epochs :80<br>
+  <br>    
+- Epoches : 1 ~ 80<br>
+  <br>
+
+#### ☆ RaSGAN
+- Epochs :80<br>
+  <br>
+
+
+### ◎ 各種オプション引数の設定値
+
+#### ☆ RSGAN
+```python
+----------------------------------------------
+実行条件
+----------------------------------------------
+開始時間： 2019-12-27 01:25:17.387356
+PyTorch version : 1.1.0
+exper_name: RSGAN_train_D_vanilla_Epoch100_191227
+device: gpu
+dataset: mnist
+dataset_dir: ../dataset
+results_dir: results
+save_checkpoints_dir: checkpoints
+load_checkpoints_dir: 
+tensorboard_dir: ../tensorboard
+n_test: 5000
+n_epoches: 100
+batch_size: 64
+batch_size_test: 256
+lr: 0.0001
+beta1: 0.5
+beta2: 0.999
+image_size: 64
+n_fmaps: 64
+n_input_noize_z: 100
+gan_type: RSGAN
+networkD_type: vanilla
+n_critic: 1
+n_display_step: 10
+n_display_test_step: 100
+n_save_step: 10000
+seed: 8
+debug: True
+実行デバイス : cuda
+GPU名 : Tesla M60
+torch.cuda.current_device() = 0
+```
+
+#### RaSGAN
+
+```python
+----------------------------------------------
+実行条件
+----------------------------------------------
+開始時間： 2019-12-27 01:27:35.916840
+PyTorch version : 1.1.0
+exper_name: RaSGAN_train_D_vanilla_Epoch100_191227
+device: gpu
+dataset: mnist
+dataset_dir: ../dataset
+results_dir: results
+save_checkpoints_dir: checkpoints
+load_checkpoints_dir: 
+tensorboard_dir: ../tensorboard
+n_test: 5000
+n_epoches: 100
+batch_size: 64
+batch_size_test: 256
+lr: 0.0001
+beta1: 0.5
+beta2: 0.999
+image_size: 64
+n_fmaps: 64
+n_input_noize_z: 100
+gan_type: RaSGAN
+networkD_type: vanilla
+n_critic: 1
+n_display_step: 10
+n_display_test_step: 100
+n_save_step: 10000
+seed: 8
+debug: True
+実行デバイス : cuda
+GPU名 : Tesla M60
+torch.cuda.current_device() = 0
+```
+
+#### ☆ RsLSGAN
+
+```python
+----------------------------------------------
+実行条件
+----------------------------------------------
+開始時間： 2019-12-27 01:28:08.538909
+PyTorch version : 1.1.0
+exper_name: RaLSGAN_train_D_vanilla_Epoch100_191227
+device: gpu
+dataset: mnist
+dataset_dir: ../dataset
+results_dir: results
+save_checkpoints_dir: checkpoints
+load_checkpoints_dir: 
+tensorboard_dir: ../tensorboard
+n_test: 1000
+n_epoches: 100
+batch_size: 64
+batch_size_test: 256
+lr: 0.0001
+beta1: 0.5
+beta2: 0.999
+image_size: 64
+n_fmaps: 64
+n_input_noize_z: 100
+gan_type: RaLSGAN
+networkD_type: vanilla
+n_critic: 1
+n_display_step: 10
+n_display_test_step: 100
+n_save_step: 10000
+seed: 8
+debug: True
+実行デバイス : cuda
+GPU名 : Tesla M60
+torch.cuda.current_device() = 0
+```
 
 <!--
-    ![image](https://user-images.githubusercontent.com/25688193/70800236-1088a000-1def-11ea-9a72-5bb289360563.png)<br>
-    ![image](https://user-images.githubusercontent.com/25688193/70800017-7fb1c480-1dee-11ea-86bc-ca0c63a1dc11.png)<br>
--->
-
-- RaSGAN<br>
-
-### ◎ 生成器から生成された自動生成画像
-
-<!--
-- RSGAN<br>
-    - Epochs :10<br>
-            ![image](https://user-images.githubusercontent.com/25688193/70800135-d15a4f00-1dee-11ea-9275-0dd44068a599.png)<br>
-
-- RaSGAN<br>
-    - Epochs :10<br>
-        ![image](https://user-images.githubusercontent.com/25688193/70803801-42523480-1df8-11ea-8807-4dfa0149fe4b.png)<br>
--->
-
 ## ■ デバッグ情報
 
 ```python
@@ -129,6 +243,26 @@ model_G :
     (11): ReLU(inplace)
     (12): ConvTranspose2d(64, 1, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1), bias=False)
     (13): Tanh()
+  )
+)
+```
+
+```python
+model_D :
+ Discriminator(
+  (layer): Sequential(
+    (0): Conv2d(1, 64, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1), bias=False)
+    (1): LeakyReLU(negative_slope=0.2, inplace)
+    (2): Conv2d(64, 128, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1), bias=False)
+    (3): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (4): LeakyReLU(negative_slope=0.2, inplace)
+    (5): Conv2d(128, 256, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1), bias=False)
+    (6): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (7): LeakyReLU(negative_slope=0.2, inplace)
+    (8): Conv2d(256, 512, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1), bias=False)
+    (9): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (10): LeakyReLU(negative_slope=0.2, inplace)
+    (11): Conv2d(512, 1, kernel_size=(4, 4), stride=(1, 1), bias=False)
   )
 )
 ```
@@ -161,3 +295,5 @@ model_D :
   )
 )
 ```
+
+-->

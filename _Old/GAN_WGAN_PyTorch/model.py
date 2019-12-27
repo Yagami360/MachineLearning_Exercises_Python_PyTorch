@@ -94,7 +94,7 @@ class WassersteinGAN( object ):
         self.loss()
         self.optimizer()
 
-        self._fixed_input_noize_z = torch.rand( (n_samples, self._n_input_noize_z, 1, 1) ).to( self._device )
+        self._fixed_input_noize_z = torch.randn( (n_samples, self._n_input_noize_z, 1, 1) ).to( self._device )
         return
 
     def print( self, str = "" ):
@@ -459,7 +459,7 @@ class WassersteinGAN( object ):
         self._generator.eval()
 
         # 生成のもとになる乱数を生成
-        input_noize_z = torch.rand( (n_samples, self._n_input_noize_z, 1, 1) ).to( self._device )
+        input_noize_z = torch.randn( (n_samples, self._n_input_noize_z, 1, 1) ).to( self._device )
 
         # 画像を生成
         images = self._generator( input_noize_z )

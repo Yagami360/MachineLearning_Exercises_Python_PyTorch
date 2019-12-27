@@ -48,7 +48,7 @@ if __name__ == '__main__':
     parser.add_argument('--n_fmaps', type=int, default=64, help="特徴マップの枚数")
     parser.add_argument('--n_input_noize_z', type=int, default=100, help="生成器に入力するノイズ z の次数")
     parser.add_argument('--networkG_type', choices=['vanilla','mnist' ], default="vanilla", help="GAN の生成器の種類")
-    parser.add_argument('--networkD_type', choices=['vanilla','mnist','PatchGAN' ], default="PatchGAN", help="GAN の識別器の種類")
+    parser.add_argument('--networkD_type', choices=['vanilla','mnist','PatchGAN' ], default="vanilla", help="GAN の識別器の種類")
     parser.add_argument('--n_display_step', type=int, default=50, help="tensorboard への表示間隔")
     parser.add_argument('--n_display_test_step', type=int, default=500, help="test データの tensorboard への表示間隔")
     parser.add_argument("--n_save_step", type=int, default=5000, help="モデルのチェックポイントの保存間隔")
@@ -282,11 +282,13 @@ if __name__ == '__main__':
     #======================================================================
     # 入力ノイズ z
     if( args.networkD_type == "mnist" or args.networkG_type == "mnist" ):
-        input_noize_z = torch.rand( size = (args.batch_size, args.n_input_noize_z) ).to( device )
-        input_noize_fix_z = torch.rand( size = (args.batch_size, args.n_input_noize_z) ).to( device )
+        input_noize_z = torch.randn( size = (args.batch_size, args.n_input_noize_z) ).to( device )
+        input_noize_fix_z = torch.randn( size = (args.batch_size, args.n_input_noize_z) ).to( device )
+        input_noize_fix_z_test = torch.randn( size = (args.batch_size_test, args.n_input_noize_z) ).to( device )
     else:
-        input_noize_z = torch.rand( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
-        input_noize_fix_z = torch.rand( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
+        input_noize_z = torch.randn( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
+        input_noize_fix_z = torch.randn( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
+        input_noize_fix_z_test = torch.randn( size = (args.batch_size_test, args.n_input_noize_z,1,1) ).to( device )
 
     if( args.debug ):
         print( "input_noize_z.shape :", input_noize_z.shape )
@@ -329,9 +331,9 @@ if __name__ == '__main__':
             #----------------------------------------------------
             # 入力ノイズを再生成
             if( args.networkD_type == "mnist" or args.networkG_type == "mnist" ):
-                input_noize_z = torch.rand( size = (args.batch_size, args.n_input_noize_z) ).to( device )
+                input_noize_z = torch.randn( size = (args.batch_size, args.n_input_noize_z) ).to( device )
             else:
-                input_noize_z = torch.rand( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
+                input_noize_z = torch.randn( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
 
             # D(x) : 本物画像 x = image を入力したときの識別器の出力
             D_x = model_D( images )
@@ -343,7 +345,7 @@ if __name__ == '__main__':
                 G_z = model_G( input_noize_z )
                 if( args.debug and n_print > 0 ):
                     print( "G_z.size() :", G_z.size() )
-                
+
             # D( G(z) ) : 偽物画像を入力したときの識別器の出力
             D_G_z = model_D( G_z.detach()  )    # detach して G_z を通じて、生成器に勾配が伝搬しないようにする
             if( args.debug and n_print > 0 ):
@@ -362,7 +364,9 @@ if __name__ == '__main__':
                 print( "real_ones_tsr.shape :", real_ones_tsr.shape )
                 print( "fake_zeros_tsr.shape :", fake_zeros_tsr.shape )
 
-            loss_D = loss_fn( D_x, real_ones_tsr ) + loss_fn( D_G_z, fake_zeros_tsr )
+            loss_D_real = loss_fn( D_x, real_ones_tsr )
+            loss_D_fake = loss_fn( D_G_z, fake_zeros_tsr )
+            loss_D = loss_D_real + loss_D_fake
 
             #----------------------------------------------------
             # ネットワークの更新処理
@@ -390,9 +394,9 @@ if __name__ == '__main__':
             #----------------------------------------------------
             # 入力ノイズを再生成
             if( args.networkD_type == "mnist" or args.networkG_type == "mnist" ):
-                input_noize_z = torch.rand( size = (args.batch_size, args.n_input_noize_z) ).to( device )
+                input_noize_z = torch.randn( size = (args.batch_size, args.n_input_noize_z) ).to( device )
             else:
-                input_noize_z = torch.rand( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
+                input_noize_z = torch.randn( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
 
             # G(z) : 生成器から出力される偽物画像
             G_z = model_G( input_noize_z )
@@ -428,7 +432,9 @@ if __name__ == '__main__':
             if( step == 0 or ( step % args.n_display_step == 0 ) ):
                 board_train.add_scalar('Generater/loss_G', loss_G.item(), iterations)
                 board_train.add_scalar('Discriminator/loss_D', loss_D.item(), iterations)
-                board_add_image(board_train, 'fake image', G_z, iterations+1)
+                board_train.add_scalar('Discriminator/loss_D_real', loss_D_real.item(), iterations)
+                board_train.add_scalar('Discriminator/loss_D_fake', loss_D_fake.item(), iterations)
+                board_add_image(board_train, 'fake image', G_z, iterations)
                 print( "epoch={}, iters={}, loss_G={:.5f}, loss_D={:.5f}".format(epoch, iterations, loss_G, loss_D) )
 
             #====================================================
@@ -438,16 +444,15 @@ if __name__ == '__main__':
                 model_G.eval()
                 model_D.eval()
 
-                # 入力ノイズは固定
-                if( args.networkD_type == "mnist" or args.networkG_type == "mnist" ):
-                    input_noize_z = torch.rand( size = (args.batch_size_test, args.n_input_noize_z) ).to( device )
-                else:
-                    input_noize_z = torch.rand( size = (args.batch_size_test, args.n_input_noize_z,1,1) ).to( device )
-
                 n_test_loop = 0
                 test_iterations = 0
                 loss_D_total = 0
+                loss_D_real_total = 0
+                loss_D_fake_total = 0
                 loss_G_total = 0
+
+                #for step_test, (test_images,test_targets) in enumerate( dloader_test ):
+
                 for (test_images,test_targets) in dloader_test :
                     if test_images.size()[0] != args.batch_size_test:
                         break
@@ -465,7 +470,7 @@ if __name__ == '__main__':
                     #----------------------------------------------------
                     with torch.no_grad():
                         D_x = model_D( test_images )
-                        G_z = model_G( input_noize_z )
+                        G_z = model_G( input_noize_fix_z_test )
                         D_G_z = model_D( G_z )
 
                     #----------------------------------------------------
@@ -475,13 +480,17 @@ if __name__ == '__main__':
                     fake_zeros_tsr =  torch.zeros( D_x.shape ).to( device )
 
                     # Discriminator
-                    loss_D = loss_fn( D_x, real_ones_tsr ) + loss_fn( D_G_z, fake_zeros_tsr )
+                    loss_D_real = loss_fn( D_x, real_ones_tsr )
+                    loss_D_fake = loss_fn( D_G_z, fake_zeros_tsr )
+                    loss_D = loss_D_real + loss_D_fake
 
                     # Generator
                     loss_G = loss_fn( D_G_z, real_ones_tsr )
 
                     # total
                     loss_D_total += loss_D.item()
+                    loss_D_real_total += loss_D_real.item()
+                    loss_D_fake_total += loss_D_fake.item()
                     loss_G_total += loss_G.item()
 
                     if( test_iterations > args.n_test ):
@@ -489,6 +498,9 @@ if __name__ == '__main__':
 
                 board_test.add_scalar('Generater/loss_G', (loss_G_total/n_test_loop), iterations)
                 board_test.add_scalar('Discriminator/loss_D', (loss_D_total/n_test_loop), iterations)
+                board_test.add_scalar('Discriminator/loss_D_real', (loss_D_real_total/n_test_loop), iterations)
+                board_test.add_scalar('Discriminator/loss_D_fake', (loss_D_fake_total/n_test_loop), iterations)
+                board_add_image(board_test, 'fake_image_test', G_z, iterations)
 
             #====================================================
             # モデルの保存
@@ -510,12 +522,15 @@ if __name__ == '__main__':
         with torch.no_grad():
             G_z = model_G( input_noize_fix_z )
 
-        save_image( tensor = G_z[0], filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}_iters{}_batch0.png".format( epoch, iterations ) )
-        save_image( tensor = G_z, filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}_iters{}_batchAll.png".format( epoch, iterations ) )
+        save_image( tensor = G_z[0], filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}_batch0.png".format( epoch ) )
+        save_image( tensor = G_z, filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}_batchAll.png".format( epoch ) )
 
         # [batch_size, n_channels, height, width] → [height, width, n_channels]
-        fake_images_historys.append(G_z[0].transpose( 0 ,2 ).cpu().clone().numpy())
-        save_image_historys_gif( fake_images_historys, os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}_iters{}.gif".format( epoch, iterations ) )        
+        #print( "G_z[0].transpose(0,2).cpu().clone().numpy().shape", G_z[0].transpose(0,2).cpu().clone().numpy().shape )
+        #print( "G_z[0].transpose(0,1).transpose(1,2).cpu().clone().numpy().shape", G_z[0].transpose(0,1).transpose(1,2).cpu().clone().numpy().shape )
+        #print( "G_z[0].cpu().clone().numpy().shape", G_z[0].cpu().clone().numpy().shape )
+        fake_images_historys.append(G_z[0].transpose(0,1).transpose(1,2).cpu().clone().numpy())
+        save_image_historys_gif( fake_images_historys, os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}.gif".format( epoch ) )
 
     save_checkpoint( model_G, device, os.path.join(args.save_checkpoints_dir, args.exper_name, "G", 'G_final.pth'), iterations )
     save_checkpoint( model_D, device, os.path.join(args.save_checkpoints_dir, args.exper_name, "D", 'D_final.pth'), iterations )
