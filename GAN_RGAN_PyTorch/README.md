@@ -67,9 +67,9 @@ RSGAN, RaSGAN, RaLSGAN の PyTorch での実装。
 
 #### ☆ RSGAN
 - 識別器側<br>
-  ![image](https://user-images.githubusercontent.com/25688193/71316691-1e0cec80-24b7-11ea-88f3-ef5b17b6652f.png)<br>
+  <br>
 - 生成器側<br>
-  ![image](https://user-images.githubusercontent.com/25688193/71316723-3d584980-24b8-11ea-800e-f292ca4624ac.png)<br>
+  <br>
   - 学習データセットの loss 値（）
   - テスト用データセットの loss 値（）
    
@@ -79,16 +79,16 @@ RSGAN, RaSGAN, RaLSGAN の PyTorch での実装。
 
 - 生成器側<br>
   <br>
-  - 学習データセットの loss 値（オレンジ）
-  - テスト用データセットの loss 値（青）
+  - 学習データセットの loss 値（）
+  - テスト用データセットの loss 値（）
 
 #### ☆ RaLSGAN
 - 識別器側<br>
   <br>
 - 生成器側<br>
   <br>
-  - 学習データセットの loss 値（青）
-  - テスト用データセットの loss 値（茶色）
+  - 学習データセットの loss 値（）
+  - テスト用データセットの loss 値（）
 
 ### ◎ 生成器からの生成画像
 

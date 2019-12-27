@@ -419,6 +419,7 @@ if __name__ == '__main__':
             fix_pre_image = test_inputs["aerial_image_tsr"].to(device)     # テスト用データの最初の画像を使用
             break
 
+        save_image( fix_pre_image, "fix_pre_image.png" )
         #fix_pre_image = fix_pre_image.unsqueeze_(0)                # バッチの次元追加
         #print( "fix_pre_image.shape", fix_pre_image.shape )
         with torch.no_grad():

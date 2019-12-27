@@ -520,17 +520,17 @@ if __name__ == '__main__':
             eye_tsr = torch.eye( args.n_classes ).to( device )
             y_fake_label = torch.full( (args.batch_size,), y_label ).long().to( device )
             y_fake_one_hot = eye_tsr[y_fake_label].view( -1, args.n_classes, 1, 1 ).to( device )
-            
+
             # 出力画像の生成＆保存
             model_G.eval()
             with torch.no_grad():
                 G_z = model_G( input_noize_fix_z, y_fake_one_hot )
 
-            save_image( tensor = G_z[0], filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_label{}_epoches{}_batch0.png".format( y_lable, epoch ) )
-            save_image( tensor = G_z, filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_label{}_epoches{}_batchAll.png".format( y_lable, epoch ) )
+            save_image( tensor = G_z[0], filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_label{}_epoches{}_batch0.png".format( y_label, epoch ) )
+            save_image( tensor = G_z, filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_label{}_epoches{}_batchAll.png".format( y_label, epoch ) )
 
             fake_images_historys.append(G_z[0].transpose(0,1).transpose(1,2).cpu().clone().numpy())
-            save_image_historys_gif( fake_images_historys, os.path.join(args.results_dir, args.exper_name) + "/fake_image_label{}_epoches{}.gif".format( y_lable, epoch, iterations ) )        
+            save_image_historys_gif( fake_images_historys, os.path.join(args.results_dir, args.exper_name) + "/fake_image_label{}_epoches{}.gif".format( y_label, epoch, iterations ) )        
 
     save_checkpoint( model_G, device, os.path.join(args.save_checkpoints_dir, args.exper_name, "G", 'G_final.pth'), iterations )
     save_checkpoint( model_D, device, os.path.join(args.save_checkpoints_dir, args.exper_name, "D", 'D_final.pth'), iterations )
