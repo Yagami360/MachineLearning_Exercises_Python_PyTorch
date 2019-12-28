@@ -39,7 +39,7 @@ if __name__ == '__main__':
     parser.add_argument('--load_checkpoints_dir', type=str, default="", help="モデルの読み込みディレクトリ")
     parser.add_argument('--tensorboard_dir', type=str, default="tensorboard", help="TensorBoard のディレクトリ")
     parser.add_argument('--n_test', type=int, default=10000, help="test dataset の最大数")
-    parser.add_argument('--n_epoches', type=int, default=100, help="エポック数")
+    parser.add_argument('--n_epoches', type=int, default=30, help="エポック数")
     parser.add_argument('--batch_size', type=int, default=64, help="バッチサイズ")
     parser.add_argument('--batch_size_test', type=int, default=4, help="test データのバッチサイズ")
     parser.add_argument('--lr', type=float, default=0.0001, help="学習率")

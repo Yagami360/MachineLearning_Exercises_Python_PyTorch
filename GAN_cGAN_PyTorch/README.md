@@ -53,33 +53,47 @@ Conditional GAN（cGAN）の PyTorch での実装。
 
 ## ■ コードの実行結果
 
-<!--
+### ◎ 生成器からの生成画像
 
-|パラメータ名|値（実行条件１）|値（実行条件２）|
-|---|---|---|
-|実験名：<br>`args.exper_name`|""|""|
-|学習用データセット：`args.dataset`|"mnist"|"cifar-10"|
-|使用デバイス：<br>`args.device`|"gpu"|←|
-|シード値|`random.seed(8)`<br>`np.random.seed(8)`<br>`torch.manual_seed(8)`|←|
-|エポック数：<br>`args.n_epoches`|10|50|
-|バッチサイズ：<br>`args.batch_size`|64|64|
-|生成器に入力するノイズ z の次数：<br>`args.n_input_noize_z`|100|100|
-|入力画像のサイズ：<br>`args.image_size`|64|64|
-|入力画像のチャンネル数：<br>`args.n_channels`|1|3|
-|特徴マップの枚数：<br>`args.n_fmaps`|64|64|
-|最適化アルゴリズム|Adam|←|
-|学習率：<br>`args.lr`|0.00005|←|
-|クリティックの更新回数：<br>`args.n_critic`|5|←|
-|重みクリッピングの下限値：<br>`args.w_clamp_lower`|-0.01|←|
-|重みクリッピングの上限値：<br>`args.w_clamp_upper`|0.01|←|
+- label 0 / Epoche 15
+  ![fake_image_label0_epoches15_batchAll](https://user-images.githubusercontent.com/25688193/71542944-74df5e00-29b0-11ea-8276-522ecb740f6d.png)<br>
 
--->
+- label 1 / Epoche 15
+  ![fake_image_label1_epoches15_batchAll](https://user-images.githubusercontent.com/25688193/71542992-0353df80-29b1-11ea-924b-76374f859ff8.png)<br>
+
+- label 2 / Epoche 15
+  ![fake_image_label2_epoches15_batchAll](https://user-images.githubusercontent.com/25688193/71542991-02bb4900-29b1-11ea-9f46-1c1b036d5c83.png)<br>
+
+- label 3 / Epoche 15
+  ![fake_image_label3_epoches15_batchAll](https://user-images.githubusercontent.com/25688193/71542990-02bb4900-29b1-11ea-9d49-825b36db25a0.png)<br>
+
+- label 4 / Epoche 15
+  ![fake_image_label4_epoches15_batchAll](https://user-images.githubusercontent.com/25688193/71542989-02bb4900-29b1-11ea-948d-6a0458e3cff1.png)<br>
+
+- label 5 / Epoche 15
+  ![fake_image_label5_epoches15_batchAll](https://user-images.githubusercontent.com/25688193/71542988-02bb4900-29b1-11ea-9a4b-9dd9565e7fef.png)<br>
+
+- label 6 / Epoche 15
+  ![fake_image_label6_epoches15_batchAll](https://user-images.githubusercontent.com/25688193/71542987-0222b280-29b1-11ea-824d-2ddbeb28eb20.png)<br>
+
+- label 7 / Epoche 15
+  ![fake_image_label7_epoches15_batchAll](https://user-images.githubusercontent.com/25688193/71542986-0222b280-29b1-11ea-883c-3f9903ec932d.png)<br>
+
+- label 8 / Epoche 15
+  ![fake_image_label8_epoches15_batchAll](https://user-images.githubusercontent.com/25688193/71542985-0222b280-29b1-11ea-84dc-185994575076.png)<br>
+
+- label 9 / Epoche 15
+  ![fake_image_label9_epoches15_batchAll](https://user-images.githubusercontent.com/25688193/71543012-3f874000-29b1-11ea-873e-f53a309cf60d.png)<br>
 
 ### ◎ 損失関数のグラフ
 
+- 識別器 : Epoches 1~100<br>
+  ![image](https://user-images.githubusercontent.com/25688193/71542919-f387cb80-29af-11ea-865e-20d94e511552.png)<br>
 
-### ◎ 生成器から生成された自動生成画像
+- 生成器 : Epoches 1~100
+  ![image](https://user-images.githubusercontent.com/25688193/71542934-3ea1de80-29b0-11ea-8dec-952a676526ac.png)<br>
 
+  → 学習を進めていくとむしろ悪化？
 
 ## ■ デバッグ情報
 

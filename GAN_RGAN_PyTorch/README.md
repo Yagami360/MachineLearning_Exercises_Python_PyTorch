@@ -1,4 +1,4 @@
-# GAN_RGAN-GP_PyTorch
+# GAN_RGAN_PyTorch
 RSGAN, RaSGAN, RaLSGAN の PyTorch での実装。
 
 - 参考コード
@@ -66,23 +66,17 @@ RSGAN, RaSGAN, RaLSGAN の PyTorch での実装。
 ### ◎ 生成器からの生成画像
 
 #### ☆ RSGAN
-- Epochs :50<br>
-  ![fake_image_epoches50_batchAll](https://user-images.githubusercontent.com/25688193/71537438-851b1d00-295f-11ea-9fbe-9c3f2cd46588.png)<br>    
 
 - Epochs :100<br>
-  <br>
+  ![fake_image_epoches95_batchAll](https://user-images.githubusercontent.com/25688193/71542901-7d836480-29af-11ea-821e-99ced847d7ae.png)<br>
 
 
 #### ☆ RaSGAN
-- Epochs :50<br>
-  <br>
 
 - Epochs :100<br>
   <br>
 
 #### ☆ RaLSGAN
-- Epochs :50<br>
-  <br>
 
 - Epochs :100<br>
   <br>
@@ -90,10 +84,10 @@ RSGAN, RaSGAN, RaLSGAN の PyTorch での実装。
 ### ◎ 損失関数のグラフ
 
 #### ☆ RSGAN
-- 識別器側<br>
-  ![image](https://user-images.githubusercontent.com/25688193/71537470-125e7180-2960-11ea-97df-145f407fb8fb.png)<br>
-- 生成器側<br>
-  ![image](https://user-images.githubusercontent.com/25688193/71537462-fb1f8400-295f-11ea-87ce-60155b5c8ca2.png)<br>
+- 識別器側 : Epoches 1~100<br>
+  ![image](https://user-images.githubusercontent.com/25688193/71543060-cdfbc180-29b1-11ea-9267-7789725bebee.png)<br>
+- 生成器側 : Epoches 1~100<br>
+  ![image](https://user-images.githubusercontent.com/25688193/71543057-c0ded280-29b1-11ea-94a7-c8db7a41a3f0.png)<br>
    
 #### ☆ RaSGAN
 - 識別器側<br>
@@ -101,17 +95,12 @@ RSGAN, RaSGAN, RaLSGAN の PyTorch での実装。
 
 - 生成器側<br>
   <br>
-  - 学習データセットの loss 値（）
-  - テスト用データセットの loss 値（）
 
 #### ☆ RaLSGAN
 - 識別器側<br>
   <br>
 - 生成器側<br>
   <br>
-  - 学習データセットの loss 値（）
-  - テスト用データセットの loss 値（）
-
 
 ### ◎ 各種オプション引数の設定値
 

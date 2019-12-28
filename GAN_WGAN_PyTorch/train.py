@@ -56,7 +56,7 @@ if __name__ == '__main__':
     parser.add_argument('--n_display_step', type=int, default=100, help="tensorboard への表示間隔")
     parser.add_argument('--n_display_test_step', type=int, default=1000, help="test データの tensorboard への表示間隔")
     parser.add_argument("--n_save_step", type=int, default=5000, help="モデルのチェックポイントの保存間隔")
-    parser.add_argument("--seed", type=int, default=8, help="乱数シード値")
+    parser.add_argument("--seed", type=int, default=12, help="乱数シード値")
     parser.add_argument('--debug', action='store_true', help="デバッグモード有効化")
     args = parser.parse_args()
 
@@ -272,7 +272,9 @@ if __name__ == '__main__':
     input_noize_z = torch.randn( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
     input_noize_fix_z = torch.randn( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
     input_noize_fix_z_test = torch.randn( size = (args.batch_size_test, args.n_input_noize_z,1,1) ).to( device )
-    
+
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
     if( args.debug ):
         print( "input_noize_z.shape :", input_noize_z.shape )
 

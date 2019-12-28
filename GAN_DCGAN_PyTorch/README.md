@@ -80,18 +80,17 @@ DCGAN の PyTorch での実装。
 ### ◎ 損失関数のグラフ
 
 #### ☆ MLP ネットワーク（実行条件１）
-- 識別器側<br>
+- 識別器側 : Epoches 1~30<br>
   ![image](https://user-images.githubusercontent.com/25688193/71316820-3b8f8580-24ba-11ea-9153-962dea17b36c.png)<br>
-- 生成器側<br>
+- 生成器側 : Epoches 1~30<br>
   ![image](https://user-images.githubusercontent.com/25688193/71316839-80b3b780-24ba-11ea-9a01-1c4ea8039779.png)<br>
   - 学習用データセット（緑）
   - テスト用データセット（灰色）
 
 #### ☆ DCGAN ネットワークを使用（実行条件２）
-- 識別器側<br>
-  ![image](https://user-images.githubusercontent.com/25688193/71537419-2786d080-295f-11ea-9fed-756536f8f19c.png)
-<br>
-- 生成器側<br>
+- 識別器側 : Epoches 1~100<br>
+  ![image](https://user-images.githubusercontent.com/25688193/71537419-2786d080-295f-11ea-9fed-756536f8f19c.png)<br>
+- 生成器側 : Epoches 1~100<br>
   ![image](https://user-images.githubusercontent.com/25688193/71537425-45eccc00-295f-11ea-85ae-687f75430d48.png)<br>
 
 ### ◎ 各種オプション引数の設定値

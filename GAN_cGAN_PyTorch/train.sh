@@ -4,7 +4,7 @@
 #nohup tensorboard --logdir tensorboard --port 6006 &
 set -eu
 
-N_EPOCHES=100
+N_EPOCHES=30
 BATCH_SIZE=64
 BATCH_SIZE_TEST=256
 N_DISPLAY_STEP=10

@@ -20,7 +20,7 @@ OPTIMIZER=RMSprop
 # RSGAN
 #-------------------
 mkdir -p ${PWD}/_logs
-EXEP_NAME=WGAN_train_D_${NETWORK_D_TYPE}_Opt_${OPTIMIZER}_Epoch${N_EPOCHES}_191228
+EXEP_NAME=WGAN_train_D_${NETWORK_D_TYPE}_Opt_${OPTIMIZER}_Epoch${N_EPOCHES}_191228_1
 TENSOR_BOARD_DIR=../tensorboard
 if [ -d "${TENSOR_BOARD_DIR}/${EXEP_NAME}" ] ; then
     rm -r ${TENSOR_BOARD_DIR}/${EXEP_NAME}
@@ -50,4 +50,4 @@ python train.py \
     --networkD_type ${NETWORK_D_TYPE} \
     --debug > _logs/${EXEP_NAME}.out
 
-sudo poweroff
+#sudo poweroff
