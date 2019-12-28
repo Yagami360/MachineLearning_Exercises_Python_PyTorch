@@ -200,6 +200,8 @@ if __name__ == '__main__':
             # ミニバッチデータを GPU へ転送
             pre_image = inputs["aerial_image_tsr"].to(device)
             after_image = inputs["map_image_tsr"].to(device)
+            #save_image( pre_image, "pre_image.png" )
+            #save_image( after_image, "after_image.png" )
 
             #====================================================
             # 識別器 D の fitting 処理
@@ -416,14 +418,15 @@ if __name__ == '__main__':
         # 出力画像の生成＆保存
         model_G.eval()
         for test_inputs in dloader_test :
-            fix_pre_image = test_inputs["aerial_image_tsr"].to(device)     # テスト用データの最初の画像を使用
+            fix_pre_image = test_inputs["aerial_image_tsr"].to(device)
+            fix_after_image = test_inputs["map_image_tsr"].to(device)
+            save_image( fix_pre_image, os.path.join(args.results_dir, args.exper_name) + "/fix_pre_image.png" )
+            save_image( fix_after_image, os.path.join(args.results_dir, args.exper_name) + "/fix_after_image.png" )
             break
 
-        save_image( fix_pre_image, "fix_pre_image.png" )
-        #fix_pre_image = fix_pre_image.unsqueeze_(0)                # バッチの次元追加
-        #print( "fix_pre_image.shape", fix_pre_image.shape )
         with torch.no_grad():
-            G_z = model_G( fix_pre_image )
+            #G_z = model_G( fix_pre_image )
+            G_z = model_G( fix_after_image )
 
         save_image( tensor = G_z[0], filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}_batch0.png".format( epoch ) )
         save_image( tensor = G_z, filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}_batchAll.png".format( epoch ) )

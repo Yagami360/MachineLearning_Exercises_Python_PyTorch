@@ -22,7 +22,7 @@ DCGAN の PyTorch での実装。
 
 - 学習処理
   ```sh
-  # （例１） train DCGAN for MNIST datset using GPU0, using networks only for mnist
+  # （例１） train DCGAN for MNIST datset using GPU0, using MLP networks only for mnist
   $ python train.py \
     --exper_name DCGAN_MNISTNet_train \
     --dataset mnist --image_size 64 \
@@ -31,7 +31,7 @@ DCGAN の PyTorch での実装。
   ```
 
   ```sh
-  # （例２） train DCGAN for MNIST datset using GPU0, using networks for general purpose
+  # （例２） train DCGAN for MNIST datset using GPU0, using DCGAN networks
   $ python train.py \
     --exper_name DCGAN_train \
     --dataset mnist --image_size 64 \
@@ -65,31 +65,21 @@ DCGAN の PyTorch での実装。
 
 ## ■ コードの実行結果
 
-<!--
+### ◎ 生成器からの生成画像
 
-|パラメータ名|値（実行条件１）|値（実行条件２）|
-|---|---|---|
-|実験名：<br>`args.exper_name`|""|""|
-|学習用データセット：`args.dataset`|"mnist"|"cifar-10"|
-|使用デバイス：<br>`args.device`|"gpu"|←|
-|シード値|`random.seed(8)`<br>`np.random.seed(8)`<br>`torch.manual_seed(8)`|←|
-|エポック数：<br>`args.n_epoches`|10|50|
-|バッチサイズ：<br>`args.batch_size`|64|64|
-|生成器に入力するノイズ z の次数：<br>`args.n_input_noize_z`|100|100|
-|入力画像のサイズ：<br>`args.image_size`|64|64|
-|入力画像のチャンネル数：<br>`args.n_channels`|1|3|
-|特徴マップの枚数：<br>`args.n_fmaps`|64|64|
-|最適化アルゴリズム|Adam|←|
-|学習率：<br>`args.lr`|0.00005|←|
-|クリティックの更新回数：<br>`args.n_critic`|5|←|
-|重みクリッピングの下限値：<br>`args.w_clamp_lower`|-0.01|←|
-|重みクリッピングの上限値：<br>`args.w_clamp_upper`|0.01|←|
+#### ☆ MLP ネットワーク（実行条件１）
+- Epochs :30<br>
+  ![fake_image_epoches30_iters1857024_batchAll](https://user-images.githubusercontent.com/25688193/71316862-d6885f80-24ba-11ea-924f-dba470003bc8.png)<br>
 
--->
+#### ☆ DCGAN ネットワークを使用（実行条件２）
+- Epoches : 50<br>
+  ![fake_image_epoches50_batchAll](https://user-images.githubusercontent.com/25688193/71516740-fde19100-28ed-11ea-8bfc-8f1a0fb6e783.png)<br>
+- Epoches : 100<br>
+  ![fake_image_epoches99_batchAll](https://user-images.githubusercontent.com/25688193/71537339-fb1e8480-295d-11ea-9b19-2cd25da58d30.png)<br>
 
 ### ◎ 損失関数のグラフ
 
-#### ☆ MNIST 専用ネットワーク（実行条件１）
+#### ☆ MLP ネットワーク（実行条件１）
 - 識別器側<br>
   ![image](https://user-images.githubusercontent.com/25688193/71316820-3b8f8580-24ba-11ea-9153-962dea17b36c.png)<br>
 - 生成器側<br>
@@ -97,29 +87,16 @@ DCGAN の PyTorch での実装。
   - 学習用データセット（緑）
   - テスト用データセット（灰色）
 
-#### ☆ 生成器・識別器として、一般的なネットワークを使用（実行条件２）
+#### ☆ DCGAN ネットワークを使用（実行条件２）
 - 識別器側<br>
-  <br>
+  ![image](https://user-images.githubusercontent.com/25688193/71537419-2786d080-295f-11ea-9fed-756536f8f19c.png)
+<br>
 - 生成器側<br>
-  <br>
-  - 学習用データセット（）
-  - テスト用データセット（）
-
-### ◎ 生成器からの生成画像
-
-#### ☆ MNIST 専用ネットワーク（実行条件１）
-- Epochs :30<br>
-  ![fake_image_epoches30_iters1857024_batchAll](https://user-images.githubusercontent.com/25688193/71316862-d6885f80-24ba-11ea-924f-dba470003bc8.png)<br>
-
-#### ☆ 生成器・識別器として、一般的なネットワークを使用（実行条件２）
-- Epoches : 50<br>
-  ![fake_image_epoches50_batchAll](https://user-images.githubusercontent.com/25688193/71516740-fde19100-28ed-11ea-8bfc-8f1a0fb6e783.png)<br>
-- Epoches : 100<br>
-  <br>
+  ![image](https://user-images.githubusercontent.com/25688193/71537425-45eccc00-295f-11ea-85ae-687f75430d48.png)<br>
 
 ### ◎ 各種オプション引数の設定値
 
-#### ☆ MNIST 専用ネットワーク（実行条件１）
+#### ☆ MLP ネットワーク（実行条件１）
 
 ```python
 ----------------------------------------------
@@ -157,7 +134,7 @@ GPU名 : Tesla M60
 torch.cuda.current_device() = 0
 ```
 
-#### ☆ 生成器・識別器として、一般的なネットワークを使用（実行条件２）
+#### ☆ DCGAN ネットワークを使用（実行条件２）
 
 ```python
 ----------------------------------------------

@@ -63,15 +63,37 @@ RSGAN, RaSGAN, RaLSGAN の PyTorch での実装。
 
 ## ■ コードの実行結果
 
+### ◎ 生成器からの生成画像
+
+#### ☆ RSGAN
+- Epochs :50<br>
+  ![fake_image_epoches50_batchAll](https://user-images.githubusercontent.com/25688193/71537438-851b1d00-295f-11ea-9fbe-9c3f2cd46588.png)<br>    
+
+- Epochs :100<br>
+  <br>
+
+
+#### ☆ RaSGAN
+- Epochs :50<br>
+  <br>
+
+- Epochs :100<br>
+  <br>
+
+#### ☆ RaLSGAN
+- Epochs :50<br>
+  <br>
+
+- Epochs :100<br>
+  <br>
+
 ### ◎ 損失関数のグラフ
 
 #### ☆ RSGAN
 - 識別器側<br>
-  <br>
+  ![image](https://user-images.githubusercontent.com/25688193/71537470-125e7180-2960-11ea-97df-145f407fb8fb.png)<br>
 - 生成器側<br>
-  <br>
-  - 学習データセットの loss 値（）
-  - テスト用データセットの loss 値（）
+  ![image](https://user-images.githubusercontent.com/25688193/71537462-fb1f8400-295f-11ea-87ce-60155b5c8ca2.png)<br>
    
 #### ☆ RaSGAN
 - 識別器側<br>
@@ -89,18 +111,6 @@ RSGAN, RaSGAN, RaLSGAN の PyTorch での実装。
   <br>
   - 学習データセットの loss 値（）
   - テスト用データセットの loss 値（）
-
-### ◎ 生成器からの生成画像
-
-#### ☆ RSGAN
-- Epochs :80<br>
-  <br>    
-- Epoches : 1 ~ 80<br>
-  <br>
-
-#### ☆ RaSGAN
-- Epochs :80<br>
-  <br>
 
 
 ### ◎ 各種オプション引数の設定値
@@ -120,7 +130,7 @@ results_dir: results
 save_checkpoints_dir: checkpoints
 load_checkpoints_dir: 
 tensorboard_dir: ../tensorboard
-n_test: 5000
+n_test: 10000
 n_epoches: 100
 batch_size: 64
 batch_size_test: 256
@@ -159,7 +169,7 @@ results_dir: results
 save_checkpoints_dir: checkpoints
 load_checkpoints_dir: 
 tensorboard_dir: ../tensorboard
-n_test: 5000
+n_test: 10000
 n_epoches: 100
 batch_size: 64
 batch_size_test: 256
@@ -198,7 +208,7 @@ results_dir: results
 save_checkpoints_dir: checkpoints
 load_checkpoints_dir: 
 tensorboard_dir: ../tensorboard
-n_test: 1000
+n_test: 10000
 n_epoches: 100
 batch_size: 64
 batch_size_test: 256

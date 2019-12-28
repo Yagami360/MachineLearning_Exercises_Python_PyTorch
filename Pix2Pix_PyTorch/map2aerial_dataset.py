@@ -54,9 +54,7 @@ class Map2AerialDataset(data.Dataset):
         # 学習用データには、左側に衛星画像、右側に地図画像が入っているので、chunk で切り分ける
         # torch.chunk() : 渡したTensorを指定した個数に切り分ける。
         aerial_image_tsr, map_image_tsr = torch.chunk( raw_image_tsr, chunks=2, dim=2 )
-        #save_image( aerial_image_tsr, "aerial_image_tsr.png" )
-        #save_image( map_image_tsr, "map_image_tsr.png" )
-
+        
         results_dict = {
             "image_name" : image_name,
             "raw_image_tsr" : raw_image_tsr,

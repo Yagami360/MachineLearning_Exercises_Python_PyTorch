@@ -18,7 +18,7 @@ NETWORK_D_TYPE=vanilla
 # RaSGAN
 #-------------------
 mkdir -p ${PWD}/_logs
-EXEP_NAME=RaSGAN_train_D_${NETWORK_D_TYPE}_Epoch${N_EPOCHES}_191227
+EXEP_NAME=RaSGAN_train_D_${NETWORK_D_TYPE}_Epoch${N_EPOCHES}_191228
 TENSOR_BOARD_DIR=../tensorboard
 if [ -d "${TENSOR_BOARD_DIR}/${EXEP_NAME}" ] ; then
     rm -r ${TENSOR_BOARD_DIR}/${EXEP_NAME}
@@ -43,7 +43,7 @@ python train.py \
     --dataset mnist --image_size 64  \
     --n_epoches ${N_EPOCHES} --batch_size ${BATCH_SIZE} --batch_size_test ${BATCH_SIZE_TEST} \
     --lr 0.0001 --beta1 0.5 --beta2 0.999 \
-    --n_test 5000 \
+    --n_test 10000 \
     --n_display_step ${N_DISPLAY_STEP} --n_display_test_step ${N_DISPLAY_TEST_STEP} \
     --gan_type RaSGAN \
     --networkD_type ${NETWORK_D_TYPE} \

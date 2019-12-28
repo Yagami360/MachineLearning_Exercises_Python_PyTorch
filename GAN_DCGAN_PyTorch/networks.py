@@ -81,8 +81,8 @@ class Generator( nn.Module ):
 
 class MNISTGenerator( nn.Module ):
     """
-    DCGAN の生成器 G [Generator] 側のネットワーク構成を記述したモデル。
-    ・MNIST のデータ構造に最適化されている。
+    生成器 G [Generator] 側のネットワーク構成を記述したモデル。
+    ・MNIST のデータ構造に最適化された MLP ネットワーク。
     """
     def __init__(
         self,
@@ -273,8 +273,8 @@ class Discriminator( nn.Module ):
 
 class MNISTDiscriminator( nn.Module ):
     """
-    DCGAN の識別器 D [Generator] 側のネットワーク構成を記述したモデル。
-    ・MNIST のデータ構造に最適化されている。
+    識別器 D [Generator] 側のネットワーク構成を記述したモデル。
+    ・MNIST のデータ構造に最適化された MLP ネットワーク。
     """
     def __init__(
        self,

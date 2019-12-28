@@ -2,8 +2,7 @@
 WGAN の PyTorch での実装。
 
 - 参考コード
-  - [Github/eriklindernoren/PyTorch-GAN](https://github.com/eriklindernoren/PyTorch-GAN/blob/master/implementations/wgan/wgan.py)
-
+  - [martinarjovsky/WassersteinGAN](https://github.com/martinarjovsky/WassersteinGAN)
 
 ## ■ 項目 [Contents]
 1. [動作環境](#動作環境)

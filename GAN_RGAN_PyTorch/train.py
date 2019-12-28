@@ -466,7 +466,7 @@ if __name__ == '__main__':
             if( step == 0 or ( step % args.n_display_step == 0 ) ):
                 board_train.add_scalar('Generater/loss_G', loss_G.item(), iterations)
                 board_train.add_scalar('Discriminator/loss_D', loss_D.item(), iterations)
-                board_add_image(board_train, 'fake image', G_z, iterations+1)
+                board_add_image(board_train, 'fake image', G_z, iterations)
                 print( "epoch={}, iters={}, loss_G={:.5f}, loss_D={:.5f}".format(epoch, iterations, loss_G, loss_D) )
 
             #====================================================
@@ -475,9 +475,6 @@ if __name__ == '__main__':
             if( step == 0 or ( step % args.n_display_test_step == 0 ) ):
                 model_G.eval()
                 model_D.eval()
-
-                # 入力ノイズは固定
-                #input_noize_z = torch.randn( size = (args.batch_size_test, args.n_input_noize_z,1,1) ).to( device )
 
                 n_test_loop = 0
                 test_iterations = 0

@@ -41,7 +41,9 @@ if __name__ == '__main__':
     parser.add_argument('--n_epoches', type=int, default=100, help="エポック数")
     parser.add_argument('--batch_size', type=int, default=64, help="バッチサイズ")
     parser.add_argument('--batch_size_test', type=int, default=4, help="test データのバッチサイズ")
-    parser.add_argument('--lr', type=float, default=0.0001, help="学習率")
+    parser.add_argument('--optimizer', choices=['RMSprop','Adam' ], default="RMSprop", help="最適化アルゴリズムの種類")
+    parser.add_argument('--lr_G', type=float, default=0.00005, help="学習率")
+    parser.add_argument('--lr_D', type=float, default=0.00005, help="学習率")
     parser.add_argument('--beta1', type=float, default=0.5, help="学習率の減衰率")
     parser.add_argument('--beta2', type=float, default=0.999, help="学習率の減衰率")
     parser.add_argument('--image_size', type=int, default=64, help="入力画像のサイズ（pixel単位）")
@@ -237,15 +239,26 @@ if __name__ == '__main__':
     #======================================================================
     # optimizer の設定
     #======================================================================
-    optimizer_G = optim.Adam(
-        params = model_G.parameters(),
-        lr = args.lr, betas = (args.beta1,args.beta2)
-    )
-    
-    optimizer_D = optim.Adam(
-        params = model_D.parameters(),
-        lr = args.lr, betas = (args.beta1,args.beta2)
-    )
+    if( args.optimizer == "RMSprop" ):
+        optimizer_G = optim.RMSprop(
+            params = model_G.parameters(), lr = args.lr_G
+        )
+        
+        optimizer_D = optim.RMSprop(
+            params = model_D.parameters(), lr = args.lr_D
+        )
+    elif( args.optimizer == "Adam" ):
+        optimizer_G = optim.Adam(
+            params = model_G.parameters(),
+            lr = args.lr_G, betas = (args.beta1,args.beta2)
+        )
+        
+        optimizer_D = optim.Adam(
+            params = model_D.parameters(),
+            lr = args.lr_D, betas = (args.beta1,args.beta2)
+        )
+    else:
+        raise NotImplementedError('optimizer %s not implemented' % args.optimizer)
 
     #======================================================================
     # loss 関数の設定
@@ -419,9 +432,6 @@ if __name__ == '__main__':
                 model_G.eval()
                 model_D.eval()
 
-                # 入力ノイズは固定
-                input_noize_z = torch.rand( size = (args.batch_size_test, args.n_input_noize_z,1,1) ).to( device )
-
                 loss_C_real_total = 0
                 loss_C_fake_total = 0
                 loss_C_total = 0
@@ -493,7 +503,6 @@ if __name__ == '__main__':
         save_image( tensor = G_z[0], filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}_batch0.png".format( epoch ) )
         save_image( tensor = G_z, filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}_batchAll.png".format( epoch ) )
 
-        # [batch_size, n_channels, height, width] → [height, width, n_channels]
         fake_images_historys.append(G_z[0].transpose(0,1).transpose(1,2).cpu().clone().numpy())
         save_image_historys_gif( fake_images_historys, os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}.gif".format( epoch ) )        
 

@@ -6,7 +6,7 @@ set -e
 
 N_EPOCHES=100
 BATCH_SIZE=64
-BATCH_SIZE_TEST=64
+BATCH_SIZE_TEST=256
 N_DISPLAY_STEP=10
 N_DISPLAY_TEST_STEP=100
 N_SAVE_STEP=10000
@@ -40,7 +40,7 @@ python train.py \
     --tensorboard_dir ${TENSOR_BOARD_DIR} \
     --save_checkpoints_dir checkpoints --n_save_step ${N_SAVE_STEP} \
     --dataset mnist --image_size 64 \
-    --n_test 5000 \
+    --n_test 10000 \
     --n_epoches ${N_EPOCHES} --batch_size ${BATCH_SIZE} --batch_size_test ${BATCH_SIZE_TEST} \
     --lr 0.0001 --beta1 0.5 --beta2 0.999 \
     --n_display_step ${N_DISPLAY_STEP} --n_display_test_step ${N_DISPLAY_TEST_STEP} \
@@ -48,4 +48,4 @@ python train.py \
     --networkD_type ${NETWORK_D_TYPE} \
     --debug > _logs/${EXEP_NAME}.out
 
-sudo poweroff
+#sudo poweroff
