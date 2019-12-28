@@ -18,7 +18,7 @@ from torchvision.utils import save_image
 from tensorboardX import SummaryWriter
 
 # 自作クラス
-from networks import Generator, Discriminator, PatchGANDiscriminator
+from networks import Generator, Discriminator, NonBatchNormDiscriminator, PatchGANDiscriminator
 from losses import calc_gradient_penalty
 from utils import save_checkpoint, load_checkpoint
 from utils import board_add_image, board_add_images
@@ -42,13 +42,13 @@ if __name__ == '__main__':
     parser.add_argument('--n_epoches', type=int, default=100, help="エポック数")
     parser.add_argument('--batch_size', type=int, default=64, help="バッチサイズ")
     parser.add_argument('--batch_size_test', type=int, default=4, help="test データのバッチサイズ")
-    parser.add_argument('--lr', type=float, default=0.0002, help="学習率")
+    parser.add_argument('--lr', type=float, default=0.0001, help="学習率")
     parser.add_argument('--beta1', type=float, default=0.5, help="学習率の減衰率")
     parser.add_argument('--beta2', type=float, default=0.999, help="学習率の減衰率")
     parser.add_argument('--image_size', type=int, default=64, help="入力画像のサイズ（pixel単位）")
     parser.add_argument('--n_fmaps', type=int, default=64, help="特徴マップの枚数")
     parser.add_argument('--n_input_noize_z', type=int, default=100, help="生成器に入力するノイズ z の次数")
-    parser.add_argument('--networkD_type', choices=['vanilla','PatchGAN' ], default="vanilla", help="GAN の識別器の種類")
+    parser.add_argument('--networkD_type', choices=['vanilla','NonBatchNorm', 'PatchGAN' ], default="NonBatchNorm", help="GAN の識別器の種類")
     parser.add_argument('--n_critic', type=int, default=5, help="クリティックの更新回数")
     parser.add_argument('--lambda_wgangp', type=float, default=10.0, help="WAGAN-GP の勾配ペナルティー係数")
     parser.add_argument('--n_display_step', type=int, default=100, help="tensorboard への表示間隔")
@@ -203,7 +203,12 @@ if __name__ == '__main__':
 
     # Discriminator
     if( args.dataset == "mnist" ):
-        if( args.networkD_type == "PatchGAN" ):
+        if( args.networkD_type == "NonBatchNorm" ):
+            model_D = NonBatchNormDiscriminator( 
+                n_channels = 1, 
+                n_fmaps = args.n_fmaps
+            ).to( device )
+        elif( args.networkD_type == "PatchGAN" ):
             model_D = PatchGANDiscriminator( 
                 n_in_channels = 1,
                 n_fmaps = args.n_fmaps
@@ -214,7 +219,12 @@ if __name__ == '__main__':
                 n_fmaps = args.n_fmaps
             ).to( device )
     else:
-        if( args.networkD_type == "PatchGAN" ):
+        if( args.networkD_type == "NonBatchNorm" ):
+            model_D = NonBatchNormDiscriminator( 
+                n_channels = 3, 
+                n_fmaps = args.n_fmaps
+            ).to( device )
+        elif( args.networkD_type == "PatchGAN" ):
             model_D = PatchGANDiscriminator( 
                 n_in_channels = 3,
                 n_fmaps = args.n_fmaps
@@ -407,7 +417,7 @@ if __name__ == '__main__':
                 board_train.add_scalar('Discriminator/loss_D_fake', loss_C_fake.item(), iterations)
                 board_train.add_scalar('Discriminator/gradient_penalty', gradient_penalty_loss.item(), iterations)
 
-                board_add_image(board_train, 'fake image', G_z, iterations+1)
+                board_add_image(board_train, 'fake image', G_z, iterations)
                 print( "epoch={}, iters={}, loss_G={:.5f}, loss_C={:.5f}".format(epoch, iterations, loss_G, loss_C) )
 
             #====================================================
@@ -469,7 +479,7 @@ if __name__ == '__main__':
                 board_test.add_scalar('Discriminator/loss_D_real', loss_C_real_total/n_test_loop, iterations)
                 board_test.add_scalar('Discriminator/loss_D_fake', loss_C_fake_total/n_test_loop, iterations)
                 board_test.add_scalar('Discriminator/gradient_penalty', gradient_penalty_loss_total/n_test_loop, iterations)
-                board_add_image(board_test, 'fake image', G_z, iterations+1)
+                board_add_image(board_test, 'fake_image_test', G_z, iterations)
 
             #====================================================
             # モデルの保存

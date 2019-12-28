@@ -18,7 +18,7 @@ from torchvision.utils import save_image
 from tensorboardX import SummaryWriter
 
 # 自作クラス
-from networks import Generator, Discriminator, PatchGANDiscriminator
+from networks import Generator, Discriminator, NonBatchNormDiscriminator, PatchGANDiscriminator
 from utils import save_checkpoint, load_checkpoint
 from utils import board_add_image, board_add_images
 from utils import save_image_historys_gif
@@ -49,7 +49,7 @@ if __name__ == '__main__':
     parser.add_argument('--image_size', type=int, default=64, help="入力画像のサイズ（pixel単位）")
     parser.add_argument('--n_fmaps', type=int, default=64, help="特徴マップの枚数")
     parser.add_argument('--n_input_noize_z', type=int, default=100, help="生成器に入力するノイズ z の次数")
-    parser.add_argument('--networkD_type', choices=['vanilla','PatchGAN' ], default="vanilla", help="GAN の識別器の種類")
+    parser.add_argument('--networkD_type', choices=['vanilla','NonBatchNorm', 'PatchGAN' ], default="NonBatchNorm", help="GAN の識別器の種類")
     parser.add_argument('--n_critic', type=int, default=5, help="クリティックの更新回数")
     parser.add_argument('--w_clamp_upper', type=float, default=0.01, help="重みクリッピングの下限値")
     parser.add_argument('--w_clamp_lower', type=float, default=-0.01, help="重みクリッピングの下限値")
@@ -205,7 +205,12 @@ if __name__ == '__main__':
 
     # Discriminator
     if( args.dataset == "mnist" ):
-        if( args.networkD_type == "PatchGAN" ):
+        if( args.networkD_type == "NonBatchNorm" ):
+            model_D = NonBatchNormDiscriminator( 
+                n_channels = 1, 
+                n_fmaps = args.n_fmaps
+            ).to( device )
+        elif( args.networkD_type == "PatchGAN" ):
             model_D = PatchGANDiscriminator( 
                 n_in_channels = 1,
                 n_fmaps = args.n_fmaps
@@ -216,7 +221,12 @@ if __name__ == '__main__':
                 n_fmaps = args.n_fmaps
             ).to( device )
     else:
-        if( args.networkD_type == "PatchGAN" ):
+        if( args.networkD_type == "NonBatchNorm" ):
+            model_D = NonBatchNormDiscriminator( 
+                n_channels = 3, 
+                n_fmaps = args.n_fmaps
+            ).to( device )
+        elif( args.networkD_type == "PatchGAN" ):
             model_D = PatchGANDiscriminator( 
                 n_in_channels = 3,
                 n_fmaps = args.n_fmaps
@@ -325,7 +335,7 @@ if __name__ == '__main__':
                 #----------------------------------------------------
                 # 生成器 G に入力するノイズ z
                 # Generatorの更新の前にノイズを新しく生成しなおす必要があり。
-                input_noize_z = torch.rand( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
+                input_noize_z = torch.randn( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
 
                 # E[C(x)] : 本物画像 x = image を入力したときのクリティックの出力 （平均化処理済み）
                 C_x = model_D( images )
@@ -385,7 +395,7 @@ if __name__ == '__main__':
             #----------------------------------------------------
             # 生成器 G に入力するノイズ z
             # Generatorの更新の前にノイズを新しく生成しなおす必要があり。
-            input_noize_z = torch.rand( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
+            input_noize_z = torch.randn( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
 
             # G(z) : 生成器から出力される偽物画像
             G_z = model_G( input_noize_z )

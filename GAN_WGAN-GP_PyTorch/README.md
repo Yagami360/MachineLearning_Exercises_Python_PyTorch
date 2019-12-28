@@ -1,6 +1,8 @@
 # GAN_WGAN-GP_PyTorch （実装中...）
 WGAN-GPの PyTorch での実装。（実装中...）
 
+- 参考コード
+  - [caogang/wgan-gp](https://github.com/caogang/wgan-gp/blob/master/gan_mnist.py)
 
 ## ■ 項目 [Contents]
 1. [動作環境](#動作環境)
