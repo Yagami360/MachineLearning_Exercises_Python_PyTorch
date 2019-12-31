@@ -5,12 +5,14 @@ from datetime import datetime
 import numpy as np
 from tqdm import tqdm
 from PIL import Image
+from math import ceil
 
 # PyTorch
 import torch
 from torch.utils.data import TensorDataset, DataLoader
 import torch.optim as optim
 import torch.nn as nn
+import torch.nn.functional as F
 
 import torchvision      # 画像処理関連
 import torchvision.transforms as transforms
@@ -18,38 +20,32 @@ from torchvision.utils import save_image
 from tensorboardX import SummaryWriter
 
 # 自作クラス
-from networks import CGANGenerator, CGANDiscriminator, CGANPatchGANDiscriminator
+from networks import ProgressiveGenerator, ProgressiveDiscriminator
 from utils import save_checkpoint, load_checkpoint
 from utils import board_add_image, board_add_images
 from utils import save_image_historys_gif
 
 if __name__ == '__main__':
-    """
-    cGAN による学習処理
-    """
     parser = argparse.ArgumentParser()
-    parser.add_argument("--exper_name", default="CGAN_train", help="実験名")
+    parser.add_argument("--exper_name", default="PGGAN_train", help="実験名")
     parser.add_argument('--device', choices=['cpu', 'gpu'], default="gpu", help="使用デバイス (CPU or GPU)")
     #parser.add_argument('--gpu_ids', type=str, default='0', help='gpu ids: e.g. 0  0,1,2, 0,2. use -1 for CPU') 
-    parser.add_argument('--dataset', choices=['mnist', 'cifar-10'], default="mnist", help="データセットの種類")
-    parser.add_argument('--n_classes', type=int, default=10, help="クラスラベルの数（MNIST:10, CIFAR-10:10）")
+    parser.add_argument('--dataset', choices=['mnist', 'cifar-10'], default="mnist", help="データセットの種類（MNIST or CIFAR-10）")
     parser.add_argument('--dataset_dir', type=str, default="dataset", help="データセットのディレクトリ")
     parser.add_argument('--results_dir', type=str, default="results", help="生成画像の出力ディレクトリ")
     parser.add_argument('--save_checkpoints_dir', type=str, default="checkpoints", help="モデルの保存ディレクトリ")
     parser.add_argument('--load_checkpoints_dir', type=str, default="", help="モデルの読み込みディレクトリ")
     parser.add_argument('--tensorboard_dir', type=str, default="tensorboard", help="TensorBoard のディレクトリ")
     parser.add_argument('--n_test', type=int, default=10000, help="test dataset の最大数")
-    parser.add_argument('--n_epoches', type=int, default=30, help="エポック数")
+    parser.add_argument('--n_epoches', type=int, default=50, help="エポック数")
     parser.add_argument('--batch_size', type=int, default=64, help="バッチサイズ")
     parser.add_argument('--batch_size_test', type=int, default=4, help="test データのバッチサイズ")
-    parser.add_argument('--lr', type=float, default=0.0001, help="学習率")
+    parser.add_argument('--lr', type=float, default=0.001, help="学習率")
     parser.add_argument('--beta1', type=float, default=0.5, help="学習率の減衰率")
     parser.add_argument('--beta2', type=float, default=0.999, help="学習率の減衰率")
-    parser.add_argument('--image_size', type=int, default=64, help="入力画像のサイズ（pixel単位）")
-    parser.add_argument('--n_fmaps', type=int, default=64, help="特徴マップの枚数")
-    parser.add_argument('--n_input_noize_z', type=int, default=100, help="生成器に入力するノイズ z の次数")
-    parser.add_argument('--gan_type', choices=['vanilla','LSGAN'], default="vanilla", help="GAN の種類")
-    parser.add_argument('--networkD_type', choices=['vanilla','PatchGAN' ], default="vanilla", help="GAN の識別器の種類")
+    parser.add_argument("--init_image_size", type = int, default = 4 )
+    parser.add_argument("--final_image_size", type = int, default = 32 )
+    parser.add_argument('--n_input_noize_z', type=int, default=128, help="生成器に入力するノイズ z の次数")
     parser.add_argument('--n_display_step', type=int, default=50, help="tensorboard への表示間隔")
     parser.add_argument('--n_display_test_step', type=int, default=500, help="test データの tensorboard への表示間隔")
     parser.add_argument("--n_save_step", type=int, default=5000, help="モデルのチェックポイントの保存間隔")
@@ -117,7 +113,7 @@ if __name__ == '__main__':
         # データをロードした後に行う各種前処理の関数を構成を指定する。
         transform = transforms.Compose(
             [
-                transforms.Resize(args.image_size, interpolation=Image.LANCZOS ),
+                transforms.Resize(args.final_image_size, interpolation=Image.LANCZOS ),
                 transforms.ToTensor(),   # Tensor に変換]
                 transforms.Normalize((0.5,), (0.5,)),   # 1 channel 分
             ]
@@ -140,10 +136,23 @@ if __name__ == '__main__':
             download = True
         )
 
+        # TensorDataset → DataLoader への変換
+        dloader_train = DataLoader(
+            dataset = ds_train,
+            batch_size = args.batch_size,
+            shuffle = True
+        )
+            
+        dloader_test = DataLoader(
+            dataset = ds_test,
+            batch_size = args.batch_size_test,
+            shuffle = False
+        )
+
     elif( args.dataset == "cifar-10" ):
         transform = transforms.Compose(
             [
-                transforms.Resize(args.image_size, interpolation=Image.LANCZOS ),
+                transforms.Resize(args.final_image_size, interpolation=Image.LANCZOS ),
                 transforms.ToTensor(),   # Tensor に変換
                 transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)),
             ]
@@ -165,21 +174,20 @@ if __name__ == '__main__':
             download = True
         )
 
+        # TensorDataset → DataLoader への変換
+        dloader_train = DataLoader(
+            dataset = ds_train,
+            batch_size = args.batch_size,
+            shuffle = True
+        )
+            
+        dloader_test = DataLoader(
+            dataset = ds_test,
+            batch_size = args.batch_size_test,
+            shuffle = False
+        )
     else:
         raise NotImplementedError('dataset %s not implemented' % args.dataset)
-
-    # TensorDataset → DataLoader への変換
-    dloader_train = DataLoader(
-        dataset = ds_train,
-        batch_size = args.batch_size,
-        shuffle = True
-    )
-        
-    dloader_test = DataLoader(
-        dataset = ds_test,
-        batch_size = args.batch_size_test,
-        shuffle = False
-    )
 
     if( args.debug ):
         print( "ds_train :\n", ds_train )
@@ -190,41 +198,35 @@ if __name__ == '__main__':
     #======================================================================
     # Genrator
     if( args.dataset == "mnist" ):
-        model_G = CGANGenerator( 
+        model_G = ProgressiveGenerator(
+            init_image_size = args.init_image_size,
+            final_image_size = args.final_image_size,
             n_input_noize_z = args.n_input_noize_z,
-            n_channels = 1,         # グレースケールのチャンネル数 1
-            n_fmaps = args.n_fmaps
+            n_rgb = 1,
         ).to( device )
     else:
-        model_G = CGANGenerator( 
+        model_G = ProgressiveGenerator(
+            init_image_size = args.init_image_size,
+            final_image_size = args.final_image_size,
             n_input_noize_z = args.n_input_noize_z,
-            n_channels = 3,         # RGBのチャンネル数 3
-            n_fmaps = args.n_fmaps
+            n_rgb = 3,
         ).to( device )
 
     # Discriminator
     if( args.dataset == "mnist" ):
-        if( args.networkD_type == "PatchGAN" ):
-            model_D = CGANPatchGANDiscriminator( 
-                n_in_channels = 1,
-                n_fmaps = args.n_fmaps
-            ).to( device )
-        else:
-            model_D = CGANDiscriminator( 
-                n_channels = 1, 
-                n_fmaps = args.n_fmaps
-            ).to( device )
+        model_D = ProgressiveDiscriminator(
+            init_image_size = args.init_image_size,
+            final_image_size = args.final_image_size,
+            n_fmaps = args.n_input_noize_z,
+            n_rgb = 1,
+        ).to( device )
     else:
-        if( args.networkD_type == "PatchGAN" ):
-            model_D = CGANPatchGANDiscriminator( 
-                n_in_channels = 3,
-                n_fmaps = args.n_fmaps
-            ).to( device )
-        else:
-            model_D = CGANDiscriminator( 
-                n_channels = 3, 
-                n_fmaps = args.n_fmaps
-            ).to( device )
+        model_D = ProgressiveDiscriminator( 
+            init_image_size = args.init_image_size,
+            final_image_size = args.final_image_size,
+            n_fmaps = args.n_input_noize_z,
+            n_rgb = 3,
+        ).to( device )
         
     if( args.debug ):
         print( "model_G :\n", model_G )
@@ -234,7 +236,7 @@ if __name__ == '__main__':
     if not args.load_checkpoints_dir == '' and os.path.exists(args.load_checkpoints_dir):
         init_step = load_checkpoint(model_G, device, os.path.join(args.load_checkpoints_dir, "G", "G_final.pth") )
         init_step = load_checkpoint(model_D, device, os.path.join(args.load_checkpoints_dir, "D", "D_final.pth") )
-        
+
     #======================================================================
     # optimizer の設定
     #======================================================================
@@ -251,12 +253,9 @@ if __name__ == '__main__':
     #======================================================================
     # loss 関数の設定
     #======================================================================
-    if( args.gan_type == "LSGAN" ):
-        loss_fn = nn.MSELoss()
-    else:
-        #loss_fn = nn.BCELoss()             # when use sigmoid in Discriminator
-        loss_fn = nn.BCEWithLogitsLoss()    # when not use sigmoid in Discriminator
-    
+    loss_fn = nn.BCELoss()             # when use sigmoid in Discriminator
+    #loss_fn = nn.BCEWithLogitsLoss()    # when not use sigmoid in Discriminator
+
     #======================================================================
     # モデルの学習処理
     #======================================================================
@@ -267,19 +266,12 @@ if __name__ == '__main__':
     if( args.debug ):
         print( "input_noize_z.shape :", input_noize_z.shape )
 
-    # クラスラベル
-    # one-hot encoding 用の Tensor
-    # shape = [n_classes, n_clasees]
-    # [1,0,0,...,0]
-    # [0,1,0,...,0]
-    # ...
-    # [0,0,0,...,0]
-    eye_tsr = torch.eye( args.n_classes ).to( device )
-    if( args.debug ):
-        print( "eye_tsr.shape :", eye_tsr.shape )
-
     # 学習中の生成画像の履歴
     fake_images_historys = []
+
+    #
+    init_progress = float(np.log2(args.init_image_size)) - 2
+    final_progress = float(np.log2(args.final_image_size)) -2
 
     print("Starting Training Loop...")
     iterations = 0      # 学習処理のイテレーション回数
@@ -300,17 +292,18 @@ if __name__ == '__main__':
 
             iterations += args.batch_size
 
+            x = (epoch + step / len(dloader_train))
+            progress = min(max(int(x / 2), x - ceil(x / 2), 0), final_progress)
+
             # ミニバッチデータを GPU へ転送
             images = images.to( device )
 
-            # 識別器に入力するクラスラベルの画像 y（＝本物のラベル画像情報）
-            y_real_label = targets.to( device )
-            y_real_one_hot = eye_tsr[y_real_label].view( -1, args.n_classes, 1, 1 ).to( device )
-            y_real_image_label = y_real_one_hot.expand( args.batch_size, args.n_classes, images.shape[2], images.shape[3] ).to( device )
-            if( args.debug and n_print > 0 ):
-                print( "y_real_label.shape :", y_real_label.shape )
-                print( "y_real_one_hot.shape :", y_real_one_hot.shape )
-                print( "y_real_image_label.shape :", y_real_image_label.shape )
+            # 元の画像ピクセル数を、Training Progresses 用にダウンサンプリング
+            # progress = 0.0 ⇒ 32 × 32 → 4 × 4, 
+            # 0.00 < progress < 1.00 ⇒ 32 × 32 → 8 × 8,
+            # 1.00 < progress < 2.00 ⇒ 32 × 32 → 16 × 16,
+            # ...
+            images = F.adaptive_avg_pool2d(images, 4 * 2 ** int(ceil(progress)) )
 
             #====================================================
             # 識別器 D の fitting 処理
@@ -323,32 +316,22 @@ if __name__ == '__main__':
             # 学習用データをモデルに流し込む
             # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
             #----------------------------------------------------
-            # 入力ノイズを再生成
+            # 入力ノイズを再生成 
             input_noize_z = torch.randn( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
 
-            # 生成器に入力するクラスラベル y（＝偽のラベル情報）
-            # 識別器と生成器の更新の前にノイズを新しく生成しなおす。
-            y_fake_label = torch.randint( args.n_classes, (args.batch_size,), dtype = torch.long ).to( device )
-            y_fake_one_hot = eye_tsr[y_fake_label].view( -1, args.n_classes, 1, 1 ).to( device )
-            y_fake_image_label = y_fake_one_hot.expand( args.batch_size, args.n_classes, images.shape[2], images.shape[3] ).to( device )
-            if( args.debug and n_print > 0 ):
-                print( "y_fake_label.shape :", y_fake_label.shape )
-                print( "y_fake_one_hot.shape :", y_fake_one_hot.shape )
-                print( "y_fake_image_label.shape :", y_fake_image_label.shape )
-
             # D(x) : 本物画像 x = image を入力したときの識別器の出力
-            D_x = model_D( images, y_real_image_label )
+            D_x = model_D( images, progress=progress )
             if( args.debug and n_print > 0 ):
                 print( "D_x.size() :", D_x.size() )
 
             # G(z) : 生成器から出力される偽物画像
             with torch.no_grad():   # 生成器 G の更新が行われないようにする。
-                G_z = model_G( input_noize_z, y_fake_one_hot )
+                G_z = model_G( input_noize_z, progress=progress )
                 if( args.debug and n_print > 0 ):
-                    print( "G_z.size() :", G_z.size() )
+                    print( "G_z.size() :", G_z.size() )     # torch.Size([128, 1, 28, 28])
                 
             # D( G(z) ) : 偽物画像を入力したときの識別器の出力
-            D_G_z = model_D( G_z.detach(), y_fake_image_label.detach() )    # detach して G_z を通じて、生成器に勾配が伝搬しないようにする
+            D_G_z = model_D( G_z.detach(), progress=progress  )    # detach して G_z を通じて、生成器に勾配が伝搬しないようにする
             if( args.debug and n_print > 0 ):
                 print( "D_G_z.size() :", D_G_z.size() )
 
@@ -361,10 +344,6 @@ if __name__ == '__main__':
             # real ラベルを 1、fake ラベルを 0 として定義
             real_ones_tsr =  torch.ones( D_x.shape ).to( device )
             fake_zeros_tsr =  torch.zeros( D_x.shape ).to( device )
-            if( args.debug and n_print > 0 ):
-                print( "real_ones_tsr.shape :", real_ones_tsr.shape )
-                print( "fake_zeros_tsr.shape :", fake_zeros_tsr.shape )
-
             loss_D = loss_fn( D_x, real_ones_tsr ) + loss_fn( D_G_z, fake_zeros_tsr )
 
             #----------------------------------------------------
@@ -374,8 +353,8 @@ if __name__ == '__main__':
             optimizer_D.zero_grad()
 
             # 勾配計算
-            #loss_D.backward(retain_graph=True)
-            loss_D.backward()
+            loss_D.backward(retain_graph=True)
+            #loss_D.backward()
 
             # backward() で計算した勾配を元に、設定した optimizer に従って、重みを更新
             optimizer_D.step()
@@ -391,23 +370,16 @@ if __name__ == '__main__':
             # 学習用データをモデルに流し込む
             # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
             #----------------------------------------------------
-            # 入力ノイズを再生成
             input_noize_z = torch.randn( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
 
-            # 生成器に入力するクラスラベル y（＝偽のラベル情報）
-            # 識別器と生成器の更新の前にノイズを新しく生成しなおす。
-            y_fake_label = torch.randint( args.n_classes, (args.batch_size,), dtype = torch.long ).to( device )
-            y_fake_one_hot = eye_tsr[y_fake_label].view( -1, args.n_classes, 1, 1 ).to( device )
-            y_fake_image_label = y_fake_one_hot.expand( args.batch_size, args.n_classes, images.shape[2], images.shape[3] ).to( device )
-
             # G(z) : 生成器から出力される偽物画像
-            G_z = model_G( input_noize_z, y_fake_one_hot )
+            G_z = model_G( input_noize_z, progress=progress )
             if( args.debug and n_print > 0 ):
                 print( "G_z.size() :", G_z.size() )
 
             # D( G(z) ) : 偽物画像を入力したときの識別器の出力
             #with torch.no_grad():  # param.requires_grad = False しているので不要
-            D_G_z = model_D( G_z, y_fake_image_label )
+            D_G_z = model_D( G_z, progress=progress )
             if( args.debug and n_print > 0 ):
                 print( "D_G_z.size() :", D_G_z.size() )
 
@@ -434,7 +406,7 @@ if __name__ == '__main__':
             if( step == 0 or ( step % args.n_display_step == 0 ) ):
                 board_train.add_scalar('Generater/loss_G', loss_G.item(), iterations)
                 board_train.add_scalar('Discriminator/loss_D', loss_D.item(), iterations)
-                board_add_image(board_train, 'fake image', G_z, iterations+1)
+                board_add_image(board_train, 'fake image', G_z, iterations)
                 print( "epoch={}, iters={}, loss_G={:.5f}, loss_D={:.5f}".format(epoch, iterations, loss_G, loss_D) )
 
             #====================================================
@@ -460,23 +432,20 @@ if __name__ == '__main__':
                     #----------------------------------------------------
                     test_images = test_images.to( device )
                     
+                    # 元の画像ピクセル数を、Training Progresses 用にダウンサンプリング
+                    # progress = 0.0 ⇒ 32 × 32 → 4 × 4, 
+                    # 0.00 < progress < 1.00 ⇒ 32 × 32 → 8 × 8,
+                    # 1.00 < progress < 2.00 ⇒ 32 × 32 → 16 × 16,
+                    # ...
+                    test_images = F.adaptive_avg_pool2d(test_images, 4 * 2 ** int(ceil(progress)) )
+
                     #----------------------------------------------------
                     # テスト用データをモデルに流し込む
                     #----------------------------------------------------
-                    # 識別器に入力するクラスラベルの画像 y（＝本物のラベル画像情報）
-                    y_real_label = test_targets.to( device )
-                    y_real_one_hot = eye_tsr[y_real_label].view( -1, args.n_classes, 1, 1 ).to( device )
-                    y_real_image_label = y_real_one_hot.expand( args.batch_size_test, args.n_classes, test_images.shape[2], test_images.shape[3] ).to( device )
-
-                    # 生成器に入力するクラスラベル y（＝偽のラベル情報）
-                    y_fake_label = torch.randint( args.n_classes, (args.batch_size_test,), dtype = torch.long ).to( device )
-                    y_fake_one_hot = eye_tsr[y_fake_label].view( -1, args.n_classes, 1, 1 ).to( device )
-                    y_fake_image_label = y_fake_one_hot.expand( args.batch_size_test, args.n_classes, test_images.shape[2], test_images.shape[3] ).to( device )
-
                     with torch.no_grad():
-                        D_x = model_D( test_images, y_real_image_label )
-                        G_z = model_G( input_noize_fix_z_test, y_fake_one_hot )
-                        D_G_z = model_D( G_z, y_fake_image_label )
+                        D_x = model_D( test_images, progress=progress )
+                        G_z = model_G( input_noize_fix_z_test, progress=progress )
+                        D_G_z = model_D( G_z, progress=progress )
 
                     #----------------------------------------------------
                     # 損失関数を計算する
@@ -516,21 +485,19 @@ if __name__ == '__main__':
         #====================================================
         # 各 Epoch 終了後の処理
         #====================================================
-        for y_label in range(args.n_classes):
-            eye_tsr = torch.eye( args.n_classes ).to( device )
-            y_fake_label = torch.full( (args.batch_size,), y_label ).long().to( device )
-            y_fake_one_hot = eye_tsr[y_fake_label].view( -1, args.n_classes, 1, 1 ).to( device )
+        if( args.debug ):
+            print( "progress :", progress )
+            
+        # 出力画像の生成＆保存
+        model_G.eval()
+        with torch.no_grad():
+            G_z = model_G( input_noize_fix_z, progress=progress )
 
-            # 出力画像の生成＆保存
-            model_G.eval()
-            with torch.no_grad():
-                G_z = model_G( input_noize_fix_z, y_fake_one_hot )
+        save_image( tensor = G_z[0], filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}_batch0.png".format( epoch ) )
+        save_image( tensor = G_z, filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}_batchAll.png".format( epoch ) )
 
-            save_image( tensor = G_z[0], filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_label{}_epoches{}_batch0.png".format( y_label, epoch ) )
-            save_image( tensor = G_z, filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_label{}_epoches{}_batchAll.png".format( y_label, epoch ) )
-
-            fake_images_historys.append(G_z[0].transpose(0,1).transpose(1,2).cpu().clone().numpy())
-            save_image_historys_gif( fake_images_historys, os.path.join(args.results_dir, args.exper_name) + "/fake_image_label{}_epoches{}.gif".format( y_label, epoch, iterations ) )        
+        fake_images_historys.append(G_z[0].transpose(0,1).transpose(1,2).cpu().clone().numpy())
+        save_image_historys_gif( fake_images_historys, os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}.gif".format( epoch ) )        
 
     save_checkpoint( model_G, device, os.path.join(args.save_checkpoints_dir, args.exper_name, "G", 'G_final.pth'), iterations )
     save_checkpoint( model_D, device, os.path.join(args.save_checkpoints_dir, args.exper_name, "D", 'D_final.pth'), iterations )

@@ -1,5 +1,5 @@
-# GAN_WGAN-GP_PyTorch （実装中...）
-WGAN-GPの PyTorch での実装。（実装中...）
+# GAN_WGAN-GP_PyTorch
+WGAN-GPの PyTorch での実装。
 
 - 参考コード
   - [caogang/wgan-gp](https://github.com/caogang/wgan-gp/blob/master/gan_mnist.py)
@@ -16,6 +16,9 @@ WGAN-GPの PyTorch での実装。（実装中...）
 - Python : 3.6
 - Anaconda : 5.0.1
 - PyTorch : 1.1.0
+- tensorboard : 1.13.1
+- tensorboardx : 1.9
+- tqdm
 
 ## ■ 使用法
 
@@ -27,10 +30,10 @@ WGAN-GPの PyTorch での実装。（実装中...）
     --dataset mnist --image_size 64
   ```
 
-- 推論処理（実装中）
-    ```sh
-    $ python test.py
-    ```
+- 推論処理
+  ```sh
+  $ python test.py --load_checkpoints_dir ${LOAD_CHAECKPOINTS_DIR}
+  ```
 
 - TensorBoard
   ```sh
@@ -46,32 +49,152 @@ WGAN-GPの PyTorch での実装。（実装中...）
 
 ## ■ コードの実行結果
 
+### ◎ 生成器からの生成画像
+
 <!--
+#### ☆ 実行条件１（識別器の BatchNorm あり）
 
-|パラメータ名|値（実行条件１）|値（実行条件２）|
-|---|---|---|
-|実験名：<br>`args.exper_name`|""|""|
-|学習用データセット：`args.dataset`|"mnist"|"cifar-10"|
-|使用デバイス：<br>`args.device`|"gpu"|←|
-|シード値|`random.seed(8)`<br>`np.random.seed(8)`<br>`torch.manual_seed(8)`|←|
-|エポック数：<br>`args.n_epoches`|10|50|
-|バッチサイズ：<br>`args.batch_size`|64|64|
-|生成器に入力するノイズ z の次数：<br>`args.n_input_noize_z`|100|100|
-|入力画像のサイズ：<br>`args.image_size`|64|64|
-|入力画像のチャンネル数：<br>`args.n_channels`|1|3|
-|特徴マップの枚数：<br>`args.n_fmaps`|64|64|
-|最適化アルゴリズム|Adam|←|
-|学習率：<br>`args.lr`|0.00005|←|
-|クリティックの更新回数：<br>`args.n_critic`|5|←|
-|重みクリッピングの下限値：<br>`args.w_clamp_lower`|-0.01|←|
-|重みクリッピングの上限値：<br>`args.w_clamp_upper`|0.01|←|
+- Epoches : 10
+  ![fake_image_epoches10_batchAll](https://user-images.githubusercontent.com/25688193/71566616-50909800-2afc-11ea-8b32-98c6f3cfcbef.png)<br>
 
+- Epoches : 50
+  ![fake_image_epoches49_batchAll](https://user-images.githubusercontent.com/25688193/71576057-9b2d0700-2b32-11ea-9256-9d9f39528c45.png)<br>
+
+- Epoches : 1 ~ 50<br>
+  ![fake_image_epoches49](https://user-images.githubusercontent.com/25688193/71576056-9b2d0700-2b32-11ea-8edd-eb2f210fd707.gif)<br>
+
+  → 生成画像の品質が低い。<br>
+  → Epoche数が少ないのが一因か？<br>
+  → 識別器の BatchNorm はなしにしたほうが良い？<br>
 -->
 
-### ◎ 損失関数のグラフ（実行条件１）
+#### ☆ 実行条件２（識別器の BatchNorm なし）
 
-### ◎ 生成器から生成された自動生成画像（実行条件１）
+- Epoches : 10
+  ![fake_image_epoches10_batchAll](https://user-images.githubusercontent.com/25688193/71606275-e686fa00-2bb2-11ea-92ba-68b1447af96c.png)<br>
+- Epoches : 50
+  ![fake_image_epoches49_batch0](https://user-images.githubusercontent.com/25688193/71618307-6f795200-2c02-11ea-8ca7-d23d0c01340d.png)<br>
+- Epoches : 1 ~ 50<br>
+  ![fake_image_epoches49](https://user-images.githubusercontent.com/25688193/71618306-6ee0bb80-2c02-11ea-8995-3c677a340fb7.gif)<br>
 
+### ◎ 損失関数のグラフ
 
+<!--
+#### ☆ 実行条件１（識別器の BatchNorm あり）
+
+- 識別器 : 1 ~ 50 Epoches<br>
+  ![image](https://user-images.githubusercontent.com/25688193/71576246-5d7cae00-2b33-11ea-922e-3b4cd068a15b.png)
+
+- 生成器 : 1 ~ 50 Epoches<br>
+  ![image](https://user-images.githubusercontent.com/25688193/71576272-75ecc880-2b33-11ea-9b10-c6de2c4ab37d.png)
+
+  → loss 値の挙動が不安定で
+-->
+
+#### ☆ 実行条件２（識別器の BatchNorm なし）
+
+- 識別器 : 1 ~ 50 Epoches<br>
+  ![image](https://user-images.githubusercontent.com/25688193/71618691-1c080380-2c04-11ea-96fd-5ea253718f91.png)<br>
+  - ピンク色 : 学習用データセット（ミニバッチ単位）
+  - 緑色 : テスト用データセット（データセット全体）
+
+- 生成器 : 1 ~ 50 Epoches<br>
+  ![image](https://user-images.githubusercontent.com/25688193/71618705-2c1fe300-2c04-11ea-90e7-a0bff404d066.png)<br>
+  - ピンク色 : 学習用データセット（ミニバッチ単位）
+  - 緑色 : テスト用データセット（データセット全体）
+
+  ※ テスト用データの gradient penalty loss が０になっているのは、ソフトの不具合
+
+### ◎ 各種オプション引数の設定値
+
+<!--
+- 実行条件１（識別器の BatchNorm あり）
+```python
+開始時間： 2019-12-29 01:09:28.921406
+PyTorch version : 1.1.0
+exper_name: WGANGP_train_D_vanilla_Epoch50_191229
+device: gpu
+dataset: mnist
+dataset_dir: ../dataset
+results_dir: results
+save_checkpoints_dir: checkpoints
+load_checkpoints_dir: 
+tensorboard_dir: ../tensorboard
+n_test: 5000
+n_epoches: 50
+batch_size: 64
+batch_size_test: 256
+lr: 0.0001
+beta1: 0.5
+beta2: 0.999
+image_size: 64
+n_fmaps: 64
+n_input_noize_z: 100
+networkD_type: vanilla
+n_critic: 5
+lambda_wgangp: 10.0
+n_display_step: 5
+n_display_test_step: 100
+n_save_step: 10000
+seed: 8
+debug: True
+実行デバイス : cuda
+GPU名 : Tesla M60
+torch.cuda.current_device() = 0
+```
+-->
+
+- 実行条件２（識別器の BatchNorm なし）
+
+```python
+開始時間： 2019-12-30 11:42:27.217281
+PyTorch version : 1.1.0
+exper_name: WGANGP_train_D_NonBatchNorm_Epoch50_191230
+device: gpu
+dataset: mnist
+dataset_dir: ../dataset
+results_dir: results
+save_checkpoints_dir: checkpoints
+load_checkpoints_dir: 
+tensorboard_dir: ../tensorboard
+n_test: 5000
+n_epoches: 50
+batch_size: 64
+batch_size_test: 256
+lr: 0.0001
+beta1: 0.5
+beta2: 0.999
+image_size: 64
+n_fmaps: 64
+n_input_noize_z: 100
+networkD_type: NonBatchNorm
+n_critic: 5
+lambda_wgangp: 10.0
+n_display_step: 10
+n_display_test_step: 100
+n_save_step: 10000
+seed: 8
+debug: True
+実行デバイス : cuda
+GPU名 : Tesla M60
+torch.cuda.current_device() = 0
+```
 
 ## ■ デバッグ情報
+
+```python
+model_D :
+ NonBatchNormDiscriminator(
+  (layer): Sequential(
+    (0): Conv2d(1, 64, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1), bias=False)
+    (1): LeakyReLU(negative_slope=0.2, inplace)
+    (2): Conv2d(64, 128, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1), bias=False)
+    (3): LeakyReLU(negative_slope=0.2, inplace)
+    (4): Conv2d(128, 256, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1), bias=False)
+    (5): LeakyReLU(negative_slope=0.2, inplace)
+    (6): Conv2d(256, 512, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1), bias=False)
+    (7): LeakyReLU(negative_slope=0.2, inplace)
+    (8): Conv2d(512, 1, kernel_size=(4, 4), stride=(1, 1), bias=False)
+  )
+)
+```

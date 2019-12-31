@@ -25,7 +25,7 @@ from utils import save_image_historys_gif
 
 if __name__ == '__main__':
     """
-    GAN による学習処理
+    RGAN による学習処理
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--exper_name", default="RGAN_train", help="実験名")
@@ -47,11 +47,11 @@ if __name__ == '__main__':
     parser.add_argument('--image_size', type=int, default=64, help="入力画像のサイズ（pixel単位）")
     parser.add_argument('--n_fmaps', type=int, default=64, help="特徴マップの枚数")
     parser.add_argument('--n_input_noize_z', type=int, default=100, help="生成器に入力するノイズ z の次数")
-    #parser.add_argument('--gan_type', choices=['RSGAN','RSGAN-GP','RaSGAN','RaLSGAN','RaSGAN-GP' ], default="RSGAN", help="GAN の種類")
     parser.add_argument('--gan_type', choices=['RSGAN','RaSGAN','RaLSGAN',], default="RSGAN", help="GAN の種類")
+    #parser.add_argument('--gan_type', choices=['RSGAN','RSGAN-GP','RaSGAN','RaLSGAN','RaSGAN-GP' ], default="RSGAN", help="GAN の種類")
+    #parser.add_argument('--lambda_wgangp', type=float, default=10.0, help="WAGAN-GP の勾配ペナルティー係数")
     parser.add_argument('--networkD_type', choices=['vanilla','PatchGAN' ], default="vanilla", help="GAN の識別器の種類")
     parser.add_argument('--n_critic', type=int, default=1, help="クリティックの更新回数")
-    #parser.add_argument('--lambda_wgangp', type=float, default=10.0, help="WAGAN-GP の勾配ペナルティー係数")
     parser.add_argument('--n_display_step', type=int, default=50, help="tensorboard への表示間隔")
     parser.add_argument('--n_display_test_step', type=int, default=500, help="test データの tensorboard への表示間隔")
     parser.add_argument("--n_save_step", type=int, default=5000, help="モデルのチェックポイントの保存間隔")
@@ -280,8 +280,8 @@ if __name__ == '__main__':
 
     # モデルを読み込む
     if not args.load_checkpoints_dir == '' and os.path.exists(args.load_checkpoints_dir):
-        init_step = load_checkpoint(model_G, os.path.join(args.load_checkpoints_dir, "G") )
-        init_step = load_checkpoint(model_D, os.path.join(args.load_checkpoints_dir, "D") )
+        init_step = load_checkpoint(model_G, device, os.path.join(args.load_checkpoints_dir, "G", "G_final.pth") )
+        init_step = load_checkpoint(model_D, device, os.path.join(args.load_checkpoints_dir, "D", "D_final.pth") )
 
     #======================================================================
     # optimizer の設定
@@ -345,9 +345,6 @@ if __name__ == '__main__':
             # ミニバッチデータを GPU へ転送
             images = images.to( device )
 
-            # 入力ノイズを再生成 
-            #input_noize_z = torch.randn( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
-
             #====================================================
             # 識別器 D の fitting 処理
             #====================================================
@@ -360,6 +357,7 @@ if __name__ == '__main__':
                 # 学習用データをモデルに流し込む
                 # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
                 #----------------------------------------------------
+                # 入力ノイズを再生成 
                 input_noize_z = torch.randn( size = (args.batch_size, args.n_input_noize_z,1,1) ).to( device )
 
                 # D(x) : 本物画像 x = image を入力したときの識別器の出力
@@ -441,7 +439,7 @@ if __name__ == '__main__':
             if( args.gan_type == "RSGAN" ):
                 loss_G = loss_fn( D_G_z - D_x, real_ones_tsr )
             elif( args.gan_type == "RaSGAN" ):
-                loss_G = ( loss_fn(D_x - torch.mean(D_G_z), fake_zeros_tsr) + loss_fn(D_G_z - torch.mean(real_ones_tsr), real_ones_tsr) ) / 2
+                loss_G = ( loss_fn(D_x - torch.mean(D_G_z), fake_zeros_tsr) + loss_fn(D_G_z - torch.mean(D_x), real_ones_tsr) ) / 2
             elif( args.gan_type == "RaLSGAN" ):
                 loss_G = ( loss_fn(D_x - torch.mean(D_G_z), -real_ones_tsr) + loss_fn(D_G_z - torch.mean(D_x), real_ones_tsr) ) / 2
             else:
@@ -521,7 +519,7 @@ if __name__ == '__main__':
                     if( args.gan_type == "RSGAN" ):
                         loss_G = loss_fn( D_G_z - D_x, real_ones_tsr )
                     elif( args.gan_type == "RaSGAN" ):
-                        loss_G = ( loss_fn(D_x - torch.mean(D_G_z), fake_zeros_tsr) + loss_fn(D_G_z - torch.mean(real_ones_tsr), real_ones_tsr) ) / 2
+                        loss_G = ( loss_fn(D_x - torch.mean(D_G_z), fake_zeros_tsr) + loss_fn(D_G_z - torch.mean(D_x), real_ones_tsr) ) / 2
                     elif( args.gan_type == "RaLSGAN" ):
                         loss_G = ( loss_fn(D_x - torch.mean(D_G_z), - real_ones_tsr) + loss_fn(D_G_z - torch.mean(D_x), real_ones_tsr) ) / 2
                     else:
@@ -562,7 +560,6 @@ if __name__ == '__main__':
         save_image( tensor = G_z[0], filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}_batch0.png".format( epoch ) )
         save_image( tensor = G_z, filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}_batchAll.png".format( epoch ) )
 
-        # [batch_size, n_channels, height, width] → [height, width, n_channels]
         fake_images_historys.append(G_z[0].transpose(0,1).transpose(1,2).cpu().clone().numpy())
         save_image_historys_gif( fake_images_historys, os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}.gif".format( epoch ) )        
 

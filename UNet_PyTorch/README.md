@@ -5,7 +5,6 @@ UNet によるセマンティックセグメンテーションを利用して、
 - 参考コード
     - [GitHub/GunhoChoi/Kind-PyTorch-Tutorial12_Semantic_Segmentation/](https://github.com/GunhoChoi/Kind-PyTorch-Tutorial/tree/master/12_Semantic_Segmentation)
 
-
 ## ■ 項目 [Contents]
 1. [動作環境](#動作環境)
 1. [使用法](#使用法)
@@ -14,117 +13,193 @@ UNet によるセマンティックセグメンテーションを利用して、
 
 ## ■ 動作環境
 
-- Windows 10
-- Geforce GTX1050 / VRAM:2GB
+- Mac OS / ubuntu server
 - Python : 3.6
 - Anaconda : 5.0.1
-- PyTorch : 1.0.1
+- PyTorch : 1.1.0
+- tensorboard : 1.13.1
+- tensorboardx : 1.9
+- tqdm
 
 ## ■ 使用法
 
 - 使用データ（航空写真と地図画像）<br>
-https://people.eecs.berkeley.edu/~tinghuiz/projects/pix2pix/datasets/maps.tar.gz<br>
-よりダウンロード後、解凍。
+  https://people.eecs.berkeley.edu/~tinghuiz/projects/pix2pix/datasets/maps.tar.gz<br>
+  よりダウンロード後、解凍。
 
-- 使用法
-```
-$ python main.py
-```
+- 学習処理
+  ```sh
+  # （例２） train UNet for air map datset using GPU0
+  # when save datset dataset/maps dir from https://people.eecs.berkeley.edu/~tinghuiz/projects/pix2pix/datasets/maps.tar.gz
+  $ python train.py \
+    --exper_name UNet_train \
+    --dataset_dir dataset/maps \
+    --image_size 256
+  ```
 
-- 設定可能な定数
+- 推論処理（実装中...）
+  ```sh
+  $ python test.py
+  ```
 
-```python
-[main.py]
-#DEVICE = "CPU"               # 使用デバイス ("CPU" or "GPU")
-DEVICE = "GPU"                # 使用デバイス ("CPU" or "GPU")
-DATASET_PATH = "./maps"       # 学習用データセットへのパス
-NUM_SAVE_STEP = 100           # 自動生成画像の保存間隔（イテレーション単位）
+- TensorBoard
+  ```sh
+  $ tensorboard --logdir ${TENSOR_BOARD_DIR} --port ${AVAILABLE_POOT}
+  ```
 
-NUM_EPOCHES = 10              # エポック数（学習回数）
-LEARNING_RATE = 0.0002        # 学習率 (Default:0.0002)
-BATCH_SIZE = 1                # ミニバッチサイズ
-IMAGE_SIZE = 256              # 入力画像のサイズ（pixel単位）
-NUM_FEATURE_MAPS = 64         # 特徴マップの枚数
-```
-
+  ```sh
+  #（例）
+  $ tensorboard --logdir tensorboard --port 6006
+  ```
 
 <a id="コードの実行結果"></a>
 
-## ■ コードの実行結果：`main.py`
+### ◎ 生成画像
 
-|パラメータ名|値（実行条件１）|値（実行条件２）|
-|---|---|---|
-|使用デバイス：`DEVICE`|GPU|←|
-|シード値|`random.seed(8)`<br>`np.random.seed(8)`<br>`torch.manual_seed(8)`|←|
-|エポック数：`NUM_EPOCHES`|10|50|
-|バッチサイズ：`BATCH_SIZE`|1|←|
-|特徴マップ数：`NUM_FEATURE_MAPS`|64|
-|最適化アルゴリズム|Adam|←|
-|学習率：`LEARNING_RATE`|0.0002|←|
-|減衰率 beta1|0.5|←|
+- Epoches : 10（テストデータ）<br>
+  ![fake_image_epoches10_batchAll](https://user-images.githubusercontent.com/25688193/71588082-86b53280-2b63-11ea-8562-04bc2faccd70.png)<br>
+- Epoches : 50（テストデータ）<br>
+  ![fake_image_epoches50_batchAll](https://user-images.githubusercontent.com/25688193/71588081-86b53280-2b63-11ea-85a4-a22b392fea6c.png)<br>
+- Epoches : 75（テストデータ）<br>
+  ![fake_image_epoches75_batchAll](https://user-images.githubusercontent.com/25688193/71588197-f7f4e580-2b63-11ea-9eb8-b7a9d773ed88.png)<br>
+- Epoches : 100（テストデータ）<br>
+  ![fake_image_epoches99_batchAll](https://user-images.githubusercontent.com/25688193/71588080-86b53280-2b63-11ea-9d7f-b080db5417e1.png)<br>
+- Epoches 1 ~ 100（テストデータ）<br>
+  ![fake_image_epoches99](https://user-images.githubusercontent.com/25688193/71588079-861c9c00-2b63-11ea-895e-0c017f5ab5ea.gif)
 
-### ◎ 損失関数のグラフ（実行条件１）
+→ UNet による生成画像は、その Encoder-Decoder 構造故に、全体的にぼやけた画像担っている点に注目。
 
-- Epoch :10
-![UNet_Loss_epoches10_lr0 0002_batchsize1](https://user-images.githubusercontent.com/25688193/57000545-2d20f080-6bef-11e9-84c1-b2687067b04c.png)<br>
+### ◎ 損失関数のグラフ
 
-- Epoch : 50
-![UNet_Loss_epoches50_lr0 0002_batchsize1](https://user-images.githubusercontent.com/25688193/57051611-4e501280-6cbd-11e9-891a-c1fb2bb7583b.png)<br>
+![image](https://user-images.githubusercontent.com/25688193/71588144-c4b25680-2b63-11ea-877c-2aebc6ea3dc8.png)
+- 灰色：学習用データセット（ミニバッチ単位）
+- オレンジ：テスト用データセット（データセット全体）
 
-### ◎ 生成画像（実行条件１）
-
-- Epoch = 1 ; iteration = 50<br>
-![UNet_Image_epoches0_iters50](https://user-images.githubusercontent.com/25688193/56968890-f0c5a400-6b9e-11e9-978a-dcfcbc115a06.png)<br>
-
-- Epoch = 1 ; iteration = 100<br>
-![UNet_Image_epoches0_iters100](https://user-images.githubusercontent.com/25688193/56968891-f15e3a80-6b9e-11e9-809b-a2589e15966b.png)<br>
-
-- Epoch = 1 ; iteration = 500<br>
-![UNet_Image_epoches0_iters500](https://user-images.githubusercontent.com/25688193/56969995-31262180-6ba1-11e9-9a06-aa80e018a3af.png)<br>
-
-- Epoch = 1 ; iteration = 1096<br>
-![UNet_Image_epoches0_iters1096](https://user-images.githubusercontent.com/25688193/56969999-34211200-6ba1-11e9-84cf-497b07965b46.png)<br>
-
-- Epoch = 2 ; iteration = 2192<br>
-![UNet_Image_epoches1_iters2192](https://user-images.githubusercontent.com/25688193/56969943-1b186100-6ba1-11e9-985c-fe138901becf.png)<br>
-
-- Epoch = 3 ; iteration = 3288<br>
-![UNet_Image_epoches2_iters3288](https://user-images.githubusercontent.com/25688193/56970130-734f6300-6ba1-11e9-9119-56cafc358ca3.png)<br>
-
-- Epoch = 4 ; iteration = 4384<br>
-![UNet_Image_epoches3_iters4384](https://user-images.githubusercontent.com/25688193/57000615-72452280-6bef-11e9-9636-42c69e788727.png)<br>
-
-- Epoch = 5 ; iteration = 5480<br>
-![UNet_Image_epoches4_iters5480](https://user-images.githubusercontent.com/25688193/57000602-6bb6ab00-6bef-11e9-9ec2-6c0ddec4f72e.png)<br>
-
-- Epoch = 6 ; iteration = 6576<br>
-![UNet_Image_epoches5_iters6576](https://user-images.githubusercontent.com/25688193/57000597-68232400-6bef-11e9-97a2-bd2250056b78.png)<br>
-
-- Epoch = 7 ; iteration = 7672<br>
-![UNet_Image_epoches6_iters7672](https://user-images.githubusercontent.com/25688193/57000594-648f9d00-6bef-11e9-9b7f-f9539d90ba5a.png)<br>
-
-- Epoch = 8 ; iteration = 8768<br>
-![UNet_Image_epoches7_iters8768](https://user-images.githubusercontent.com/25688193/57000589-60637f80-6bef-11e9-9bc6-bd74adb64691.png)<br>
-
-- Epoch = 9 ; iteration = 9864<br>
-![UNet_Image_epoches8_iters9864](https://user-images.githubusercontent.com/25688193/57000572-52adfa00-6bef-11e9-96f0-f47c9a1f448c.png)<br>
-
-- Epoch = 10 ; iteration = 10960<br>
-![UNet_Image_epoches9_iters10960](https://user-images.githubusercontent.com/25688193/57000557-42961a80-6bef-11e9-9941-00f80719191f.png)<br>
-
-- Epoch = 15 ; iteration = 16500<br>
-![UNet_Image_epoches15_iters16500](https://user-images.githubusercontent.com/25688193/57017555-a1dd4480-6c5a-11e9-878e-f6cf21468c38.png)<br>
-
-- Epoch = 20 ; iteration = 22000<br>
-![UNet_Image_epoches20_iters22000](https://user-images.githubusercontent.com/25688193/57017550-9d189080-6c5a-11e9-98ff-9bcbe00f25c5.png)<br>
-
-- Epoch = 30 ; iteration = 32900<br>
-![UNet_Image_epoches30_iters32900](https://user-images.githubusercontent.com/25688193/57019866-98f07100-6c62-11e9-8f79-34809b845936.png)<br>
-
-- Epoch = 40 ; iteration = 43900<br>
-![UNet_Image_epoches40_iters43900](https://user-images.githubusercontent.com/25688193/57022399-ffc55880-6c69-11e9-984a-561881814f1c.png)<br>
-
-- Epoch = 48 ; iteration = 52800<br>
-![UNet_Image_epoches48_iters52800](https://user-images.githubusercontent.com/25688193/57051567-1a74ed00-6cbd-11e9-9352-2d015d0eef7d.png)<br>
+### ◎ 各種オプション引数の設定値
+```python
+開始時間： 2019-12-30 11:43:45.172679
+PyTorch version : 1.1.0
+exper_name: UNet_train_Epoch100_191230
+device: gpu
+dataset_dir: ../dataset/maps
+results_dir: results
+save_checkpoints_dir: checkpoints
+load_checkpoints_dir: 
+tensorboard_dir: ../tensorboard
+n_test: 10000
+n_epoches: 100
+batch_size: 32
+batch_size_test: 64
+lr: 0.0002
+beta1: 0.5
+beta2: 0.999
+image_size: 64
+n_fmaps: 64
+n_display_step: 10
+n_display_test_step: 100
+n_save_step: 10000
+seed: 8
+debug: True
+実行デバイス : cuda
+GPU名 : Tesla M60
+torch.cuda.current_device() = 0
+```
 
 ## ■ デバッグ情報
+
+```python
+model :
+ UNet(
+  (conv1): Sequential(
+    (0): Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): LeakyReLU(negative_slope=0.2, inplace)
+    (3): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (4): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+  )
+  (pool1): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+  (conv2): Sequential(
+    (0): Conv2d(64, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): LeakyReLU(negative_slope=0.2, inplace)
+    (3): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (4): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+  )
+  (pool2): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+  (conv3): Sequential(
+    (0): Conv2d(128, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (1): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): LeakyReLU(negative_slope=0.2, inplace)
+    (3): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (4): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+  )
+  (pool3): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+  (conv4): Sequential(
+    (0): Conv2d(256, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (1): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): LeakyReLU(negative_slope=0.2, inplace)
+    (3): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (4): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+  )
+  (pool4): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+  (bridge): Sequential(
+    (0): Conv2d(512, 1024, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (1): BatchNorm2d(1024, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): LeakyReLU(negative_slope=0.2, inplace)
+    (3): Conv2d(1024, 1024, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (4): BatchNorm2d(1024, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+  )
+  (dconv1): Sequential(
+    (0): ConvTranspose2d(1024, 512, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), output_padding=(1, 1))
+    (1): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): LeakyReLU(negative_slope=0.2, inplace)
+  )
+  (up1): Sequential(
+    (0): Conv2d(1024, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (1): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): LeakyReLU(negative_slope=0.2, inplace)
+    (3): Conv2d(512, 512, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (4): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+  )
+  (dconv2): Sequential(
+    (0): ConvTranspose2d(512, 256, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), output_padding=(1, 1))
+    (1): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): LeakyReLU(negative_slope=0.2, inplace)
+  )
+  (up2): Sequential(
+    (0): Conv2d(512, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (1): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): LeakyReLU(negative_slope=0.2, inplace)
+    (3): Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (4): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+  )
+  (dconv3): Sequential(
+    (0): ConvTranspose2d(256, 128, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), output_padding=(1, 1))
+    (1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): LeakyReLU(negative_slope=0.2, inplace)
+  )
+  (up3): Sequential(
+    (0): Conv2d(256, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): LeakyReLU(negative_slope=0.2, inplace)
+    (3): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (4): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+  )
+  (dconv4): Sequential(
+    (0): ConvTranspose2d(128, 64, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1), output_padding=(1, 1))
+    (1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): LeakyReLU(negative_slope=0.2, inplace)
+  )
+  (up4): Sequential(
+    (0): Conv2d(128, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): LeakyReLU(negative_slope=0.2, inplace)
+    (3): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (4): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+  )
+  (out_layer): Sequential(
+    (0): Conv2d(64, 3, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+    (1): Tanh()
+  )
+)
+```

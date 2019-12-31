@@ -17,6 +17,9 @@ DCGAN の PyTorch での実装。
 - Python : 3.6
 - Anaconda : 5.0.1
 - PyTorch : 1.1.0
+- tensorboard : 1.13.1
+- tensorboardx : 1.9
+- tqdm
 
 ## ■ 使用法
 
@@ -46,9 +49,15 @@ DCGAN の PyTorch での実装。
     --networkG_type vanilla --networkD_type vanilla
   ```
 
-- 推論処理（実装中...）
+- 推論処理
   ```sh
-  $ python test.py
+  $ python test.py --load_checkpoints_dir ${LOAD_CHAECKPOINTS_DIR}
+  ```
+  ```
+  # （例）
+  $ python test.py \
+      --exper_name DCGAN_test \
+      --load_checkpoints_dir checkpoints/DCGAN_train_G_vanilla_D_vanilla_Epoch100_191227
   ```
 
 - TensorBoard
@@ -68,10 +77,13 @@ DCGAN の PyTorch での実装。
 ### ◎ 生成器からの生成画像
 
 #### ☆ MLP ネットワーク（実行条件１）
-- Epochs :30<br>
+- Epochs : 30<br>
   ![fake_image_epoches30_iters1857024_batchAll](https://user-images.githubusercontent.com/25688193/71316862-d6885f80-24ba-11ea-924f-dba470003bc8.png)<br>
 
 #### ☆ DCGAN ネットワークを使用（実行条件２）
+- Epoches : 10<br>
+  ![fake_image_epoches10_batchAll](https://user-images.githubusercontent.com/25688193/71560202-f535ba00-2aa9-11ea-994c-9f5109474462.png)
+
 - Epoches : 50<br>
   ![fake_image_epoches50_batchAll](https://user-images.githubusercontent.com/25688193/71516740-fde19100-28ed-11ea-8bfc-8f1a0fb6e783.png)<br>
 - Epoches : 100<br>
@@ -84,8 +96,8 @@ DCGAN の PyTorch での実装。
   ![image](https://user-images.githubusercontent.com/25688193/71316820-3b8f8580-24ba-11ea-9153-962dea17b36c.png)<br>
 - 生成器側 : Epoches 1~30<br>
   ![image](https://user-images.githubusercontent.com/25688193/71316839-80b3b780-24ba-11ea-9a01-1c4ea8039779.png)<br>
-  - 学習用データセット（緑）
-  - テスト用データセット（灰色）
+  - 緑色：学習用データセット（ミニバッチ単位）
+  - 灰色：テスト用データセット（データセット全体）
 
 #### ☆ DCGAN ネットワークを使用（実行条件２）
 - 識別器側 : Epoches 1~100<br>
@@ -98,9 +110,6 @@ DCGAN の PyTorch での実装。
 #### ☆ MLP ネットワーク（実行条件１）
 
 ```python
-----------------------------------------------
-実行条件
-----------------------------------------------
 開始時間： 2019-12-21 12:34:38.011688
 PyTorch version : 1.1.0
 exper_name: DCGAN_train_G_mnist_D_mnist_Epoch100_191221
@@ -136,9 +145,6 @@ torch.cuda.current_device() = 0
 #### ☆ DCGAN ネットワークを使用（実行条件２）
 
 ```python
-----------------------------------------------
-実行条件
-----------------------------------------------
 開始時間： 2019-12-27 01:24:01.742542
 PyTorch version : 1.1.0
 exper_name: DCGAN_train_G_vanilla_D_vanilla_Epoch100_191227
@@ -237,6 +243,7 @@ model_D :
   )
 )
 ```
+※ Discriminator の出力層は、損失関数 に `nn.BCEWithLogitsLoss()` を使用しているため、sigmoid による活性化関数はなし。
 
 ```python
 model_D :

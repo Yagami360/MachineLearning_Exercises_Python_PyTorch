@@ -49,7 +49,7 @@ if __name__ == '__main__':
     parser.add_argument('--image_size', type=int, default=64, help="入力画像のサイズ（pixel単位）")
     parser.add_argument('--n_fmaps', type=int, default=64, help="特徴マップの枚数")
     parser.add_argument('--n_input_noize_z', type=int, default=100, help="生成器に入力するノイズ z の次数")
-    parser.add_argument('--networkD_type', choices=['vanilla','NonBatchNorm', 'PatchGAN' ], default="NonBatchNorm", help="GAN の識別器の種類")
+    parser.add_argument('--networkD_type', choices=['vanilla','NonBatchNorm', 'PatchGAN' ], default="vanilla", help="GAN の識別器の種類")
     parser.add_argument('--n_critic', type=int, default=5, help="クリティックの更新回数")
     parser.add_argument('--w_clamp_upper', type=float, default=0.01, help="重みクリッピングの下限値")
     parser.add_argument('--w_clamp_lower', type=float, default=-0.01, help="重みクリッピングの下限値")
@@ -243,8 +243,8 @@ if __name__ == '__main__':
 
     # モデルを読み込む
     if not args.load_checkpoints_dir == '' and os.path.exists(args.load_checkpoints_dir):
-        init_step = load_checkpoint(model_G, os.path.join(args.load_checkpoints_dir, "G") )
-        init_step = load_checkpoint(model_D, os.path.join(args.load_checkpoints_dir, "D") )
+        init_step = load_checkpoint(model_G, device, os.path.join(args.load_checkpoints_dir, "G", "G_final.pth") )
+        init_step = load_checkpoint(model_D, device, os.path.join(args.load_checkpoints_dir, "D", "D_final.pth") )
 
     #======================================================================
     # optimizer の設定

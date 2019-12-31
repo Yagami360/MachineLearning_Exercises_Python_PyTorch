@@ -15,11 +15,11 @@ NETWORK_D_TYPE=PatchGAN
 #NETWORK_D_TYPE=vanilla
 
 #-------------------
-# RSGAN
+# Pix2Pix
 #-------------------
 mkdir -p ${PWD}/_logs
 #EXEP_NAME=Pix2Pix_train_D_${NETWORK_D_TYPE}_Epoch${N_EPOCHES}_191223
-EXEP_NAME=Pix2Pix_train_D_${NETWORK_D_TYPE}_Epoch${N_EPOCHES}_191227
+EXEP_NAME=Pix2Pix_train_D_${NETWORK_D_TYPE}_Epoch${N_EPOCHES}_191231
 TENSOR_BOARD_DIR=../tensorboard
 if [ -d "${TENSOR_BOARD_DIR}/${EXEP_NAME}" ] ; then
     rm -r ${TENSOR_BOARD_DIR}/${EXEP_NAME}
@@ -43,7 +43,7 @@ python train.py \
     --image_size 64 \
     --n_test 5000 \
     --n_epoches ${N_EPOCHES} --batch_size ${BATCH_SIZE} --batch_size_test ${BATCH_SIZE_TEST} \
-    --lr 0.0001 --beta1 0.5 --beta2 0.999 \
+    --lr 0.0002 --beta1 0.5 --beta2 0.999 \
     --n_display_step ${N_DISPLAY_STEP} --n_display_test_step ${N_DISPLAY_TEST_STEP} \
     --unetG_dropout 0.5 --networkD_type ${NETWORK_D_TYPE} \
     --debug > _logs/${EXEP_NAME}.out

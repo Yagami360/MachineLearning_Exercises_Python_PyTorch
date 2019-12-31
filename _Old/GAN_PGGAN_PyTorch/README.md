@@ -15,13 +15,11 @@ ProgressiveGAN（PGGAN）の PyTorch での実装。<br>
 
 ## ■ 動作環境
 
-- Mac OS / ubuntu server
+- Windows 10
+- Geforce GTX1050 / VRAM:2GB
 - Python : 3.6
 - Anaconda : 5.0.1
-- PyTorch : 1.1.0
-- tensorboard : 1.13.1
-- tensorboardx : 1.9
-- tqdm
+- PyTorch : 1.0.1
 
 ## ■ 使用法
 
@@ -40,51 +38,123 @@ ProgressiveGAN（PGGAN）の PyTorch での実装。<br>
   - `python2 h5tool.py create_celeba_hq [file_name_to_save] [/path/to/celeba_dataset/] [/path/to/celeba_hq_deltas]`
 -->
 
+- 使用法
+```
+$ python main.py
+```
+
+- 設定可能なコマンドライン引数
+
+|引数名|意味|値 (Default値)|
+|---|---|---|
+|`--device`|実行デバイス|`GPU` (Default) or `CPU`|
+|`--run_mode`|動作モード|`train` (Default) or `add_train` or `test`|
+|`--dataset`|データセット|`MNIST` (Default) or `CIFAR-10`|
+|`--dataset_path`|データセットの保存先|`./dataset` (Default)|
+|`--n_input_noize_z`|入力ノイズ z の次元数（＝潜在変数の次元数）|`128`(Default)|
+|`--init_image_size`|最初の Training Progresses での生成画像の解像度|`4`(Default)|
+|`--final_image_size`|最終的な Training Progresses での生成画像の解像度|`32`(Default)|
+|`--n_epoches`|エポック数|`10` (Default)|
+|`--batch_size`|バッチサイズ|`32` (Default)|
+|`--learning_rate`|学習率|`0.001` (Default)|
+|`--result_path`|学習結果のフォルダ|`./result` (Default)|
+|`--xxx`|xxx|`xxx` (Default)|
+
 
 <a id="コード説明＆実行結果"></a>
 
-## ■ コードの実行結果
+## ■ コードの実行結果：`main.py`
 
-### ◎ 生成画像
+|パラメータ名|値（実行条件１）|値（実行条件２）|
+|---|---|---|
+|使用デバイス：<br>`--device`|GPU|←|
+|データセット：<br>`--dataset`|MNIST|CIFAR-10|
+|動作モード：<br>`--run_mode`|`train`|←|
+|エポック数：<br>`--n_epoches`|10|10|
+|入力ノイズ z の次元数：<br>`--n_input_noize_z`|128|128|
+|最初の生成画像の解像度：<br>`--init_image_size`|4|4|
+|最終的なの生成画像の解像度：<br>`--final_image_size`|32|64|
+|バッチサイズ：<br>`--batch_size`|16|8|
+|最適化アルゴリズム|Adam|←|
+|学習率：<br>`--learning_rate`|0.001|
+|減衰率 beta1|0.5|←|
+|減衰率 beta2|0.999|←|
+|簡略化された Minibatch discrimation|有り|←|
+|Equalized learning rate|有り|←|
+|Pixel norm|有り|←|
+|シード値|`random.seed(8)`<br>`np.random.seed(8)`<br>`torch.manual_seed(8)`|←|
+
+
+### ◎ 損失関数のグラフ（実行条件１）
+
+![PGGAN_Loss_epoches10_lr0 001_batchsize16](https://user-images.githubusercontent.com/25688193/59812205-1de53600-9348-11e9-96bb-a6b37b92a201.png)
+
+- iterations = 0 ~ 3750 : Traing Progress 1 (4 × 4 pixel) <br>
+- iterations = 3751 ~ 11250 : Traing Progress 2 (8 × 8 pixel) <br>
+- iterations = 11251 ~ 18750 : Traing Progress 3 (16 × 16 pixel) <br>
+- iterations = 18751 ~ 37500 : Traing Progress 4 (32 × 32 pixel) <br>
+
+
+### ◎ 生成画像（実行条件１）
 
 - [Traing Progress 1] : 4 × 4 pixel 縦（8 枚）×横（８枚）<br>
-  - Epoch 0<br>
-    ![fake_image_epoches0_batchAll](https://user-images.githubusercontent.com/25688193/71587820-95e7b080-2b62-11ea-98db-6d0925ad3b08.png)
+	- Epoch 0 : iterations = 3750<br>
+		![PGGAN_Image_iters3750](https://user-images.githubusercontent.com/25688193/59812366-a82d9a00-9348-11e9-9140-aab74e331c8e.png)<br>
+
+- [Traing Progress 2] : 8 × 8 pixel 縦（8 枚）×横（８枚）
+	- Epoch 1 : iterations = 11250<br>
+		![PGGAN_Image_iters11250](https://user-images.githubusercontent.com/25688193/59812425-e925ae80-9348-11e9-98a7-ddc8b2e8d93b.png)<br>
+
+- [Traing Progress 3] : 16 × 16 pixel 縦（8 枚）×横（８枚）
+	- Epoch 2 : iterations = 12000<br>
+		![PGGAN_Image_iters12000](https://user-images.githubusercontent.com/25688193/59812577-77019980-9349-11e9-942c-b03b5474b6d3.png)<br>
+
+	- Epoch 3 : iterations = 18750<br>
+		![PGGAN_Image_iters18750](https://user-images.githubusercontent.com/25688193/59812564-681ae700-9349-11e9-9d1c-8d2be6820163.png)<br>
+
+- [Traing Progress 4] : 32 × 32 pixel 縦（8 枚）×横（８枚）
+	- Epoch 4 : iterations = 19000<br>
+		![PGGAN_Image_iters19000](https://user-images.githubusercontent.com/25688193/59812644-b0d2a000-9349-11e9-96ba-7f3cb092ae6b.png)<br>
+
+	- Epoch 5 : iterations = 23000<br>
+		![PGGAN_Image_iters23000](https://user-images.githubusercontent.com/25688193/59812748-06a74800-934a-11e9-9bb6-1bed332fab52.png)<br>
+
+	- Epoch 9 : iterations = 37500<br>
+		![PGGAN_Image_iters37500](https://user-images.githubusercontent.com/25688193/59812701-d2cc2280-9349-11e9-8705-4c26fff84712.png)<br>
+
+### ◎ 損失関数のグラフ（実行条件２）
+
+- iterations = 0 ~ 3750 : Traing Progress 1 (4 × 4 pixel) <br>
+- iterations = 3751 ~ 11250 : Traing Progress 2 (8 × 8 pixel) <br>
+- iterations = 11251 ~ 18750 : Traing Progress 3 (16 × 16 pixel) <br>
+- iterations = 18751 ~ 37500 : Traing Progress 4 (32 × 32 pixel) <br>
+
+
+### ◎ 生成画像（実行条件２）
+
+- [Traing Progress 1] : 4 × 4 pixel 縦（8 枚）×横（８枚）<br>
+	- Epoch 0 : iterations = 3750<br>
+
 
 - [Traing Progress 2] : 8 × 8 pixel 縦（8 枚）×横（８枚）<br>
-  - Epoch 1<br>
-    ![fake_image_epoches1_batchAll](https://user-images.githubusercontent.com/25688193/71587819-95e7b080-2b62-11ea-929c-c327908f0844.png)
+	- Epoch 1 : iterations = xxx<br>
 
 - [Traing Progress 3] : 16 × 16 pixel 縦（8 枚）×横（８枚）<br>
-  - Epoch 2<br>
-    ![fake_image_epoches2_batchAll](https://user-images.githubusercontent.com/25688193/71587817-954f1a00-2b62-11ea-8d62-aa24af0207f1.png)
-  - Epoch 3<br>
-    ![fake_image_epoches3_batchAll](https://user-images.githubusercontent.com/25688193/71587816-954f1a00-2b62-11ea-9638-de690a81aa11.png)
+	- Epoch 2 : iterations = xxx<br>
 
 - [Traing Progress 4] : 32 × 32 pixel 縦（8 枚）×横（８枚）<br>
-  - Epoch 4<br>
-    ![fake_image_epoches4_batchAll](https://user-images.githubusercontent.com/25688193/71587814-954f1a00-2b62-11ea-8040-479620aa6c9e.png)
-  - Epoch 5<br>
-    ![fake_image_epoches5_batchAll](https://user-images.githubusercontent.com/25688193/71587813-954f1a00-2b62-11ea-8d6d-5849456a0655.png)
-  - Epoch 10<br>
-    ![fake_image_epoches10_batchAll](https://user-images.githubusercontent.com/25688193/71587812-94b68380-2b62-11ea-89ad-9d7571b40e8e.png)
-  - Epoch 50<br>
-    ![fake_image_epoches50_batchAll](https://user-images.githubusercontent.com/25688193/71611900-0254c500-2be0-11ea-9b96-f09f96e09c68.png)<br>
-  - Epoch 100<br>
+	- Epoch 3 : iterations = xxx<br>
 
-### ◎ 損失関数のグラフ
+- [Traing Progress 5] : 64 × 64 pixel 縦（8 枚）×横（８枚）<br>
+	- Epoch 4 : iterations = xxx<br>
+	- Epoch 5 : iterations = xxx<br>
+	- Epoch 9 : iterations = xxx<br>
 
-- 識別器 : Epoch 1 ~ 50<br>
-  ![image](https://user-images.githubusercontent.com/25688193/71611926-30d2a000-2be0-11ea-91d3-799111063391.png)
-  - 茶色 : 学習用データセット（ミニバッチ単位）
-  - 水色 : テスト用データセット（データセット全体）
-
-- 生成器 : Epoch 1 ~ 50<br>
-  ![image](https://user-images.githubusercontent.com/25688193/71611958-58c20380-2be0-11ea-86aa-74edf7eb0dc8.png)<br>
-  - 茶色 : 学習用データセット（ミニバッチ単位）
-  - 水色 : テスト用データセット（データセット全体）
 
 ## ■ デバッグ情報
+
+
+`$ python h5tool.py create_celeba_hq /Users/sakai/ML_dataset/CelebA-HQ /Users/sakai/ML_dataset/CelebA/celebA /Users/sakai/ML_dataset/CelebA/celebA-HQ`
 
 ```python
 Generator(

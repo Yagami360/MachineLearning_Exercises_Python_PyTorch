@@ -39,7 +39,7 @@ if __name__ == '__main__':
     parser.add_argument('--load_checkpoints_dir', type=str, default="", help="モデルの読み込みディレクトリ")
     parser.add_argument('--tensorboard_dir', type=str, default="tensorboard", help="TensorBoard のディレクトリ")
     parser.add_argument('--n_test', type=int, default=10000, help="test dataset の最大数")
-    parser.add_argument('--n_epoches', type=int, default=100, help="エポック数")
+    parser.add_argument('--n_epoches', type=int, default=50, help="エポック数")
     parser.add_argument('--batch_size', type=int, default=64, help="バッチサイズ")
     parser.add_argument('--batch_size_test', type=int, default=4, help="test データのバッチサイズ")
     parser.add_argument('--lr', type=float, default=0.0001, help="学習率")
@@ -241,8 +241,8 @@ if __name__ == '__main__':
 
     # モデルを読み込む
     if not args.load_checkpoints_dir == '' and os.path.exists(args.load_checkpoints_dir):
-        init_step = load_checkpoint(model_G, os.path.join(args.load_checkpoints_dir, "G") )
-        init_step = load_checkpoint(model_D, os.path.join(args.load_checkpoints_dir, "D") )
+        init_step = load_checkpoint(model_G, device, os.path.join(args.load_checkpoints_dir, "G", "G_final.pth") )
+        init_step = load_checkpoint(model_D, device, os.path.join(args.load_checkpoints_dir, "D", "D_final.pth") )
 
     #======================================================================
     # optimizer の設定
@@ -468,6 +468,7 @@ if __name__ == '__main__':
 
                     loss_C_real_total += test_loss_C_real.item()
                     loss_C_fake_total += test_loss_C_fake.item()
+                    gradient_penalty_loss_total += test_gradient_penalty_loss.item()
                     loss_C_total += test_loss_C.item()
                     loss_G_total += test_loss_G.item()
 

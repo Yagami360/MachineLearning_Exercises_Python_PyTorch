@@ -253,8 +253,8 @@ if __name__ == '__main__':
 
     # モデルを読み込む
     if not args.load_checkpoints_dir == '' and os.path.exists(args.load_checkpoints_dir):
-        init_step = load_checkpoint(model_G, os.path.join(args.load_checkpoints_dir, "G") )
-        init_step = load_checkpoint(model_D, os.path.join(args.load_checkpoints_dir, "D") )
+        init_step = load_checkpoint(model_G, device, os.path.join(args.load_checkpoints_dir, "G", "G_final.pth") )
+        init_step = load_checkpoint(model_D, device, os.path.join(args.load_checkpoints_dir, "D", "D_final.pth") )
 
     #======================================================================
     # optimizer の設定

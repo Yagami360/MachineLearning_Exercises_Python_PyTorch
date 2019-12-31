@@ -4,10 +4,10 @@
 #nohup tensorboard --logdir tensorboard --port 6006 &
 set -eu
 
-N_EPOCHES=100
+N_EPOCHES=50
 BATCH_SIZE=64
 BATCH_SIZE_TEST=256
-N_DISPLAY_STEP=5
+N_DISPLAY_STEP=10
 N_DISPLAY_TEST_STEP=100
 N_SAVE_STEP=10000
 
@@ -19,7 +19,7 @@ NETWORK_D_TYPE=NonBatchNorm
 # RSGAN
 #-------------------
 mkdir -p ${PWD}/_logs
-EXEP_NAME=WGANGP_train_D_${NETWORK_D_TYPE}_Epoch${N_EPOCHES}_191228_1
+EXEP_NAME=WGANGP_train_D_${NETWORK_D_TYPE}_Epoch${N_EPOCHES}_191230
 TENSOR_BOARD_DIR=../tensorboard
 if [ -d "${TENSOR_BOARD_DIR}/${EXEP_NAME}" ] ; then
     rm -r ${TENSOR_BOARD_DIR}/${EXEP_NAME}

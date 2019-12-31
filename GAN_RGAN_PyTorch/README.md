@@ -1,8 +1,8 @@
 # GAN_RGAN_PyTorch
-RSGAN, RaSGAN, RaLSGAN の PyTorch での実装。
+Relativistic GANs (RSGAN, RaSGAN, RaLSGAN) の PyTorch での実装。
 
 - 参考コード
-  - [Github/AlexiaJM/RelativisticGAN](https://github.com/AlexiaJM/RelativisticGAN)
+  - [Github/junyanz/pytorch-CycleGAN-and-pix2pix](https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix)
 
 ## ■ 項目 [Contents]
 1. [動作環境](#動作環境)
@@ -16,6 +16,9 @@ RSGAN, RaSGAN, RaLSGAN の PyTorch での実装。
 - Python : 3.6
 - Anaconda : 5.0.1
 - PyTorch : 1.1.0
+- tensorboard : 1.13.1
+- tensorboardx : 1.9
+- tqdm
 
 ## ■ 使用法
 
@@ -44,9 +47,9 @@ RSGAN, RaSGAN, RaLSGAN の PyTorch での実装。
     --gan_type RaLSGAN
   ```
 
-- 推論処理（実装中...）
+- 推論処理
   ```sh
-  $ python test.py
+  $ python test.py --load_checkpoints_dir ${LOAD_CHAECKPOINTS_DIR}
   ```
 
 - TensorBoard
@@ -67,19 +70,53 @@ RSGAN, RaSGAN, RaLSGAN の PyTorch での実装。
 
 #### ☆ RSGAN
 
-- Epochs :100<br>
-  ![fake_image_epoches95_batchAll](https://user-images.githubusercontent.com/25688193/71542901-7d836480-29af-11ea-821e-99ced847d7ae.png)<br>
+- Epochs : 10<br>
+  ![fake_image_epoches10_batchAll](https://user-images.githubusercontent.com/25688193/71560073-873cc300-2aa8-11ea-86e7-cb686d2b31ea.png)
 
+- Epochs : 50<br>
+  ![fake_image_epoches50_batchAll](https://user-images.githubusercontent.com/25688193/71560088-b05d5380-2aa8-11ea-83bd-f2d6d46b500f.png)
+
+- Epochs : 100<br>
+  ![fake_image_epoches96_batchAll](https://user-images.githubusercontent.com/25688193/71560109-ee5a7780-2aa8-11ea-876a-f88dd4aeb80f.png)<br>
+  → 他の RaSGAN, RsLSGAN と比較して、生成画像の品質は低い。
+
+- Epoches : 1 ~ 100<br>
+  ![fake_image_epoches96](https://user-images.githubusercontent.com/25688193/71560087-b05d5380-2aa8-11ea-9a39-be6a35e76826.gif)<br>
+  → 入力ノイズ z を固定した場合でも、学習中の生成画像が安定しない。
 
 #### ☆ RaSGAN
 
+- Epochs :10<br>
+  ![fake_image_epoches10_batchAll](https://user-images.githubusercontent.com/25688193/71560121-1ea21600-2aa9-11ea-8e34-5dd0e1119087.png)
+
+- Epochs :50<br>
+  ![fake_image_epoches50_batchAll](https://user-images.githubusercontent.com/25688193/71560120-1ea21600-2aa9-11ea-8f12-86aa5d2605c9.png)
+
 - Epochs :100<br>
-  <br>
+  ![fake_image_epoches99_batchAll](https://user-images.githubusercontent.com/25688193/71566312-f8f12d00-2af9-11ea-85d7-0823a6ec557b.png)
+<br>
+
+  → vanilla GAN や WGAN, WGAN-GP や RGAN と比較して、生成画像の品質が高い。<br>
+  → 又、WGAN, WGAN-GP や RGAN と比較して、学習の初期段階から品質の高い画像が生成出来ている。
+
+- Epoches : 1 ~100<br>
+  ![fake_image_epoches99](https://user-images.githubusercontent.com/25688193/71566310-f8f12d00-2af9-11ea-9b9d-52bef0b9a4e8.gif)
 
 #### ☆ RaLSGAN
 
+- Epochs :10<br>
+  ![fake_image_epoches10_batchAll](https://user-images.githubusercontent.com/25688193/71560019-e0582700-2aa7-11ea-916d-110007b85270.png)
+
+- Epochs :50<br>
+  ![fake_image_epoches50_batchAll](https://user-images.githubusercontent.com/25688193/71560018-e0582700-2aa7-11ea-9774-fb647771160f.png)
+
 - Epochs :100<br>
-  <br>
+  ![fake_image_epoches99_batchAll](https://user-images.githubusercontent.com/25688193/71566336-2047fa00-2afa-11ea-848d-839d2609e6a0.png)<br>
+  → vanilla GAN や WGAN, WGAN-GP や RGAN と比較して、生成画像の品質が高い。<br>
+  → 又、WGAN, WGAN-GP や RGAN と比較して、学習の初期段階から品質の高い画像が生成出来ている。
+
+- Epoches : 1 ~100<br>
+  ![fake_image_epoches99](https://user-images.githubusercontent.com/25688193/71566335-2047fa00-2afa-11ea-801d-cea2da92521e.gif)<br>
 
 ### ◎ 損失関数のグラフ
 
@@ -91,27 +128,24 @@ RSGAN, RaSGAN, RaLSGAN の PyTorch での実装。
    
 #### ☆ RaSGAN
 - 識別器側<br>
-  <br>
+  ![image](https://user-images.githubusercontent.com/25688193/71566378-846abe00-2afa-11ea-9a7f-f30a42d4b0d4.png)<br>
 
 - 生成器側<br>
-  <br>
+  ![image](https://user-images.githubusercontent.com/25688193/71566389-99475180-2afa-11ea-90bd-21df297624f7.png)<br>
 
 #### ☆ RaLSGAN
 - 識別器側<br>
-  <br>
+  ![image](https://user-images.githubusercontent.com/25688193/71566354-52f1f280-2afa-11ea-8f15-a01034f2a78f.png)<br>
 - 生成器側<br>
-  <br>
+  ![image](https://user-images.githubusercontent.com/25688193/71566365-64d39580-2afa-11ea-8a35-ca3f34deef0d.png)<br>
 
 ### ◎ 各種オプション引数の設定値
 
 #### ☆ RSGAN
 ```python
-----------------------------------------------
-実行条件
-----------------------------------------------
-開始時間： 2019-12-27 01:25:17.387356
+開始時間： 2019-12-27 15:21:10.851957
 PyTorch version : 1.1.0
-exper_name: RSGAN_train_D_vanilla_Epoch100_191227
+exper_name: RSGAN_train_D_vanilla_Epoch100_191227_1
 device: gpu
 dataset: mnist
 dataset_dir: ../dataset
@@ -145,12 +179,9 @@ torch.cuda.current_device() = 0
 #### RaSGAN
 
 ```python
-----------------------------------------------
-実行条件
-----------------------------------------------
-開始時間： 2019-12-27 01:27:35.916840
+開始時間： 2019-12-29 01:35:41.331311
 PyTorch version : 1.1.0
-exper_name: RaSGAN_train_D_vanilla_Epoch100_191227
+exper_name: RaSGAN_train_D_vanilla_Epoch100_191229
 device: gpu
 dataset: mnist
 dataset_dir: ../dataset
@@ -161,7 +192,7 @@ tensorboard_dir: ../tensorboard
 n_test: 10000
 n_epoches: 100
 batch_size: 64
-batch_size_test: 256
+batch_size_test: 64
 lr: 0.0001
 beta1: 0.5
 beta2: 0.999
@@ -184,12 +215,9 @@ torch.cuda.current_device() = 0
 #### ☆ RsLSGAN
 
 ```python
-----------------------------------------------
-実行条件
-----------------------------------------------
-開始時間： 2019-12-27 01:28:08.538909
+開始時間： 2019-12-28 11:40:47.254753
 PyTorch version : 1.1.0
-exper_name: RaLSGAN_train_D_vanilla_Epoch100_191227
+exper_name: RaLSGAN_train_D_vanilla_Epoch100_191228
 device: gpu
 dataset: mnist
 dataset_dir: ../dataset
@@ -200,7 +228,7 @@ tensorboard_dir: ../tensorboard
 n_test: 10000
 n_epoches: 100
 batch_size: 64
-batch_size_test: 256
+batch_size_test: 64
 lr: 0.0001
 beta1: 0.5
 beta2: 0.999

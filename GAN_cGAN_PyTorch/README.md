@@ -14,6 +14,9 @@ Conditional GAN（cGAN）の PyTorch での実装。
 - Python : 3.6
 - Anaconda : 5.0.1
 - PyTorch : 1.1.0
+- tensorboard : 1.13.1
+- tensorboardx : 1.9
+- tqdm
 
 ## ■ 使用法
 
@@ -34,9 +37,13 @@ Conditional GAN（cGAN）の PyTorch での実装。
     --gan_type LSGAN
   ```
 
-- 推論処理（実装中...）
+- 推論処理
   ```sh
-  $ python test.py
+  # （例１）label 0 の画像を生成
+  $ python test.py --load_checkpoints_dir ${LOAD_CHAECKPOINTS_DIR} --y_label 0
+
+  # （例１）label 1 の画像を生成
+  $ python test.py --load_checkpoints_dir ${LOAD_CHAECKPOINTS_DIR} --y_label 1
   ```
 
 - TensorBoard
@@ -85,6 +92,14 @@ Conditional GAN（cGAN）の PyTorch での実装。
 - label 9 / Epoche 15
   ![fake_image_label9_epoches15_batchAll](https://user-images.githubusercontent.com/25688193/71543012-3f874000-29b1-11ea-873e-f53a309cf60d.png)<br>
 
+
+#### ☆ 生成器からの生成画像（失敗ケース）
+
+- label 1 / Epoches 50<br>
+  ![fake_image_label1_epoches50_batchAll](https://user-images.githubusercontent.com/25688193/71560236-83aa3b80-2aaa-11ea-899b-7f0d42596477.png)<br>
+  → 学習を進めすぎると、生成画像が崩壊した。<br>
+  → GAN の Adv loss の種類（vanilla）が問題か？
+
 ### ◎ 損失関数のグラフ
 
 - 識別器 : Epoches 1~100<br>
@@ -93,14 +108,86 @@ Conditional GAN（cGAN）の PyTorch での実装。
 - 生成器 : Epoches 1~100
   ![image](https://user-images.githubusercontent.com/25688193/71542934-3ea1de80-29b0-11ea-8dec-952a676526ac.png)<br>
 
-  → 学習を進めていくとむしろ悪化？
+  → 学習を進めていくとむしろ悪化している。
+  → GAN の Adv loss の種類 (vanilla) が問題か？
+
+### ◎ 各種オプション引数の設定値
+
+```python
+開始時間： 2019-12-27 15:12:51.169508
+PyTorch version : 1.1.0
+exper_name: CGAN_train_gantype_vanilla_D_vanilla_Epoch100_191227
+device: gpu
+dataset: mnist
+n_classes: 10
+dataset_dir: ../dataset
+results_dir: results
+save_checkpoints_dir: checkpoints
+load_checkpoints_dir: 
+tensorboard_dir: ../tensorboard
+n_test: 10000
+n_epoches: 100
+batch_size: 64
+batch_size_test: 256
+lr: 0.0001
+beta1: 0.5
+beta2: 0.999
+image_size: 64
+n_fmaps: 64
+n_input_noize_z: 100
+gan_type: vanilla
+networkD_type: vanilla
+n_display_step: 10
+n_display_test_step: 100
+n_save_step: 10000
+seed: 8
+debug: True
+実行デバイス : cuda
+GPU名 : Tesla M60
+torch.cuda.current_device() = 0
+```
 
 ## ■ デバッグ情報
 
 ```python
-[CGAN Generator]
+model_G :
+ CGANGenerator(
+  (layer): Sequential(
+    (0): ConvTranspose2d(110, 512, kernel_size=(4, 4), stride=(1, 1), bias=False)
+    (1): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): ReLU(inplace)
+    (3): ConvTranspose2d(512, 256, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1), bias=False)
+    (4): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (5): ReLU(inplace)
+    (6): ConvTranspose2d(256, 128, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1), bias=False)
+    (7): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (8): ReLU(inplace)
+    (9): ConvTranspose2d(128, 64, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1), bias=False)
+    (10): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (11): ReLU(inplace)
+    (12): ConvTranspose2d(64, 1, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1), bias=False)
+    (13): Tanh()
+  )
+)
 ```
 
 ```python
-
+model_D :
+ CGANDiscriminator(
+  (layer): Sequential(
+    (0): Conv2d(11, 64, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1), bias=False)
+    (1): LeakyReLU(negative_slope=0.2, inplace)
+    (2): Conv2d(64, 128, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1), bias=False)
+    (3): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (4): LeakyReLU(negative_slope=0.2, inplace)
+    (5): Conv2d(128, 256, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1), bias=False)
+    (6): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (7): LeakyReLU(negative_slope=0.2, inplace)
+    (8): Conv2d(256, 512, kernel_size=(4, 4), stride=(2, 2), padding=(1, 1), bias=False)
+    (9): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (10): LeakyReLU(negative_slope=0.2, inplace)
+    (11): Conv2d(512, 1, kernel_size=(4, 4), stride=(1, 1), bias=False)
+  )
+)
 ```
+※ Discriminator の出力層は、損失関数 に `nn.BCEWithLogitsLoss()` を使用しているため、sigmoid による活性化関数はなし。
