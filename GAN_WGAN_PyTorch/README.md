@@ -30,9 +30,21 @@ WGAN の PyTorch での実装。
     --dataset mnist --image_size 64
   ```
 
-- 推論処理
+- 推論処理（学習済みモデルから画像生成）
   ```sh
   $ python test.py --load_checkpoints_dir ${LOAD_CHAECKPOINTS_DIR}
+  ```
+
+- 推論処理（学習済みモデルからモーフィング動画の作成）
+  ```sh
+  $ python test_morphing.py --load_checkpoints_dir ${LOAD_CHAECKPOINTS_DIR}
+  ```
+  ```sh
+  # （例）
+  $ python test_morphing.py \
+      --exper_name WGAN_test_morphing \
+      --load_checkpoints_dir checkpoints/WGAN_train_D_NonBatchNorm_Opt_RMSprop_Epoch50_191228_1 \
+      --fps 30 --codec gif
   ```
 
 - TensorBoard
@@ -65,6 +77,9 @@ WGAN の PyTorch での実装。
   → 学習は安定化するものの、生成画像の品質はそれほど高くない印象<br>
   → 又、学習時間が長いという問題もあった。
 
+- 学習済みモデルからのモーフィング動画<br>
+  ![morphing_video](https://user-images.githubusercontent.com/25688193/71775924-c056c500-2fcb-11ea-991e-1939d216ce29.gif)<br>
+
 #### ☆ 実行条件２（識別器の BatchNorm なし）
 
 - Epoches : 10<br>
@@ -78,6 +93,9 @@ WGAN の PyTorch での実装。
 
   → 論文にあるように、識別器から BatchNorm を除外すると、生成画像の品質はむしろ悪化している。<br>
   → 論文の意味での BatchNorm の除外になっていない？
+
+- 学習済みモデルからのモーフィング動画<br>
+  ![morphing_video](https://user-images.githubusercontent.com/25688193/71775904-8685be80-2fcb-11ea-89f7-deda4e747971.gif)<br>
 
 ### ◎ 損失関数のグラフ
 

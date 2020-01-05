@@ -40,7 +40,43 @@ ProgressiveGAN（PGGAN）の PyTorch での実装。<br>
   - `python2 h5tool.py create_celeba_hq [file_name_to_save] [/path/to/celeba_dataset/] [/path/to/celeba_hq_deltas]`
 -->
 
+- 学習処理
+  ```sh
+  # （例１） train PGGAN for MNIST datset using GPU0
+  $ python train.py \
+    --exper_name PGGAN_train \
+    --dataset mnist --init_image_size 4 --final_image_size 32
+  ```
 
+- 推論処理（学習済みモデルから画像生成）
+  ```sh
+  $ python test.py --load_checkpoints_dir ${LOAD_CHAECKPOINTS_DIR}
+  ```
+
+- 推論処理（学習済みモデルからモーフィング動画の作成）
+  ```sh
+  # モーフィング動画の作成
+  $ python test_morphing.py --load_checkpoints_dir ${LOAD_CHAECKPOINTS_DIR}
+  ```
+  ```sh
+  # （例）
+  $ python test_morphing.py \
+      --exper_name PGGAN_test_morphing \
+      --load_checkpoints_dir checkpoints/PGGAN_train_Epoch100_191230 \
+      --dataset mnist --init_image_size 4 --final_image_size 32 \
+      --fps 30 --codec gif
+  ```
+
+- TensorBoard
+  ```sh
+  $ tensorboard --logdir ${TENSOR_BOARD_DIR} --port ${AVAILABLE_POOT}
+  ```
+
+  ```sh
+  #（例）
+  $ tensorboard --logdir tensorboard --port 6006
+  ```
+  
 <a id="コード説明＆実行結果"></a>
 
 ## ■ コードの実行結果
@@ -70,7 +106,9 @@ ProgressiveGAN（PGGAN）の PyTorch での実装。<br>
     ![fake_image_epoches10_batchAll](https://user-images.githubusercontent.com/25688193/71587812-94b68380-2b62-11ea-89ad-9d7571b40e8e.png)
   - Epoch 50<br>
     ![fake_image_epoches50_batchAll](https://user-images.githubusercontent.com/25688193/71611900-0254c500-2be0-11ea-9b96-f09f96e09c68.png)<br>
-  - Epoch 100<br>
+
+- 学習済みモデルからのモーフィング動画<br>
+  ![morphing_video](https://user-images.githubusercontent.com/25688193/71776293-4f66db80-2fd2-11ea-8a91-afc2d57e6b8e.gif)<br>
 
 ### ◎ 損失関数のグラフ
 

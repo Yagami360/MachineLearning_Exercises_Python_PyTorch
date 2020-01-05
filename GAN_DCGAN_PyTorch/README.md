@@ -49,15 +49,28 @@ DCGAN の PyTorch での実装。
     --networkG_type vanilla --networkD_type vanilla
   ```
 
-- 推論処理
+- 推論処理（学習済みモデルから画像生成）
   ```sh
   $ python test.py --load_checkpoints_dir ${LOAD_CHAECKPOINTS_DIR}
   ```
-  ```
+  ```sh
   # （例）
   $ python test.py \
       --exper_name DCGAN_test \
       --load_checkpoints_dir checkpoints/DCGAN_train_G_vanilla_D_vanilla_Epoch100_191227
+  ```
+
+- 推論処理（学習済みモデルからモーフィング動画の作成）
+  ```sh
+  # モーフィング動画の作成
+  $ python test_morphing.py --load_checkpoints_dir ${LOAD_CHAECKPOINTS_DIR}
+  ```
+  ```sh
+  # （例）
+  $ python test_morphing.py \
+      --exper_name DCGAN_test_morphing \
+      --load_checkpoints_dir checkpoints/DCGAN_train_G_vanilla_D_vanilla_Epoch100_191227 \
+      --fps 30 --codec gif
   ```
 
 - TensorBoard
@@ -88,6 +101,9 @@ DCGAN の PyTorch での実装。
   ![fake_image_epoches50_batchAll](https://user-images.githubusercontent.com/25688193/71516740-fde19100-28ed-11ea-8bfc-8f1a0fb6e783.png)<br>
 - Epoches : 100<br>
   ![fake_image_epoches99_batchAll](https://user-images.githubusercontent.com/25688193/71537339-fb1e8480-295d-11ea-9b19-2cd25da58d30.png)<br>
+
+- 学習済みモデルから生成したモーフィング動画<br>
+  ![morphing_video](https://user-images.githubusercontent.com/25688193/71775634-3573cb80-2fc7-11ea-9b4c-c86a85234f07.gif)<br>
 
 ### ◎ 損失関数のグラフ
 

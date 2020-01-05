@@ -30,9 +30,21 @@ WGAN-GPの PyTorch での実装。
     --dataset mnist --image_size 64
   ```
 
-- 推論処理
+- 推論処理（学習済みモデルから画像生成）
   ```sh
   $ python test.py --load_checkpoints_dir ${LOAD_CHAECKPOINTS_DIR}
+  ```
+
+- 推論処理（学習済みモデルからモーフィング動画の作成）
+  ```sh
+  $ python test_morphing.py --load_checkpoints_dir ${LOAD_CHAECKPOINTS_DIR}
+  ```
+  ```sh
+  # （例）
+  $ python test_morphing.py \
+      --exper_name WGANGP_test_morphing \
+      --load_checkpoints_dir checkpoints/WGANGP_train_D_NonBatchNorm_Epoch50_191230 \
+      --fps 30 --codec gif
   ```
 
 - TensorBoard
@@ -70,12 +82,15 @@ WGAN-GPの PyTorch での実装。
 
 #### ☆ 実行条件２（識別器の BatchNorm なし）
 
-- Epoches : 10
+- Epoches : 10<br>
   ![fake_image_epoches10_batchAll](https://user-images.githubusercontent.com/25688193/71606275-e686fa00-2bb2-11ea-92ba-68b1447af96c.png)<br>
-- Epoches : 50
-  ![fake_image_epoches49_batch0](https://user-images.githubusercontent.com/25688193/71618307-6f795200-2c02-11ea-8ca7-d23d0c01340d.png)<br>
+- Epoches : 50<br>
+  ![fake_image_epoches49_batchAll](https://user-images.githubusercontent.com/25688193/71776040-b209a880-2fcd-11ea-9cef-0430a0c7b845.png)<br>
 - Epoches : 1 ~ 50<br>
   ![fake_image_epoches49](https://user-images.githubusercontent.com/25688193/71618306-6ee0bb80-2c02-11ea-8995-3c677a340fb7.gif)<br>
+
+- 学習済みモデルからのモーフィング動画<br>
+  ![morphing_video](https://user-images.githubusercontent.com/25688193/71776028-7f5fb000-2fcd-11ea-89a9-b49c2471f9b6.gif)<br>
 
 ### ◎ 損失関数のグラフ
 
@@ -104,7 +119,7 @@ WGAN-GPの PyTorch での実装。
   - 緑色 : テスト用データセット（データセット全体）
 
   ※ テスト用データの gradient penalty loss が０になっているのは、ソフトの不具合
-
+  
 ### ◎ 各種オプション引数の設定値
 
 <!--

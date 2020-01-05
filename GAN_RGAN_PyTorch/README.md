@@ -47,9 +47,22 @@ Relativistic GANs (RSGAN, RaSGAN, RaLSGAN) の PyTorch での実装。
     --gan_type RaLSGAN
   ```
 
-- 推論処理
+- 推論処理（学習済みモデルから画像生成）
   ```sh
   $ python test.py --load_checkpoints_dir ${LOAD_CHAECKPOINTS_DIR}
+  ```
+
+- 推論処理（学習済みモデルからモーフィング動画の作成）
+  ```sh
+  # モーフィング動画の作成
+  $ python test_morphing.py --load_checkpoints_dir ${LOAD_CHAECKPOINTS_DIR}
+  ```
+  ```sh
+  # （例）
+  $ python test_morphing.py \
+      --exper_name RGAN_test_morphing \
+      --load_checkpoints_dir checkpoints/RaLSGAN_train_D_vanilla_Epoch100_191227 \
+      --fps 30 --codec gif
   ```
 
 - TensorBoard
@@ -84,6 +97,9 @@ Relativistic GANs (RSGAN, RaSGAN, RaLSGAN) の PyTorch での実装。
   ![fake_image_epoches96](https://user-images.githubusercontent.com/25688193/71560087-b05d5380-2aa8-11ea-9a39-be6a35e76826.gif)<br>
   → 入力ノイズ z を固定した場合でも、学習中の生成画像が安定しない。
 
+- 学習済みモデルからのモーフィング動画<br>
+  ![morphing_video](https://user-images.githubusercontent.com/25688193/71775768-dc596700-2fc9-11ea-94d9-1f2580f2eeb5.gif)<br>
+
 #### ☆ RaSGAN
 
 - Epochs :10<br>
@@ -102,6 +118,9 @@ Relativistic GANs (RSGAN, RaSGAN, RaLSGAN) の PyTorch での実装。
 - Epoches : 1 ~100<br>
   ![fake_image_epoches99](https://user-images.githubusercontent.com/25688193/71566310-f8f12d00-2af9-11ea-9b9d-52bef0b9a4e8.gif)
 
+- 学習済みモデルからのモーフィング動画<br>
+  ![morphing_video](https://user-images.githubusercontent.com/25688193/71775797-32c6a580-2fca-11ea-8837-1ee9973c451c.gif)<br>
+
 #### ☆ RaLSGAN
 
 - Epochs :10<br>
@@ -117,6 +136,9 @@ Relativistic GANs (RSGAN, RaSGAN, RaLSGAN) の PyTorch での実装。
 
 - Epoches : 1 ~100<br>
   ![fake_image_epoches99](https://user-images.githubusercontent.com/25688193/71566335-2047fa00-2afa-11ea-801d-cea2da92521e.gif)<br>
+
+- 学習済みモデルからのモーフィング動画<br>
+  ![morphing_video](https://user-images.githubusercontent.com/25688193/71775733-21c96480-2fc9-11ea-91f2-47ea084c40b1.gif)<br>
 
 ### ◎ 損失関数のグラフ
 

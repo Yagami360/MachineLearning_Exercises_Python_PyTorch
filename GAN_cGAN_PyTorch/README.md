@@ -37,13 +37,35 @@ Conditional GAN（cGAN）の PyTorch での実装。
     --gan_type LSGAN
   ```
 
-- 推論処理
+- 推論処理（学習済みモデルから画像生成）
   ```sh
   # （例１）label 0 の画像を生成
   $ python test.py --load_checkpoints_dir ${LOAD_CHAECKPOINTS_DIR} --y_label 0
 
   # （例１）label 1 の画像を生成
   $ python test.py --load_checkpoints_dir ${LOAD_CHAECKPOINTS_DIR} --y_label 1
+  ```
+
+- 推論処理（学習済みモデルからモーフィング動画の作成）
+  ```sh
+  # モーフィング動画の作成
+  $ python test_morphing.py --load_checkpoints_dir ${LOAD_CHAECKPOINTS_DIR} --y_label ${Y_LABEL}
+  ```
+  ```sh
+  # （例１）label 0 のモーフィング動画を生成
+  $ python test_morphing.py \
+      --exper_name CGAN_test_morphing \
+      --load_checkpoints_dir checkpoints/DCGAN_train_G_vanilla_D_vanilla_Epoch100_191227 \
+      --y_label 0 \
+      --fps 30 --codec gif
+  ```
+  ```sh
+  # （例２）label 1 のモーフィング動画を生成
+  $ python test_morphing.py \
+      --exper_name CGAN_test_morphing \
+      --load_checkpoints_dir checkpoints/DCGAN_train_G_vanilla_D_vanilla_Epoch100_191227 \
+      --y_label 1 \
+      --fps 30 --codec gif
   ```
 
 - TensorBoard
