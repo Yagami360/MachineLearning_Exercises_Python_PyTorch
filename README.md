@@ -21,16 +21,17 @@ PyTorch 実装の練習コード集。<br>
 
 ## ■ 項目（フォルダ別）
 
-1. [ResNet](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/ResNet_PyTorch)
-1. [UNet](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/UNet_PyTorch)
+1. Deep Neural Network（基礎モデル）
+    1. [ResNet](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/ResNet_PyTorch)
+    1. [UNet](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/UNet_PyTorch)
 1. GANs
     1. [Deep Convolutional GAN（DCGAN）](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_DCGAN_PyTorch)
     1. [Conditional GAN（cGAN）](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_cGAN_PyTorch)
     1. [Wasserstein GAN（WGAN）](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_WGAN_PyTorch)
     1. [Improved Training of Wasserstein GANs（WGAN-GP）](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_WGAN-GP_PyTorch)
-    1. [RGAN](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_RGAN_PyTorch)
-    1. [Pix2Pix](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/Pix2Pix_PyTorch)
+    1. [Relativistic GANs（RGAN）](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_RGAN_PyTorch)
     1. [ProgressiveGAN](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_PGGAN_PyTorch)
+    1. [Pix2Pix](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/Pix2Pix_PyTorch)
 - 強化学習
     1. [【外部リンク】ReinforcementLearning](https://github.com/Yagami360/ReinforcementLearning_Exercises)
 
