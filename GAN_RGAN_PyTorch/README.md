@@ -2,7 +2,7 @@
 Relativistic GANs (RSGAN, RaSGAN, RaLSGAN) の PyTorch での実装。
 
 - 参考コード
-  - [Github/junyanz/pytorch-CycleGAN-and-pix2pix](https://github.com/junyanz/pytorch-CycleGAN-and-pix2pix)
+  - [Github/AlexiaJM/RelativisticGAN](https://github.com/AlexiaJM/RelativisticGAN)
 
 ## ■ 項目 [Contents]
 1. [動作環境](#動作環境)

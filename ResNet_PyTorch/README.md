@@ -26,22 +26,35 @@ ResNet-18 の PyTorch での実装
 
 - 学習処理
   ```sh
-  # （例１） train cGAN for MNIST datset using GPU0
+  # （例１） train ResNet18 for MNIST datset using GPU0
   $ python train.py \
     --exper_name ResNet18_train_mnist \
     --dataset mnist --image_size 224 --n_classes 10
   ```
 
   ```sh
-  # （例２） train cGAN for CIFAR-10 datset using GPU0
+  # （例２） train ResNet18 for CIFAR-10 datset using GPU0
   $ python train.py \
     --exper_name ResNet_train_cifar10 \
     --dataset cifar-10 --image_size 224 --n_classes 10
   ```
 
-- 推論処理（実装中...）
+- 推論処理
   ```sh
-  $ python test.py
+  # （例１） test ResNet18 for MNIST datset using GPU0
+  $ python test.py \
+    --exper_name ResNet18_test_mnist \
+    --load_checkpoints_dir ${LOAD_CHECKPOINTS_DIR} \
+    --dataset mnist --image_size 224 --n_classes 10
+  ```
+
+  ```sh
+  # （例1-1） test ResNet18 for MNIST datset using GPU0
+  $ python test.py \
+    --exper_name ResNet18_test_mnist \
+    --dataset_dir ../dataset \
+    --load_checkpoints_dir checkpoints/ResNet18_train_Epoch10_191230 \
+    --dataset mnist --image_size 224 --n_classes 10
   ```
 
 - TensorBoard

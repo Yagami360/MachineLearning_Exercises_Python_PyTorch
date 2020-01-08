@@ -37,9 +37,21 @@ UNet によるセマンティックセグメンテーションを利用して、
     --image_size 256
   ```
 
-- 推論処理（実装中...）
+- 推論処理
   ```sh
-  $ python test.py
+  $ python test.py \
+    --exper_name UNet_test \
+    --dataset_dir ${DATASET_DIR} \
+    --load_checkpoints_dir ${LOAD_CHECKPOINTS_DIR} \
+    --image_size 64 \
+  ```
+  ```sh
+  # （例）
+  $ python test.py \
+    --exper_name UNet_test \
+    --dataset_dir ../dataset/maps \
+    --load_checkpoints_dir checkpoints/UNet_train_Epoch100_191230 \
+    --image_size 64
   ```
 
 - TensorBoard

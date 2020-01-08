@@ -123,7 +123,7 @@ if __name__ == '__main__':
 
     # モデルを読み込む
     if not args.load_checkpoints_dir == '' and os.path.exists(args.load_checkpoints_dir):
-        init_step = load_checkpoint(model, device, args.load_checkpoints_dir, "model_final.pth" )
+        init_step = load_checkpoint(model, device, os.path.join(args.load_checkpoints_dir, "model_final.pth") )
 
     #======================================================================
     # optimizer の設定
