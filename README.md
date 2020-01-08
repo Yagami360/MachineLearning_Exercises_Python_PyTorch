@@ -31,7 +31,7 @@ PyTorch 実装の練習コード集。<br>
     1. [Improved Training of Wasserstein GANs（WGAN-GP）](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_WGAN-GP_PyTorch)
     1. [Relativistic GANs（RGAN）](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_RGAN_PyTorch)
     1. [ProgressiveGAN](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_PGGAN_PyTorch)
-    1. [Pix2Pix](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/Pix2Pix_PyTorch)
+    1. [Pix2Pix](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_Pix2Pix_PyTorch)
 - 強化学習
     1. [【外部リンク】ReinforcementLearning](https://github.com/Yagami360/ReinforcementLearning_Exercises)
 
