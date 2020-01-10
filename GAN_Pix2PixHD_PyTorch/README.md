@@ -122,6 +122,7 @@ model_D :
 ```
 
 ```python
+[feature matching loss なし]
 model_D :
  Pix2PixMultiscaleDiscriminator(
   (layer0): Sequential(
@@ -308,49 +309,73 @@ GlobalGenerator(
 ```
 
 ```python
-MultiscaleDiscriminator(
+[feature matching loss あり]
+model_D :
+ MultiscaleDiscriminator(
   (scale0_layer0): Sequential(
-    (0): Conv2d(39, 64, kernel_size=(4, 4), stride=(2, 2), padding=(2, 2))
+    (0): Conv2d(6, 64, kernel_size=(4, 4), stride=(2, 2), padding=(2, 2))
     (1): LeakyReLU(negative_slope=0.2, inplace)
   )
   (scale0_layer1): Sequential(
     (0): Conv2d(64, 128, kernel_size=(4, 4), stride=(2, 2), padding=(2, 2))
-    (1): InstanceNorm2d(128, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
+    (1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
     (2): LeakyReLU(negative_slope=0.2, inplace)
   )
   (scale0_layer2): Sequential(
     (0): Conv2d(128, 256, kernel_size=(4, 4), stride=(2, 2), padding=(2, 2))
-    (1): InstanceNorm2d(256, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
+    (1): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
     (2): LeakyReLU(negative_slope=0.2, inplace)
   )
   (scale0_layer3): Sequential(
     (0): Conv2d(256, 512, kernel_size=(4, 4), stride=(1, 1), padding=(2, 2))
-    (1): InstanceNorm2d(512, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
+    (1): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
     (2): LeakyReLU(negative_slope=0.2, inplace)
   )
   (scale0_layer4): Sequential(
     (0): Conv2d(512, 1, kernel_size=(4, 4), stride=(1, 1), padding=(2, 2))
   )
   (scale1_layer0): Sequential(
-    (0): Conv2d(39, 64, kernel_size=(4, 4), stride=(2, 2), padding=(2, 2))
+    (0): Conv2d(6, 64, kernel_size=(4, 4), stride=(2, 2), padding=(2, 2))
     (1): LeakyReLU(negative_slope=0.2, inplace)
   )
   (scale1_layer1): Sequential(
     (0): Conv2d(64, 128, kernel_size=(4, 4), stride=(2, 2), padding=(2, 2))
-    (1): InstanceNorm2d(128, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
+    (1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
     (2): LeakyReLU(negative_slope=0.2, inplace)
   )
   (scale1_layer2): Sequential(
     (0): Conv2d(128, 256, kernel_size=(4, 4), stride=(2, 2), padding=(2, 2))
-    (1): InstanceNorm2d(256, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
+    (1): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
     (2): LeakyReLU(negative_slope=0.2, inplace)
   )
   (scale1_layer3): Sequential(
     (0): Conv2d(256, 512, kernel_size=(4, 4), stride=(1, 1), padding=(2, 2))
-    (1): InstanceNorm2d(512, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
+    (1): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
     (2): LeakyReLU(negative_slope=0.2, inplace)
   )
   (scale1_layer4): Sequential(
+    (0): Conv2d(512, 1, kernel_size=(4, 4), stride=(1, 1), padding=(2, 2))
+  )
+  (scale2_layer0): Sequential(
+    (0): Conv2d(6, 64, kernel_size=(4, 4), stride=(2, 2), padding=(2, 2))
+    (1): LeakyReLU(negative_slope=0.2, inplace)
+  )
+  (scale2_layer1): Sequential(
+    (0): Conv2d(64, 128, kernel_size=(4, 4), stride=(2, 2), padding=(2, 2))
+    (1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): LeakyReLU(negative_slope=0.2, inplace)
+  )
+  (scale2_layer2): Sequential(
+    (0): Conv2d(128, 256, kernel_size=(4, 4), stride=(2, 2), padding=(2, 2))
+    (1): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): LeakyReLU(negative_slope=0.2, inplace)
+  )
+  (scale2_layer3): Sequential(
+    (0): Conv2d(256, 512, kernel_size=(4, 4), stride=(1, 1), padding=(2, 2))
+    (1): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (2): LeakyReLU(negative_slope=0.2, inplace)
+  )
+  (scale2_layer4): Sequential(
     (0): Conv2d(512, 1, kernel_size=(4, 4), stride=(1, 1), padding=(2, 2))
   )
   (downsample): AvgPool2d(kernel_size=3, stride=2, padding=[1, 1])

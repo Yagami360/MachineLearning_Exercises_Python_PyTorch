@@ -257,7 +257,6 @@ class Pix2PixPatchGANDiscriminator( nn.Module ):
             nn.Conv2d( n_fmaps*8, 1, 4, padding=1, bias=False )
         )
 
-
     def forward(self, x, y ):
         output = torch.cat( [x, y], dim=1 )
         output = self.layer1( output )
@@ -270,16 +269,46 @@ class Pix2PixPatchGANDiscriminator( nn.Module ):
 
 
 class Pix2PixMultiscaleDiscriminator(nn.Module):
-    def __init__(self, input_nc=6, ndf=64, n_layers=3, norm_layer=nn.BatchNorm2d, 
+    """
+    Pix2Pix-HD のマルチスケール識別器
+    """
+    def __init__(
+        self,
+        n_in_channels = 3,
+        n_fmaps = 32,
+        n_dis = 3,                # 識別器の数
+    ):
+        super( Pix2PixMultiscaleDiscriminator, self ).__init__()
+        self.n_dis = n_dis
+        layers = []
+        for i in range(self.n_dis):
+            layers.append( Pix2PixPatchGANDiscriminator(n_in_channels, n_fmaps) )
+
+        self.downsample = nn.AvgPool2d(3, stride=2, padding=[1, 1], count_include_pad=False)
+        self.layers = nn.Sequential( *layers )
+
+        return
+
+    def forward(self, x, y ):
+        output = torch.cat( [x, y], dim=1 )
+
+        outputs = []
+        for i in range(self.n_dis):
+            outputs.append([])
+            
+        return outputs
+
+
+class MultiscaleDiscriminator(nn.Module):
+    def __init__(self, input_nc, ndf=64, n_layers=3, norm_layer=nn.BatchNorm2d, 
                  use_sigmoid=False, num_D=3, getIntermFeat=False):
-        super(Pix2PixMultiscaleDiscriminator, self).__init__()
+        super(MultiscaleDiscriminator, self).__init__()
         self.num_D = num_D
         self.n_layers = n_layers
         self.getIntermFeat = getIntermFeat
      
         for i in range(num_D):
             netD = NLayerDiscriminator(input_nc, ndf, n_layers, norm_layer, use_sigmoid, getIntermFeat)
-            #netD = Pix2PixPatchGANDiscriminator(input_nc, ndf)
             if getIntermFeat:                                
                 for j in range(n_layers+2):
                     setattr(self, 'scale'+str(i)+'_layer'+str(j), getattr(netD, 'model'+str(j)))                                   
@@ -297,7 +326,8 @@ class Pix2PixMultiscaleDiscriminator(nn.Module):
         else:
             return [model(input)]
 
-    def forward(self, input):        
+    def forward(self, inputA, inputB):
+        input = torch.cat( [inputA, inputB], dim=1 )        
         num_D = self.num_D
         result = []
         input_downsampled = input
@@ -362,3 +392,51 @@ class NLayerDiscriminator(nn.Module):
             return res[1:]
         else:
             return self.model(input)  
+
+import functools
+class NLayerDiscriminator2(nn.Module):
+    """Defines a PatchGAN discriminator"""
+
+    def __init__(self, input_nc=3, ndf=64, n_layers=3, norm_layer=nn.BatchNorm2d):
+        """Construct a PatchGAN discriminator
+        Parameters:
+            input_nc (int)  -- the number of channels in input images
+            ndf (int)       -- the number of filters in the last conv layer
+            n_layers (int)  -- the number of conv layers in the discriminator
+            norm_layer      -- normalization layer
+        """
+        super(NLayerDiscriminator, self).__init__()
+        if type(norm_layer) == functools.partial:  # no need to use bias as BatchNorm2d has affine parameters
+            use_bias = norm_layer.func != nn.BatchNorm2d
+        else:
+            use_bias = norm_layer != nn.BatchNorm2d
+
+        kw = 4
+        padw = 1
+        sequence = [nn.Conv2d(input_nc, ndf, kernel_size=kw, stride=2, padding=padw), nn.LeakyReLU(0.2, True)]
+        nf_mult = 1
+        nf_mult_prev = 1
+        for n in range(1, n_layers):  # gradually increase the number of filters
+            nf_mult_prev = nf_mult
+            nf_mult = min(2 ** n, 8)
+            sequence += [
+                nn.Conv2d(ndf * nf_mult_prev, ndf * nf_mult, kernel_size=kw, stride=2, padding=padw, bias=use_bias),
+                norm_layer(ndf * nf_mult),
+                nn.LeakyReLU(0.2, True)
+            ]
+
+        nf_mult_prev = nf_mult
+        nf_mult = min(2 ** n_layers, 8)
+        sequence += [
+            nn.Conv2d(ndf * nf_mult_prev, ndf * nf_mult, kernel_size=kw, stride=1, padding=padw, bias=use_bias),
+            norm_layer(ndf * nf_mult),
+            nn.LeakyReLU(0.2, True)
+        ]
+
+        sequence += [nn.Conv2d(ndf * nf_mult, 1, kernel_size=kw, stride=1, padding=padw)]  # output 1 channel prediction map
+        self.model = nn.Sequential(*sequence)
+        init_weights(self.model, 'xavier')
+
+    def forward(self, input):
+        """Standard forward."""
+        return self.model(input)

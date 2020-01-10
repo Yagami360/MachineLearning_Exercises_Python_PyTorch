@@ -18,7 +18,7 @@ from torchvision.utils import save_image
 from tensorboardX import SummaryWriter
 
 # 自作クラス
-from networks import Pix2PixUNetGenerator, Pix2PixPatchGANDiscriminator, Pix2PixMultiscaleDiscriminator
+from networks import Pix2PixUNetGenerator, Pix2PixPatchGANDiscriminator, MultiscaleDiscriminator, Pix2PixMultiscaleDiscriminator
 from map2aerial_dataset import Map2AerialDataset, Map2AerialDataLoader
 from utils import save_checkpoint, load_checkpoint
 from utils import board_add_image, board_add_images
@@ -46,7 +46,9 @@ if __name__ == '__main__':
     parser.add_argument('--beta2', type=float, default=0.999, help="学習率の減衰率")
     parser.add_argument('--image_height', type=int, default=64, help="入力画像の高さ（pixel単位）")
     parser.add_argument('--image_width', type=int, default=64, help="入力画像の幅（pixel単位）")
-    parser.add_argument('--lambda_l1', type=float, default=100.0, help="L1正則化項の係数値")
+    parser.add_argument('--lambda_gan', type=float, default=1.0, help="adv loss の重み係数値")
+    parser.add_argument('--lambda_feat', type=float, default=10.0, help="feature matching loss の重み係数値")
+    parser.add_argument('--lambda_vgg', type=float, default=1.0, help="vgg perceptual loss の重み係数値")
     parser.add_argument('--unetG_dropout', type=float, default=0.5, help="生成器への入力ノイズとしての Dropout 率")
     parser.add_argument('--n_fmaps', type=int, default=64, help="特徴マップの枚数")
     parser.add_argument('--n_display_step', type=int, default=50, help="tensorboard への表示間隔")
@@ -129,13 +131,13 @@ if __name__ == '__main__':
     ).to( device )
 
     # Discriminator
-    model_D = Pix2PixMultiscaleDiscriminator(
-        input_nc=3, ndf=args.n_fmaps, n_layers=3,
-        norm_layer=nn.BatchNorm2d, use_sigmoid=False, num_D=3, getIntermFeat=False 
+    model_D = MultiscaleDiscriminator(
+        input_nc=6, ndf=args.n_fmaps, n_layers=3,
+        norm_layer=nn.BatchNorm2d, use_sigmoid=False, num_D=3, getIntermFeat=True 
     ).to( device )
 
     """
-    model_D = Pix2PixPatchGANDiscriminator( 
+    model_D = Pix2PixMultiscaleDiscriminator( 
         n_in_channels = 3,
         n_fmaps = args.n_fmaps
     ).to( device )
@@ -168,8 +170,6 @@ if __name__ == '__main__':
     #loss_gan_fn = nn.BCELoss()             # when use sigmoid in Discriminator
     #loss_gan_fn = nn.BCEWithLogitsLoss()    # when not use sigmoid in Discriminator
     loss_gan_fn = nn.MSELoss()
-
-    loss_l1_fn = torch.nn.L1Loss()
 
     #======================================================================
     # モデルの学習処理
@@ -214,21 +214,24 @@ if __name__ == '__main__':
             # 学習用データをモデルに流し込む
             # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
             #----------------------------------------------------
-            # D(x) : 本物画像 x = image を入力したときの識別器の出力
-            D_x = model_D( pre_image, after_image )
+            # 本物画像 x = image を入力したときの識別器の出力
+            d_reals = model_D( pre_image, after_image )
+            d_real = d_reals[0]
             if( args.debug and n_print > 0 ):
-                print( "D_x.size() :", D_x.size() )
+                print( "len(d_reals) :", len(d_reals) )
+                print( "len(d_reals[0]) :", len(d_reals[0]) )
+                print( "d_reals[0][0].shape :", d_reals[0][0].shape )
 
-            # G(z) : 生成器から出力される偽物画像
+            # 生成器から出力される偽物画像
             with torch.no_grad():   # 生成器 G の更新が行われないようにする。
-                G_z = model_G( after_image )
+                g_fake_img = model_G( after_image )
                 if( args.debug and n_print > 0 ):
-                    print( "G_z.size() :", G_z.size() )
+                    print( "g_fake_img.shape :", g_fake_img.shape )
                 
-            # D( G(z) ) : 偽物画像を入力したときの識別器の出力
-            D_G_z = model_D( G_z.detach(), after_image )    # detach して G_z を通じて、生成器に勾配が伝搬しないようにする
+            # 偽物画像を入力したときの識別器の出力
+            d_fake = model_D( g_fake_img.detach(), after_image )    # detach して g_fake_img を通じて、生成器に勾配が伝搬しないようにする
             if( args.debug and n_print > 0 ):
-                print( "D_G_z.size() :", D_G_z.size() )
+                print( "d_fake.shape :", d_fake.shape )
 
             #----------------------------------------------------
             # 損失関数を計算する
@@ -237,14 +240,14 @@ if __name__ == '__main__':
             # loss は Pytorch の Variable として帰ってくるので、これをloss.data[0]で数値として見る必要があり
             #----------------------------------------------------
             # real ラベルを 1、fake ラベルを 0 として定義
-            real_ones_tsr =  torch.ones( D_x.shape ).to( device )
-            fake_zeros_tsr =  torch.zeros( D_x.shape ).to( device )
+            real_ones_tsr =  torch.ones( d_real.shape ).to( device )
+            fake_zeros_tsr =  torch.zeros( d_real.shape ).to( device )
             if( args.debug and n_print > 0 ):
                 print( "real_ones_tsr.shape :", real_ones_tsr.shape )
                 print( "fake_zeros_tsr.shape :", fake_zeros_tsr.shape )
 
-            loss_D_real = loss_gan_fn( D_x, real_ones_tsr )
-            loss_D_fake = loss_gan_fn( D_G_z, fake_zeros_tsr )
+            loss_D_real = loss_gan_fn( d_real, real_ones_tsr )
+            loss_D_fake = loss_gan_fn( d_fake, fake_zeros_tsr )
             loss_D = loss_D_real + loss_D_fake
 
             #----------------------------------------------------
@@ -269,25 +272,19 @@ if __name__ == '__main__':
 
             #----------------------------------------------------
             # 学習用データをモデルに流し込む
-            # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
             #----------------------------------------------------
-            # G(z) : 生成器から出力される偽物画像
-            G_z = model_G( after_image )
-            if( args.debug and n_print > 0 ):
-                print( "G_z.size() :", G_z.size() )
+            # 生成器から出力される偽物画像
+            g_fake_img = model_G( after_image )
 
-            # D( G(z) ) : 偽物画像を入力したときの識別器の出力
+            # 偽物画像を入力したときの識別器の出力
             #with torch.no_grad():  # param.requires_grad = False しているので不要
-            D_G_z = model_D( G_z, after_image )
-            if( args.debug and n_print > 0 ):
-                print( "D_G_z.size() :", D_G_z.size() )
+            d_fake = model_D( g_fake_img, after_image )
 
             #----------------------------------------------------
             # 損失関数を計算する
             #----------------------------------------------------
-            loss_gan = loss_gan_fn( D_G_z, real_ones_tsr )
-            loss_l1 = loss_l1_fn( G_z, after_image )
-            loss_G = loss_gan + args.lambda_l1 * loss_l1
+            loss_gan = loss_gan_fn( d_fake, real_ones_tsr )
+            loss_G = args.lambda_gan * loss_gan
 
             #----------------------------------------------------
             # ネットワークの更新処理
@@ -307,14 +304,13 @@ if __name__ == '__main__':
             if( step == 0 or ( step % args.n_display_step == 0 ) ):
                 board_train.add_scalar('Generater/loss_G', loss_G.item(), iterations)
                 board_train.add_scalar('Generater/loss_gan', loss_gan.item(), iterations)
-                board_train.add_scalar('Generater/loss_l1', loss_l1.item(), iterations)
                 board_train.add_scalar('Discriminator/loss_D', loss_D.item(), iterations)
                 board_train.add_scalar('Discriminator/loss_D_real', loss_D_real.item(), iterations)
                 board_train.add_scalar('Discriminator/loss_D_fake', loss_D_fake.item(), iterations)
                 print( "epoch={}, iters={}, loss_G={:.5f}, loss_D={:.5f}".format(epoch, iterations, loss_G, loss_D) )
 
                 visuals = [
-                    [pre_image, after_image, G_z],
+                    [pre_image, after_image, g_fake_img],
                 ]
                 board_add_images(board_train, 'fake image', visuals, iterations+1)
 
@@ -332,7 +328,6 @@ if __name__ == '__main__':
                 loss_D_fake_total = 0
                 loss_G_total = 0
                 loss_gan_total = 0
-                loss_l1_total = 0
                 for test_inputs in dloader_test :
                     if test_inputs["aerial_image_tsr"].shape[0] != args.batch_size_test:
                         break
@@ -350,25 +345,24 @@ if __name__ == '__main__':
                     # テスト用データをモデルに流し込む
                     #----------------------------------------------------
                     with torch.no_grad():
-                        D_x = model_D( pre_image, after_image )
-                        G_z = model_G( after_image )
-                        D_G_z = model_D( G_z, after_image )
+                        d_real = model_D( pre_image, after_image )
+                        g_fake_img = model_G( after_image )
+                        d_fake = model_D( g_fake_img, after_image )
 
                     #----------------------------------------------------
                     # 損失関数を計算する
                     #----------------------------------------------------
-                    real_ones_tsr =  torch.ones( D_x.shape ).to( device )
-                    fake_zeros_tsr =  torch.zeros( D_x.shape ).to( device )
+                    real_ones_tsr =  torch.ones( d_real.shape ).to( device )
+                    fake_zeros_tsr =  torch.zeros( d_real.shape ).to( device )
 
                     # Discriminator
-                    loss_D_real = loss_gan_fn( D_x, real_ones_tsr )
-                    loss_D_fake = loss_gan_fn( D_G_z, fake_zeros_tsr )
+                    loss_D_real = loss_gan_fn( d_real, real_ones_tsr )
+                    loss_D_fake = loss_gan_fn( d_fake, fake_zeros_tsr )
                     loss_D = loss_D_real + loss_D_fake
 
                     # Generator
-                    loss_gan = loss_gan_fn( D_G_z, real_ones_tsr )
-                    loss_l1 = loss_l1_fn( G_z, after_image )
-                    loss_G = loss_gan + args.lambda_l1 * loss_l1
+                    loss_gan = loss_gan_fn( d_fake, real_ones_tsr )
+                    loss_G = args.lambda_l1 * loss_gan_fn
 
                     # total
                     loss_D_total += loss_D.item()
@@ -376,20 +370,18 @@ if __name__ == '__main__':
                     loss_D_fake_total += loss_D_fake.item()
                     loss_G_total += loss_G.item()
                     loss_gan_total += loss_gan.item()
-                    loss_l1_total += loss_l1.item()
 
                     if( test_iterations > args.n_test ):
                         break
 
                 board_test.add_scalar('Generater/loss_G', (loss_G_total/n_test_loop), iterations)
                 board_test.add_scalar('Generater/loss_gan', (loss_gan_total/n_test_loop), iterations)
-                board_test.add_scalar('Generater/loss_l1', (loss_l1_total/n_test_loop), iterations)
                 board_test.add_scalar('Discriminator/loss_D', (loss_D_total/n_test_loop), iterations)
                 board_test.add_scalar('Discriminator/loss_D_real', (loss_D_real_total/n_test_loop), iterations)
                 board_test.add_scalar('Discriminator/loss_D_fake', (loss_D_fake_total/n_test_loop), iterations)
 
                 visuals = [
-                    [pre_image, after_image, G_z],
+                    [pre_image, after_image, g_fake_img],
                 ]
                 """
                 if( args.debug and n_print > 0 ):
@@ -424,13 +416,13 @@ if __name__ == '__main__':
             break
 
         with torch.no_grad():
-            G_z = model_G( fix_pre_image )
-            #G_z = model_G( fix_after_image )
+            g_fake_img = model_G( fix_pre_image )
+            #g_fake_img = model_G( fix_after_image )
 
-        save_image( tensor = G_z[0], filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}_batch0.png".format( epoch ) )
-        save_image( tensor = G_z, filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}_batchAll.png".format( epoch ) )
+        save_image( tensor = g_fake_img[0], filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}_batch0.png".format( epoch ) )
+        save_image( tensor = g_fake_img, filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}_batchAll.png".format( epoch ) )
 
-        fake_images_historys.append(G_z[0].transpose(0,1).transpose(1,2).cpu().clone().numpy())
+        fake_images_historys.append(g_fake_img[0].transpose(0,1).transpose(1,2).cpu().clone().numpy())
         save_image_historys_gif( fake_images_historys, os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}.gif".format( epoch ) )        
 
     save_checkpoint( model_G, device, os.path.join(args.save_checkpoints_dir, args.exper_name, "G", 'G_final.pth'), iterations )
