@@ -30,9 +30,9 @@ if [ -d "${RESULTS_DIR}/${EXEP_NAME}" ] ; then
 fi
 
 python train.py \
-    --device gpu \
+    --device cpu \
     --exper_name ${EXEP_NAME} \
-    --dataset_dir ../dataset/maps \
+    --dataset_dir ${HOME}/ML_dataset/maps \
     --results_dir ${RESULTS_DIR} \
     --tensorboard_dir ${TENSOR_BOARD_DIR} \
     --save_checkpoints_dir checkpoints --n_save_step ${N_SAVE_STEP} \

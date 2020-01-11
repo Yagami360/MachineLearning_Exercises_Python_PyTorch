@@ -275,28 +275,81 @@ class Pix2PixMultiscaleDiscriminator(nn.Module):
     def __init__(
         self,
         n_in_channels = 3,
-        n_fmaps = 32,
+        n_fmaps = 64,
         n_dis = 3,                # 識別器の数
+#        n_layers = 3,        
     ):
         super( Pix2PixMultiscaleDiscriminator, self ).__init__()
         self.n_dis = n_dis
-        layers = []
+        #self.n_layers = n_layers
+
+        def discriminator_block1( in_dim, out_dim, stride, padding ):
+            model = nn.Sequential(
+                nn.Conv2d( in_dim, out_dim, 4, stride, padding ),
+                nn.LeakyReLU( 0.2, inplace=True ),
+            )
+            return model
+
+        def discriminator_block2( in_dim, out_dim, stride, padding ):
+            model = nn.Sequential(
+                nn.Conv2d( in_dim, out_dim, 4, stride, padding ),
+                nn.InstanceNorm2d( out_dim ),
+                nn.LeakyReLU( 0.2, inplace=True )
+            )
+            return model
+
+        def discriminator_block3( in_dim, out_dim, stride, padding ):
+            model = nn.Sequential(
+                nn.Conv2d( in_dim, out_dim, 4, stride, padding ),
+            )
+            return model
+
+        # setattr() を用いて self オブジェクトを動的に生成することで、各 Sequential ブロックに名前をつける
         for i in range(self.n_dis):
-            layers.append( Pix2PixPatchGANDiscriminator(n_in_channels, n_fmaps) )
+            setattr( self, 'scale'+str(i)+'_layer0', discriminator_block1( n_in_channels*2, n_fmaps, 2, 2) )
+            setattr( self, 'scale'+str(i)+'_layer1', discriminator_block2( n_fmaps, n_fmaps*2, 2, 2) )
+            setattr( self, 'scale'+str(i)+'_layer2', discriminator_block2( n_fmaps*2, n_fmaps*4, 2, 2) )
+            setattr( self, 'scale'+str(i)+'_layer3', discriminator_block2( n_fmaps*4, n_fmaps*8, 1, 2) )
+            setattr( self, 'scale'+str(i)+'_layer4', discriminator_block3( n_fmaps*8, 1, 1, 2) )
 
-        self.downsample = nn.AvgPool2d(3, stride=2, padding=[1, 1], count_include_pad=False)
-        self.layers = nn.Sequential( *layers )
-
+        """
+        # この方法だと、各 Sequential ブロックに名前をつけられない（連番になる）
+        self.layers = nn.ModuleList()
+        for i in range(self.n_dis):
+            self.layers.append( discriminator_block1( n_in_channels*2, n_fmaps, 2, 2) )
+            self.layers.append( discriminator_block2( n_fmaps, n_fmaps*2, 2, 2) )
+            self.layers.append( scdiscriminator_block2( n_fmaps*2, n_fmaps*4, 2, 2)ale_layer )
+            self.layers.append( discriminator_block2( n_fmaps*4, n_fmaps*8, 1, 2) )
+            self.layers.append( discriminator_block3( n_fmaps*8, 1, 1, 2) )
+        """
+        self.downsample_layer = nn.AvgPool2d(3, stride=2, padding=[1, 1], count_include_pad=False)
         return
 
     def forward(self, x, y ):
-        output = torch.cat( [x, y], dim=1 )
+        """
+        [Args]
+            x, y : 入力画像 <torch.Float32> shape =[N,C,H,W]
+        [Returns]
+            outputs_allD : shape=[n_dis, n_layers=5, tensor=[N,C,H,W] ]
+        """
+        input = torch.cat( [x, y], dim=1 )
 
-        outputs = []
+        outputs_allD = []
         for i in range(self.n_dis):
-            outputs.append([])
-            
-        return outputs
+            scale_layer0 = getattr( self, 'scale'+str(i)+'_layer0' )
+            scale_layer1 = getattr( self, 'scale'+str(i)+'_layer1' )
+            scale_layer2 = getattr( self, 'scale'+str(i)+'_layer2' )
+            scale_layer3 = getattr( self, 'scale'+str(i)+'_layer3' )
+            scale_layer4 = getattr( self, 'scale'+str(i)+'_layer4' )
+            outputs_oneD = []
+            outputs_oneD.append( scale_layer0(input) )
+            outputs_oneD.append( scale_layer1(outputs_oneD[-1]) )
+            outputs_oneD.append( scale_layer2(outputs_oneD[-1]) )
+            outputs_oneD.append( scale_layer3(outputs_oneD[-1]) )
+            outputs_oneD.append( scale_layer4(outputs_oneD[-1]) )
+            outputs_allD.append( outputs_oneD )
+
+        return outputs_allD
 
 
 class MultiscaleDiscriminator(nn.Module):

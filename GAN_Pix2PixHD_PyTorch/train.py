@@ -18,21 +18,23 @@ from torchvision.utils import save_image
 from tensorboardX import SummaryWriter
 
 # 自作クラス
-from networks import Pix2PixUNetGenerator, Pix2PixPatchGANDiscriminator, MultiscaleDiscriminator, Pix2PixMultiscaleDiscriminator
 from map2aerial_dataset import Map2AerialDataset, Map2AerialDataLoader
+from networks import Pix2PixUNetGenerator, MultiscaleDiscriminator, Pix2PixMultiscaleDiscriminator
+from losses import VanillaGANLoss, LSGANLoss, HingeGANLoss, FeatureMatchingLoss
 from utils import save_checkpoint, load_checkpoint
 from utils import board_add_image, board_add_images
 from utils import save_image_historys_gif
+
 
 if __name__ == '__main__':
     """
     pix2pix-HD による学習処理
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument("--exper_name", default="Pix2Pix_train", help="実験名")
-    parser.add_argument('--device', choices=['cpu', 'gpu'], default="gpu", help="使用デバイス (CPU or GPU)")
+    parser.add_argument("--exper_name", default="Pix2PixHD_train", help="実験名")
+    parser.add_argument('--device', choices=['cpu', 'gpu'], default="cpu", help="使用デバイス (CPU or GPU)")
     #parser.add_argument('--gpu_ids', type=str, default='0', help='gpu ids: e.g. 0  0,1,2, 0,2. use -1 for CPU') 
-    parser.add_argument('--dataset_dir', type=str, default="dataset/maps", help="データセットのディレクトリ")
+    parser.add_argument('--dataset_dir', type=str, default="/Users/sakai/ML_dataset/maps", help="データセットのディレクトリ")
     parser.add_argument('--results_dir', type=str, default="results", help="生成画像の出力ディレクトリ")
     parser.add_argument('--save_checkpoints_dir', type=str, default="checkpoints", help="モデルの保存ディレクトリ")
     parser.add_argument('--load_checkpoints_dir', type=str, default="", help="モデルの読み込みディレクトリ")
@@ -46,6 +48,7 @@ if __name__ == '__main__':
     parser.add_argument('--beta2', type=float, default=0.999, help="学習率の減衰率")
     parser.add_argument('--image_height', type=int, default=64, help="入力画像の高さ（pixel単位）")
     parser.add_argument('--image_width', type=int, default=64, help="入力画像の幅（pixel単位）")
+    parser.add_argument('--gan_type', choices=['vanilla', 'lsgan', 'hinge'], default="lsgan", help="GAN の Adv loss の種類")
     parser.add_argument('--lambda_gan', type=float, default=1.0, help="adv loss の重み係数値")
     parser.add_argument('--lambda_feat', type=float, default=10.0, help="feature matching loss の重み係数値")
     parser.add_argument('--lambda_vgg', type=float, default=1.0, help="vgg perceptual loss の重み係数値")
@@ -55,7 +58,7 @@ if __name__ == '__main__':
     parser.add_argument('--n_display_test_step', type=int, default=500, help="test データの tensorboard への表示間隔")
     parser.add_argument("--n_save_step", type=int, default=5000, help="モデルのチェックポイントの保存間隔")
     parser.add_argument("--seed", type=int, default=8, help="乱数シード値")
-    parser.add_argument('--debug', action='store_true', help="デバッグモード有効化")
+    parser.add_argument('--debug', action='store_false', help="デバッグモード有効化")
     args = parser.parse_args()
 
     # 実行条件の出力
@@ -131,17 +134,19 @@ if __name__ == '__main__':
     ).to( device )
 
     # Discriminator
+    """
     model_D = MultiscaleDiscriminator(
         input_nc=6, ndf=args.n_fmaps, n_layers=3,
         norm_layer=nn.BatchNorm2d, use_sigmoid=False, num_D=3, getIntermFeat=True 
     ).to( device )
-
     """
+
     model_D = Pix2PixMultiscaleDiscriminator( 
         n_in_channels = 3,
-        n_fmaps = args.n_fmaps
+        n_fmaps = args.n_fmaps,
+        n_dis = 3
     ).to( device )
-    """
+
     if( args.debug ):
         print( "model_G :\n", model_G )
         print( "model_D :\n", model_D )
@@ -167,9 +172,21 @@ if __name__ == '__main__':
     #======================================================================
     # loss 関数の設定
     #======================================================================
-    #loss_gan_fn = nn.BCELoss()             # when use sigmoid in Discriminator
-    #loss_gan_fn = nn.BCEWithLogitsLoss()    # when not use sigmoid in Discriminator
-    loss_gan_fn = nn.MSELoss()
+    # Adv loss
+    if( args.gan_type == "vanilla" ):
+        loss_gan_fn = VanillaGANLoss( device )
+    elif( args.gan_type == "lsgan" ):
+        loss_gan_fn = LSGANLoss( device )
+    elif( args.gan_type == "hinge" ):
+        loss_gan_fn = HingeGANLoss( device )
+    else:
+        raise NotImplementedError('gan_type %s not implemented' % args.gan_type)
+
+    # feature maching loss
+    loss_feat_fn = FeatureMatchingLoss()
+
+    # vgg perceptual loss
+    pass
 
     #======================================================================
     # モデルの学習処理
@@ -216,11 +233,11 @@ if __name__ == '__main__':
             #----------------------------------------------------
             # 本物画像 x = image を入力したときの識別器の出力
             d_reals = model_D( pre_image, after_image )
-            d_real = d_reals[0]
+            d_real = d_reals[-1][-1]
             if( args.debug and n_print > 0 ):
                 print( "len(d_reals) :", len(d_reals) )
                 print( "len(d_reals[0]) :", len(d_reals[0]) )
-                print( "d_reals[0][0].shape :", d_reals[0][0].shape )
+                print( "d_real.shape :", d_real.shape )
 
             # 生成器から出力される偽物画像
             with torch.no_grad():   # 生成器 G の更新が行われないようにする。
@@ -229,7 +246,8 @@ if __name__ == '__main__':
                     print( "g_fake_img.shape :", g_fake_img.shape )
                 
             # 偽物画像を入力したときの識別器の出力
-            d_fake = model_D( g_fake_img.detach(), after_image )    # detach して g_fake_img を通じて、生成器に勾配が伝搬しないようにする
+            d_fakes = model_D( g_fake_img.detach(), after_image )    # detach して g_fake_img を通じて、生成器に勾配が伝搬しないようにする
+            d_fake = d_fakes[-1][-1]
             if( args.debug and n_print > 0 ):
                 print( "d_fake.shape :", d_fake.shape )
 
@@ -239,6 +257,7 @@ if __name__ == '__main__':
             # この設定は、損失関数を __call__ をオーバライト
             # loss は Pytorch の Variable として帰ってくるので、これをloss.data[0]で数値として見る必要があり
             #----------------------------------------------------
+            """
             # real ラベルを 1、fake ラベルを 0 として定義
             real_ones_tsr =  torch.ones( d_real.shape ).to( device )
             fake_zeros_tsr =  torch.zeros( d_real.shape ).to( device )
@@ -249,6 +268,8 @@ if __name__ == '__main__':
             loss_D_real = loss_gan_fn( d_real, real_ones_tsr )
             loss_D_fake = loss_gan_fn( d_fake, fake_zeros_tsr )
             loss_D = loss_D_real + loss_D_fake
+            """
+            loss_D, loss_D_real, loss_D_fake = loss_gan_fn.forward_D( d_real, d_fake )
 
             #----------------------------------------------------
             # ネットワークの更新処理
@@ -277,13 +298,15 @@ if __name__ == '__main__':
             g_fake_img = model_G( after_image )
 
             # 偽物画像を入力したときの識別器の出力
-            #with torch.no_grad():  # param.requires_grad = False しているので不要
-            d_fake = model_D( g_fake_img, after_image )
+            d_fakes = model_D( g_fake_img, after_image )
+            d_fake = d_fakes[-1][-1]
 
             #----------------------------------------------------
             # 損失関数を計算する
             #----------------------------------------------------
-            loss_gan = loss_gan_fn( d_fake, real_ones_tsr )
+            #loss_gan = loss_gan_fn( d_fake, real_ones_tsr )
+            loss_gan = loss_gan_fn.forward_G( d_fake )
+
             loss_G = args.lambda_gan * loss_gan
 
             #----------------------------------------------------
@@ -345,24 +368,30 @@ if __name__ == '__main__':
                     # テスト用データをモデルに流し込む
                     #----------------------------------------------------
                     with torch.no_grad():
-                        d_real = model_D( pre_image, after_image )
+                        d_reals = model_D( pre_image, after_image )
+                        d_real = d_reals[-1][-1]
                         g_fake_img = model_G( after_image )
-                        d_fake = model_D( g_fake_img, after_image )
+                        d_fakes = model_D( g_fake_img, after_image )
+                        d_fake = d_fakes[-1][-1]
 
                     #----------------------------------------------------
                     # 損失関数を計算する
                     #----------------------------------------------------
-                    real_ones_tsr =  torch.ones( d_real.shape ).to( device )
-                    fake_zeros_tsr =  torch.zeros( d_real.shape ).to( device )
+                    #real_ones_tsr =  torch.ones( d_real.shape ).to( device )
+                    #fake_zeros_tsr =  torch.zeros( d_real.shape ).to( device )
 
                     # Discriminator
+                    """
                     loss_D_real = loss_gan_fn( d_real, real_ones_tsr )
                     loss_D_fake = loss_gan_fn( d_fake, fake_zeros_tsr )
                     loss_D = loss_D_real + loss_D_fake
+                    """
+                    loss_D, loss_D_real, loss_D_fake = loss_gan_fn.forward_D( d_real, d_fake )
 
                     # Generator
-                    loss_gan = loss_gan_fn( d_fake, real_ones_tsr )
-                    loss_G = args.lambda_l1 * loss_gan_fn
+                    #loss_gan = loss_gan_fn( d_fake, real_ones_tsr )
+                    loss_gan = loss_gan_fn.forward_G( d_fake )
+                    loss_G = args.lambda_gan * loss_gan
 
                     # total
                     loss_D_total += loss_D.item()

@@ -1,28 +1,25 @@
 # Processing_PyTorch
-PyTorch での処理フローの練習コード集。（※機械学習のコードではありません。）<br>
+PyTorch 実装の Tips 集
 
-## ■ 項目 [Contents]
-1. [動作環境](#動作環境)
-1. [使用法](#使用法)
 
-## ■ 動作環境
+## ■ 目次
+1. 自動微分関連
+1. ネットワーク定義関連
 
-- Python : 3.6
-- Anaconda : 5.0.1
-- PyTorch : 1.0.0
-- scikit-learn : 0.20.2
+## ■ 自動微分関連
 
-## ■ 使用法
+- `detach()` による勾配計算の無効化
+- `for param in model_D.parameters(): param.requires_grad = False` による勾配計算の無効化
+- `with torch.no_grad():` による勾配計算の無効化
+- `model.eval()` の効果
 
-- 使用法
-```
-$ python main.py
-```
+## ■ ネットワーク定義関連
 
-- 設定可能な定数
-```
-BATCH_SIZE = 32         # バッチサイズ
-NUM_EPOCHES = 10
-LEARNING_RATE = 0.001
-NUM_CLASSES = 10
-```
+- `nn.Sequential()` を用いたネットワーク定義
+
+- `nn.ModuleList()` を用いたネットワーク定義
+
+- ネットワークの名前付け
+    - `setattr()` を用いて、`nn.Sequential()` に動的に名前付けを行う。
+
+- ネットワークを End2End にする
