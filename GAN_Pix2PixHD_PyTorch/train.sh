@@ -11,11 +11,14 @@ N_DISPLAY_STEP=10
 N_DISPLAY_TEST_STEP=35
 N_SAVE_STEP=10000
 
+#GAN_TYPE=vanilla
+GAN_TYPE=lsgan
+
 #-------------------
-# Pix2Pix
+# Pix2Pix-HD
 #-------------------
 mkdir -p ${PWD}/_logs
-EXEP_NAME=Pix2PixHD_train_Epoch${N_EPOCHES}
+EXEP_NAME=Pix2PixHD_train_gantype_${GAN_TYPE}_Epoch${N_EPOCHES}_200120
 TENSOR_BOARD_DIR=../tensorboard
 if [ -d "${TENSOR_BOARD_DIR}/${EXEP_NAME}" ] ; then
     rm -r ${TENSOR_BOARD_DIR}/${EXEP_NAME}
@@ -30,9 +33,9 @@ if [ -d "${RESULTS_DIR}/${EXEP_NAME}" ] ; then
 fi
 
 python train.py \
-    --device cpu \
+    --device gpu \
     --exper_name ${EXEP_NAME} \
-    --dataset_dir ${HOME}/ML_dataset/maps \
+    --dataset_dir ../dataset/maps \
     --results_dir ${RESULTS_DIR} \
     --tensorboard_dir ${TENSOR_BOARD_DIR} \
     --save_checkpoints_dir checkpoints --n_save_step ${N_SAVE_STEP} \
@@ -41,9 +44,8 @@ python train.py \
     --n_epoches ${N_EPOCHES} --batch_size ${BATCH_SIZE} --batch_size_test ${BATCH_SIZE_TEST} \
     --lr 0.0002 --beta1 0.5 --beta2 0.999 \
     --n_display_step ${N_DISPLAY_STEP} --n_display_test_step ${N_DISPLAY_TEST_STEP} \
-    --unetG_dropout 0.5 \
-    --debug
-    
-# > _logs/${EXEP_NAME}.out
+    --n_dis 3 \
+    --gan_type ${GAN_TYPE} \
+    --debug > _logs/${EXEP_NAME}.out
 
 #sudo poweroff

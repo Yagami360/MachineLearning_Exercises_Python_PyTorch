@@ -19,8 +19,8 @@ from tensorboardX import SummaryWriter
 
 # 自作クラス
 from map2aerial_dataset import Map2AerialDataset, Map2AerialDataLoader
-from networks import Pix2PixUNetGenerator, MultiscaleDiscriminator, Pix2PixMultiscaleDiscriminator
-from losses import VanillaGANLoss, LSGANLoss, HingeGANLoss, FeatureMatchingLoss
+from networks import Pix2PixUNetGenerator, GlobalGenerator, MultiscaleDiscriminator
+from losses import VanillaGANLoss, LSGANLoss, FeatureMatchingLoss, VGGLoss
 from utils import save_checkpoint, load_checkpoint
 from utils import board_add_image, board_add_images
 from utils import save_image_historys_gif
@@ -48,17 +48,17 @@ if __name__ == '__main__':
     parser.add_argument('--beta2', type=float, default=0.999, help="学習率の減衰率")
     parser.add_argument('--image_height', type=int, default=64, help="入力画像の高さ（pixel単位）")
     parser.add_argument('--image_width', type=int, default=64, help="入力画像の幅（pixel単位）")
-    parser.add_argument('--gan_type', choices=['vanilla', 'lsgan', 'hinge'], default="lsgan", help="GAN の Adv loss の種類")
+    parser.add_argument('--n_fmaps', type=int, default=64, help="特徴マップの枚数")
+    parser.add_argument('--n_dis', type=int, default=3, help="マルチスケール識別器の数")
+    parser.add_argument('--gan_type', choices=['vanilla', 'lsgan'], default="lsgan", help="GAN の Adv loss の種類")
     parser.add_argument('--lambda_gan', type=float, default=1.0, help="adv loss の重み係数値")
     parser.add_argument('--lambda_feat', type=float, default=10.0, help="feature matching loss の重み係数値")
-    parser.add_argument('--lambda_vgg', type=float, default=1.0, help="vgg perceptual loss の重み係数値")
-    parser.add_argument('--unetG_dropout', type=float, default=0.5, help="生成器への入力ノイズとしての Dropout 率")
-    parser.add_argument('--n_fmaps', type=int, default=64, help="特徴マップの枚数")
+    parser.add_argument('--lambda_vgg', type=float, default=10.0, help="vgg perceptual loss の重み係数値")
     parser.add_argument('--n_display_step', type=int, default=50, help="tensorboard への表示間隔")
     parser.add_argument('--n_display_test_step', type=int, default=500, help="test データの tensorboard への表示間隔")
     parser.add_argument("--n_save_step", type=int, default=5000, help="モデルのチェックポイントの保存間隔")
     parser.add_argument("--seed", type=int, default=8, help="乱数シード値")
-    parser.add_argument('--debug', action='store_false', help="デバッグモード有効化")
+    parser.add_argument('--debug', action='store_true', help="デバッグモード有効化")
     args = parser.parse_args()
 
     # 実行条件の出力
@@ -127,21 +127,19 @@ if __name__ == '__main__':
     # モデルの構造を定義する。
     #======================================================================
     # Genrator
+    """
     model_G = Pix2PixUNetGenerator( 
         n_in_channels = 3, n_out_channels = 3,
         n_fmaps = args.n_fmaps,
-        dropout = args.unetG_dropout
+    ).to( device )
+    """
+
+    model_G = GlobalGenerator(
+        input_nc = 3 , output_nc = 3, ngf=args.n_fmaps
     ).to( device )
 
     # Discriminator
-    """
-    model_D = MultiscaleDiscriminator(
-        input_nc=6, ndf=args.n_fmaps, n_layers=3,
-        norm_layer=nn.BatchNorm2d, use_sigmoid=False, num_D=3, getIntermFeat=True 
-    ).to( device )
-    """
-
-    model_D = Pix2PixMultiscaleDiscriminator( 
+    model_D = MultiscaleDiscriminator( 
         n_in_channels = 3,
         n_fmaps = args.n_fmaps,
         n_dis = 3
@@ -174,19 +172,17 @@ if __name__ == '__main__':
     #======================================================================
     # Adv loss
     if( args.gan_type == "vanilla" ):
-        loss_gan_fn = VanillaGANLoss( device )
+        loss_gan_fn = VanillaGANLoss( device, w_sigmoid_D = False )
     elif( args.gan_type == "lsgan" ):
         loss_gan_fn = LSGANLoss( device )
-    elif( args.gan_type == "hinge" ):
-        loss_gan_fn = HingeGANLoss( device )
     else:
         raise NotImplementedError('gan_type %s not implemented' % args.gan_type)
 
     # feature maching loss
-    loss_feat_fn = FeatureMatchingLoss()
+    loss_feat_fn = FeatureMatchingLoss( device, n_dis = args.n_dis, n_layers_D = 3 )
 
     # vgg perceptual loss
-    pass
+    loss_vgg_fn = VGGLoss( device )
 
     #======================================================================
     # モデルの学習処理
@@ -195,6 +191,7 @@ if __name__ == '__main__':
     fake_images_historys = []
 
     print("Starting Training Loop...")
+    total_steps = 0
     iterations = 0      # 学習処理のイテレーション回数
     n_print = 1
     #-----------------------------
@@ -211,8 +208,8 @@ if __name__ == '__main__':
             if inputs["aerial_image_tsr"].shape[0] != args.batch_size:
                 break
 
-            #iterations += args.batch_size
-            iterations += 1
+            total_steps += 1
+            iterations += args.batch_size
 
             # ミニバッチデータを GPU へ転送
             pre_image = inputs["aerial_image_tsr"].to(device)
@@ -229,15 +226,18 @@ if __name__ == '__main__':
 
             #----------------------------------------------------
             # 学習用データをモデルに流し込む
-            # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
             #----------------------------------------------------
-            # 本物画像 x = image を入力したときの識別器の出力
+            # 本物画像を入力したときの識別器の出力
             d_reals = model_D( pre_image, after_image )
-            d_real = d_reals[-1][-1]
+            d_real_D1 = d_reals[0][-1]
+            d_real_D2 = d_reals[1][-1]
+            d_real_D3 = d_reals[2][-1]
             if( args.debug and n_print > 0 ):
                 print( "len(d_reals) :", len(d_reals) )
                 print( "len(d_reals[0]) :", len(d_reals[0]) )
-                print( "d_real.shape :", d_real.shape )
+                print( "d_real_D1.shape :", d_real_D1.shape )
+                print( "d_real_D2.shape :", d_real_D2.shape )
+                print( "d_real_D3.shape :", d_real_D3.shape )
 
             # 生成器から出力される偽物画像
             with torch.no_grad():   # 生成器 G の更新が行われないようにする。
@@ -247,29 +247,23 @@ if __name__ == '__main__':
                 
             # 偽物画像を入力したときの識別器の出力
             d_fakes = model_D( g_fake_img.detach(), after_image )    # detach して g_fake_img を通じて、生成器に勾配が伝搬しないようにする
-            d_fake = d_fakes[-1][-1]
+            d_fake_D1 = d_fakes[0][-1]
+            d_fake_D2 = d_fakes[1][-1]
+            d_fake_D3 = d_fakes[2][-1]
             if( args.debug and n_print > 0 ):
-                print( "d_fake.shape :", d_fake.shape )
+                print( "d_fake_D1.shape :", d_fake_D1.shape )
+                print( "d_fake_D2.shape :", d_fake_D2.shape )
+                print( "d_fake_D3.shape :", d_fake_D3.shape )
 
             #----------------------------------------------------
             # 損失関数を計算する
-            # 出力と教師データを損失関数に設定し、誤差 loss を計算
-            # この設定は、損失関数を __call__ をオーバライト
-            # loss は Pytorch の Variable として帰ってくるので、これをloss.data[0]で数値として見る必要があり
             #----------------------------------------------------
-            """
-            # real ラベルを 1、fake ラベルを 0 として定義
-            real_ones_tsr =  torch.ones( d_real.shape ).to( device )
-            fake_zeros_tsr =  torch.zeros( d_real.shape ).to( device )
-            if( args.debug and n_print > 0 ):
-                print( "real_ones_tsr.shape :", real_ones_tsr.shape )
-                print( "fake_zeros_tsr.shape :", fake_zeros_tsr.shape )
-
-            loss_D_real = loss_gan_fn( d_real, real_ones_tsr )
-            loss_D_fake = loss_gan_fn( d_fake, fake_zeros_tsr )
-            loss_D = loss_D_real + loss_D_fake
-            """
-            loss_D, loss_D_real, loss_D_fake = loss_gan_fn.forward_D( d_real, d_fake )
+            loss_D1, loss_D1_real, loss_D1_fake = loss_gan_fn.forward_D( d_real_D1, d_fake_D1 )
+            loss_D2, loss_D2_real, loss_D2_fake = loss_gan_fn.forward_D( d_real_D2, d_fake_D2 )
+            loss_D3, loss_D3_real, loss_D3_fake = loss_gan_fn.forward_D( d_real_D3, d_fake_D3 )
+            loss_D_real = loss_D1_real + loss_D2_real + loss_D3_real
+            loss_D_fake = loss_D1_fake + loss_D2_fake + loss_D3_fake
+            loss_D = loss_D1 + loss_D2 + loss_D3
 
             #----------------------------------------------------
             # ネットワークの更新処理
@@ -299,15 +293,27 @@ if __name__ == '__main__':
 
             # 偽物画像を入力したときの識別器の出力
             d_fakes = model_D( g_fake_img, after_image )
-            d_fake = d_fakes[-1][-1]
-
+            d_fake_D1 = d_fakes[0][-1]
+            d_fake_D2 = d_fakes[1][-1]
+            d_fake_D3 = d_fakes[2][-1]
+            
             #----------------------------------------------------
             # 損失関数を計算する
             #----------------------------------------------------
-            #loss_gan = loss_gan_fn( d_fake, real_ones_tsr )
-            loss_gan = loss_gan_fn.forward_G( d_fake )
+            # Adv loss
+            loss_gan_D1 = loss_gan_fn.forward_G( d_fake_D1 )
+            loss_gan_D2 = loss_gan_fn.forward_G( d_fake_D2 )
+            loss_gan_D3 = loss_gan_fn.forward_G( d_fake_D3 )
+            loss_gan = loss_gan_D1 + loss_gan_D2 + loss_gan_D3
 
-            loss_G = args.lambda_gan * loss_gan
+            # feature maching loss
+            loss_feat = loss_feat_fn( d_reals, d_fakes )
+
+            # vgg perceptual loss
+            loss_vgg = loss_vgg_fn( after_image, g_fake_img )
+
+            # total
+            loss_G = args.lambda_gan * loss_gan + args.lambda_feat * loss_feat + args.lambda_vgg * loss_vgg
 
             #----------------------------------------------------
             # ネットワークの更新処理
@@ -324,33 +330,52 @@ if __name__ == '__main__':
             #====================================================
             # 学習過程の表示
             #====================================================
-            if( step == 0 or ( step % args.n_display_step == 0 ) ):
-                board_train.add_scalar('Generater/loss_G', loss_G.item(), iterations)
-                board_train.add_scalar('Generater/loss_gan', loss_gan.item(), iterations)
-                board_train.add_scalar('Discriminator/loss_D', loss_D.item(), iterations)
-                board_train.add_scalar('Discriminator/loss_D_real', loss_D_real.item(), iterations)
-                board_train.add_scalar('Discriminator/loss_D_fake', loss_D_fake.item(), iterations)
-                print( "epoch={}, iters={}, loss_G={:.5f}, loss_D={:.5f}".format(epoch, iterations, loss_G, loss_D) )
+            if( total_steps == 1 or ( total_steps % args.n_display_step == 0 ) ):
+                board_train.add_scalar('Pix2PixHD_Generater/loss_G', loss_G.item(), total_steps)
+                board_train.add_scalar('Pix2PixHD_Generater/loss_gan', loss_gan.item(), total_steps)
+                board_train.add_scalar('Pix2PixHD_Generater/loss_gan_D1', loss_gan_D1.item(), total_steps)
+                board_train.add_scalar('Pix2PixHD_Generater/loss_gan_D2', loss_gan_D2.item(), total_steps)
+                board_train.add_scalar('Pix2PixHD_Generater/loss_gan_D3', loss_gan_D3.item(), total_steps)
+                board_train.add_scalar('Pix2PixHD_Generater/loss_feat', loss_feat.item(), total_steps)
+                board_train.add_scalar('Pix2PixHD_Generater/loss_vgg', loss_vgg.item(), total_steps)
+
+                board_train.add_scalar('Pix2PixHD_Generater/loss_gan', loss_gan.item(), total_steps)
+                board_train.add_scalar('Pix2PixHD_Discriminator/loss_D', loss_D.item(), total_steps)
+                board_train.add_scalar('Pix2PixHD_Discriminator/loss_D_real', loss_D_real.item(), total_steps)
+                board_train.add_scalar('Pix2PixHD_Discriminator/loss_D_fake', loss_D_fake.item(), total_steps)
+                board_train.add_scalar('Pix2PixHD_Discriminator/loss_D1', loss_D1.item(), total_steps)
+                board_train.add_scalar('Pix2PixHD_Discriminator/loss_D1_real', loss_D1_real.item(), total_steps)
+                board_train.add_scalar('Pix2PixHD_Discriminator/loss_D1_fake', loss_D1_fake.item(), total_steps)
+                board_train.add_scalar('Pix2PixHD_Discriminator/loss_D2', loss_D2.item(), total_steps)
+                board_train.add_scalar('Pix2PixHD_Discriminator/loss_D2_real', loss_D2_real.item(), total_steps)
+                board_train.add_scalar('Pix2PixHD_Discriminator/loss_D2_fake', loss_D2_fake.item(), total_steps)
+                board_train.add_scalar('Pix2PixHD_Discriminator/loss_D3', loss_D3.item(), total_steps)
+                board_train.add_scalar('Pix2PixHD_Discriminator/loss_D3_real', loss_D3_real.item(), total_steps)
+                board_train.add_scalar('Pix2PixHD_Discriminator/loss_D3_fake', loss_D3_fake.item(), total_steps)
+
+                print( "total_steps={}, epoch={}, iters={}, loss_G={:.5f}, loss_feat={:.5f}, loss_vgg={:.5f}, loss_D={:.5f}".format(total_steps, epoch, iterations, loss_G, loss_feat, loss_vgg, loss_D) )
 
                 visuals = [
                     [pre_image, after_image, g_fake_img],
                 ]
-                board_add_images(board_train, 'fake image', visuals, iterations+1)
+                board_add_images(board_train, 'fake image', visuals, total_steps)
 
             #====================================================
             # test loss の表示
             #====================================================
-            if( step == 0 or ( step % args.n_display_test_step == 0 ) ):
+            if( total_steps == 1 or ( total_steps % args.n_display_test_step == 0 ) ):
                 model_G.eval()
                 model_D.eval()
 
                 n_test_loop = 0
                 test_iterations = 0
-                loss_D_total = 0
-                loss_D_real_total = 0
-                loss_D_fake_total = 0
+                loss_D_total, loss_D1_total, loss_D2_total, loss_D3_total = 0, 0, 0, 0
+                loss_D_real_total, loss_D1_real_total, loss_D2_real_total, loss_D3_real_total = 0, 0, 0, 0
+                loss_D_fake_total, loss_D1_fake_total, loss_D2_fake_total, loss_D3_fake_total = 0, 0, 0, 0
                 loss_G_total = 0
-                loss_gan_total = 0
+                loss_gan_total, loss_gan_D1_total, loss_gan_D2_total, loss_gan_D3_total = 0, 0, 0, 0
+                loss_feat_total = 0
+                loss_vgg_total = 0
                 for test_inputs in dloader_test :
                     if test_inputs["aerial_image_tsr"].shape[0] != args.batch_size_test:
                         break
@@ -369,45 +394,86 @@ if __name__ == '__main__':
                     #----------------------------------------------------
                     with torch.no_grad():
                         d_reals = model_D( pre_image, after_image )
-                        d_real = d_reals[-1][-1]
+                        d_real_D1 = d_reals[0][-1]
+                        d_real_D2 = d_reals[1][-1]
+                        d_real_D3 = d_reals[2][-1]
+
                         g_fake_img = model_G( after_image )
                         d_fakes = model_D( g_fake_img, after_image )
-                        d_fake = d_fakes[-1][-1]
+                        d_fake_D1 = d_fakes[0][-1]
+                        d_fake_D2 = d_fakes[1][-1]
+                        d_fake_D3 = d_fakes[2][-1]
 
                     #----------------------------------------------------
                     # 損失関数を計算する
                     #----------------------------------------------------
-                    #real_ones_tsr =  torch.ones( d_real.shape ).to( device )
-                    #fake_zeros_tsr =  torch.zeros( d_real.shape ).to( device )
-
                     # Discriminator
-                    """
-                    loss_D_real = loss_gan_fn( d_real, real_ones_tsr )
-                    loss_D_fake = loss_gan_fn( d_fake, fake_zeros_tsr )
-                    loss_D = loss_D_real + loss_D_fake
-                    """
-                    loss_D, loss_D_real, loss_D_fake = loss_gan_fn.forward_D( d_real, d_fake )
+                    loss_D1, loss_D1_real, loss_D1_fake = loss_gan_fn.forward_D( d_real_D1, d_fake_D1 )
+                    loss_D2, loss_D2_real, loss_D2_fake = loss_gan_fn.forward_D( d_real_D2, d_fake_D2 )
+                    loss_D3, loss_D3_real, loss_D3_fake = loss_gan_fn.forward_D( d_real_D3, d_fake_D3 )
+                    loss_D_real = loss_D1_real + loss_D2_real + loss_D3_real
+                    loss_D_fake = loss_D1_fake + loss_D2_fake + loss_D3_fake
+                    loss_D = loss_D1 + loss_D2 + loss_D3
 
-                    # Generator
-                    #loss_gan = loss_gan_fn( d_fake, real_ones_tsr )
-                    loss_gan = loss_gan_fn.forward_G( d_fake )
-                    loss_G = args.lambda_gan * loss_gan
+                    # Generator (Adv loss)
+                    loss_gan_D1 = loss_gan_fn.forward_G( d_fake_D1 )
+                    loss_gan_D2 = loss_gan_fn.forward_G( d_fake_D2 )
+                    loss_gan_D3 = loss_gan_fn.forward_G( d_fake_D3 )
+                    loss_gan = loss_gan_D1 + loss_gan_D2 + loss_gan_D3
+
+                    # Generator(feature maching loss)
+                    loss_feat = loss_feat_fn( d_reals, d_fakes )
+
+                    # Generator (vgg perceptual loss)
+                    loss_vgg = loss_vgg_fn( after_image, g_fake_img )
+
+                    # Generator (total)
+                    loss_G = args.lambda_gan * loss_gan + args.lambda_feat * loss_feat + args.lambda_vgg * loss_vgg
 
                     # total
                     loss_D_total += loss_D.item()
                     loss_D_real_total += loss_D_real.item()
                     loss_D_fake_total += loss_D_fake.item()
+                    loss_D1_total += loss_D1.item()
+                    loss_D1_real_total += loss_D1_real.item()
+                    loss_D1_fake_total += loss_D1_fake.item()
+                    loss_D2_total += loss_D2.item()
+                    loss_D2_real_total += loss_D2_real.item()
+                    loss_D2_fake_total += loss_D2_fake.item()
+                    loss_D3_total += loss_D3.item()
+                    loss_D3_real_total += loss_D3_real.item()
+                    loss_D3_fake_total += loss_D3_fake.item()
+
                     loss_G_total += loss_G.item()
                     loss_gan_total += loss_gan.item()
+                    loss_gan_D1_total += loss_gan_D1.item()
+                    loss_gan_D2_total += loss_gan_D2.item()
+                    loss_gan_D3_total += loss_gan_D3.item()
+                    loss_feat_total += loss_feat.item()
+                    loss_vgg_total += loss_vgg.item()
 
                     if( test_iterations > args.n_test ):
                         break
 
-                board_test.add_scalar('Generater/loss_G', (loss_G_total/n_test_loop), iterations)
-                board_test.add_scalar('Generater/loss_gan', (loss_gan_total/n_test_loop), iterations)
-                board_test.add_scalar('Discriminator/loss_D', (loss_D_total/n_test_loop), iterations)
-                board_test.add_scalar('Discriminator/loss_D_real', (loss_D_real_total/n_test_loop), iterations)
-                board_test.add_scalar('Discriminator/loss_D_fake', (loss_D_fake_total/n_test_loop), iterations)
+                board_test.add_scalar('Pix2PixHD_Generater/loss_G', (loss_G_total/n_test_loop), total_steps)
+                board_test.add_scalar('Pix2PixHD_Generater/loss_gan', (loss_gan_total/n_test_loop), total_steps)
+                board_test.add_scalar('Pix2PixHD_Generater/loss_gan_D1', (loss_gan_D1_total/n_test_loop), total_steps)
+                board_test.add_scalar('Pix2PixHD_Generater/loss_gan_D2', (loss_gan_D2_total/n_test_loop), total_steps)
+                board_test.add_scalar('Pix2PixHD_Generater/loss_gan_D3', (loss_gan_D3_total/n_test_loop), total_steps)
+                board_test.add_scalar('Pix2PixHD_Generater/loss_feat', (loss_feat_total/n_test_loop), total_steps)
+                board_test.add_scalar('Pix2PixHD_Generater/loss_vgg', (loss_vgg_total/n_test_loop), total_steps)
+                board_test.add_scalar('Pix2PixHD_Discriminator/loss_D', (loss_D_total/n_test_loop), total_steps)
+                board_test.add_scalar('Pix2PixHD_Discriminator/loss_D_real', (loss_D_real_total/n_test_loop), total_steps)
+                board_test.add_scalar('Pix2PixHD_Discriminator/loss_D_fake', (loss_D_fake_total/n_test_loop), total_steps)
+                board_test.add_scalar('Pix2PixHD_Discriminator/loss_D1', (loss_D1_total/n_test_loop), total_steps)
+                board_test.add_scalar('Pix2PixHD_Discriminator/loss_D1_real', (loss_D1_real_total/n_test_loop), total_steps)
+                board_test.add_scalar('Pix2PixHD_Discriminator/loss_D1_fake', (loss_D1_fake_total/n_test_loop), total_steps)
+                board_test.add_scalar('Pix2PixHD_Discriminator/loss_D2', (loss_D2_total/n_test_loop), total_steps)
+                board_test.add_scalar('Pix2PixHD_Discriminator/loss_D2_real', (loss_D2_real_total/n_test_loop), total_steps)
+                board_test.add_scalar('Pix2PixHD_Discriminator/loss_D2_fake', (loss_D2_fake_total/n_test_loop), total_steps)
+                board_test.add_scalar('Pix2PixHD_Discriminator/loss_D3', (loss_D3_total/n_test_loop), total_steps)
+                board_test.add_scalar('Pix2PixHD_Discriminator/loss_D3_real', (loss_D3_real_total/n_test_loop), total_steps)
+                board_test.add_scalar('Pix2PixHD_Discriminator/loss_D3_fake', (loss_D3_fake_total/n_test_loop), total_steps)
 
                 visuals = [
                     [pre_image, after_image, g_fake_img],
@@ -418,15 +484,15 @@ if __name__ == '__main__':
                         for row, vis_item in enumerate(vis_item_row):
                             print("[test] vis_item[{}][{}].shape={} :".format(row,col,vis_item.shape) )
                 """
-                board_add_images(board_test, "fake image test", visuals, iterations)
+                board_add_images(board_test, "fake image test", visuals, total_steps)
 
             #====================================================
             # モデルの保存
             #====================================================
-            if( ( step % args.n_save_step == 0 ) ):
-                #save_checkpoint( model_G, device, os.path.join(args.save_checkpoints_dir, args.exper_name, "G", 'step_%08d.pth' % (iterations + 1)) )
+            if( ( total_steps % args.n_save_step == 0 ) ):
+                save_checkpoint( model_G, device, os.path.join(args.save_checkpoints_dir, args.exper_name, "G", 'step_%08d.pth' % (total_steps + 1)) )
                 save_checkpoint( model_G, device, os.path.join(args.save_checkpoints_dir, args.exper_name, "G", 'G_final.pth') )
-                #save_checkpoint( model_D, device, os.path.join(args.save_checkpoints_dir, args.exper_name, "D", 'step_%08d.pth' % (iterations + 1)) )
+                save_checkpoint( model_D, device, os.path.join(args.save_checkpoints_dir, args.exper_name, "D", 'step_%08d.pth' % (total_steps + 1)) )
                 save_checkpoint( model_D, device, os.path.join(args.save_checkpoints_dir, args.exper_name, "D", 'D_final.pth') )
                 print( "saved checkpoints" )
 
