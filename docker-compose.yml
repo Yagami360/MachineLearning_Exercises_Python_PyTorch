@@ -1,0 +1,11 @@
+version: "3"
+services:
+  app:
+    container_name: "ml_exercises_container"
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    image: ml_exercises_pytorch_image
+    volumes: 
+        - ${PWD}:/mnt
+    tty: true
