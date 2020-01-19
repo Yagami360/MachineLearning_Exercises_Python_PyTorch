@@ -19,7 +19,7 @@ NETWORK_D_TYPE=vanilla
 # RSGAN
 #-------------------
 mkdir -p ${PWD}/_logs
-EXEP_NAME=DCGAN_train_G_${NETWORK_G_TYPE}_D_${NETWORK_D_TYPE}_Epoch${N_EPOCHES}_191227_1
+EXEP_NAME=DCGAN_train_G_${NETWORK_G_TYPE}_D_${NETWORK_D_TYPE}_Epoch${N_EPOCHES}_docker_debug
 TENSOR_BOARD_DIR=../tensorboard
 if [ -d "${TENSOR_BOARD_DIR}/${EXEP_NAME}" ] ; then
     rm -r ${TENSOR_BOARD_DIR}/${EXEP_NAME}
@@ -47,6 +47,8 @@ python train.py \
     --n_display_step ${N_DISPLAY_STEP} --n_display_test_step ${N_DISPLAY_TEST_STEP} \
     --networkG_type ${NETWORK_G_TYPE} \
     --networkD_type ${NETWORK_D_TYPE} \
-    --debug > _logs/${EXEP_NAME}.out
+    --debug
+
+#     > _logs/${EXEP_NAME}.out
 
 #sudo poweroff

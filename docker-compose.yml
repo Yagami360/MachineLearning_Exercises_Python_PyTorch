@@ -7,5 +7,6 @@ services:
       dockerfile: ./Dockerfile
     image: ml_exercises_pytorch_image
     volumes: 
-        - ${PWD}:/mnt
+        - ${PWD}:/workspace/MachineLearning_Exercises_Python_PyTorch
     tty: true
+    command: /bin/bash

@@ -1,5 +1,6 @@
 tqdm
 opencv-python
 imageio
+pytorch==1.1.0
 tensorflow
 tensorboardX
