@@ -1,32 +1,17 @@
 #-----------------------------
-# FROM : Docker イメージのベースイメージ
+# Docker イメージのベースイメージ
 #-----------------------------
 FROM pytorch/pytorch
 #FROM nvidia/cuda:10.0-cudnn7-devel-ubuntu16.04
 
 #-----------------------------
-# ARG : 変数を定義
-# buildする時に変更可能
+# 作業ディレクトリの設定
+# 各種命令コマンド（RUN, COPY 等）を実行する際のコンテナ内のカレントディレクトリとなる。
+# 又、WORKDIR に設定したフォルダが docker run 時の作業起点ディレクトリとなる。
 #-----------------------------
-# コンテナ内のディレクトを決めておく
-ARG ROOT_DIR=/workspace
-
-#-----------------------------
-# RUN : コマンド命令
-# ここに記述したコマンドを実行してミドルウェアをインストールし、imageのレイヤーを重ねる
-#-----------------------------
-# apt-get update : インストール可能なパッケージの「一覧」を更新する。
-# apt-get install : インストールを実行する。
-# -y : 問い合わせがあった場合はすべて「y」と答える
-# python & python3-pipのインストール
-RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
-    # imageのサイズを小さくするためにキャッシュ削除
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* \
-    # pipのアップデート
-    && pip install --upgrade pip
+ARG WORK_DIR=/workspace
+ARG ROOT_DIR=${WORK_DIR}/MachineLearning_Exercises_Python_PyTorch
+WORKDIR ${WORK_DIR}
 
 #-----------------------------
 # ENV : 環境変数
@@ -41,18 +26,32 @@ ENV NVIDIA_VISIBLE_DEVICES all
 ENV NVIDIA_DRIVER_CAPABILITIES utility,compute
 
 #-----------------------------
-# COPY ${コピー元（ホスト側にあるファイル）} ${コピー先（）}
-# Dockerfileを実行したディレクトにあるファイルのコピー
+# 基本ライブラリのインストール
 #-----------------------------
-COPY requirements.txt ${ROOT_DIR}
+# apt-get update : インストール可能なパッケージの「一覧」を更新する。
+# apt-get install : インストールを実行する。
+# python & python3-pipのインストール
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    # imageのサイズを小さくするためにキャッシュ削除
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    # pipのアップデート
+    && pip install --upgrade pip
 
 #-----------------------------
-# ライブラリのインストール
+# 追加ライブラリのインストール
 #-----------------------------
-WORKDIR ${ROOT_DIR}
+COPY requirements.txt ${WORK_DIR}
 RUN pip install -r requirements.txt
 
 #-----------------------------
-# ディレクトリの移動
+# コンテナが作成された後で自動雨滴に実行するコマンド
 #-----------------------------
-WORKDIR ${ROOT_DIR}/MachineLearning_Exercises_Python_PyTorch
+CMD ["/bin/bash"]
+
+#-----------------------------
+# コンテナが起動後の作業ディレクトリ
+#-----------------------------
+WORKDIR ${ROOT_DIR}

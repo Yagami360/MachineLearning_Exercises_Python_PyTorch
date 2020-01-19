@@ -1,15 +1,7 @@
 #!/bin/sh
 set -eu
 
-#-------------------
-# docker
-#-------------------
-CONTAINER_NAME=ml_exercises_container
-
-docker-compose up -d
-#docker exec -it ${CONTAINER_NAME} /bin/sh
-
-
+# train parmaterters
 N_EPOCHES=100
 BATCH_SIZE=64
 BATCH_SIZE_TEST=256
@@ -20,6 +12,15 @@ N_SAVE_STEP=10000
 NETWORK_G_TYPE=vanilla
 #NETWORK_D_TYPE=PatchGAN
 NETWORK_D_TYPE=vanilla
+
+# for docker
+IMAGE_NAME=ml_exercises_pytorch_image
+CONTAINER_NAME=ml_exercises_container
+HOST_DIR=${HOME}/MachineLearning_Exercises_Python_PyTorch
+CONTAINER_DIR=/workspace/MachineLearning_Exercises_Python_PyTorch/
+if [ ! "$(docker image ls -q ${IMAGE_NAME})" ]; then
+    docker build ./ -t ${IMAGE_NAME}
+fi
 
 #-------------------
 # RSGAN
@@ -39,7 +40,9 @@ if [ -d "${RESULTS_DIR}/${EXEP_NAME}" ] ; then
     rm -r ${RESULTS_DIR}/${EXEP_NAME}
 fi
 
-python train.py \
+# tarin RSGAN
+docker run -it --rm -v ${HOST_DIR}:${CONTAINER_DIR} --name ${CONTAINER_NAME} ${IMAGE_NAME} \
+    python GAN_DCGAN_PyTorch/train.py \
     --device gpu \
     --exper_name ${EXEP_NAME} \
     --dataset_dir ../dataset \
