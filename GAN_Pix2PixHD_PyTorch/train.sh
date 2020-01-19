@@ -14,11 +14,14 @@ N_SAVE_STEP=10000
 #GAN_TYPE=vanilla
 GAN_TYPE=lsgan
 
+#NETWORK_G_TYPE=unet
+NETWORK_G_TYPE=global
+
 #-------------------
 # Pix2Pix-HD
 #-------------------
 mkdir -p ${PWD}/_logs
-EXEP_NAME=Pix2PixHD_train_gantype_${GAN_TYPE}_Epoch${N_EPOCHES}_200120
+EXEP_NAME=Pix2PixHD_train_networkG_${NETWORK_G_TYPE}_gantype_${GAN_TYPE}_Epoch${N_EPOCHES}_200120_1
 TENSOR_BOARD_DIR=../tensorboard
 if [ -d "${TENSOR_BOARD_DIR}/${EXEP_NAME}" ] ; then
     rm -r ${TENSOR_BOARD_DIR}/${EXEP_NAME}
@@ -46,6 +49,7 @@ python train.py \
     --n_display_step ${N_DISPLAY_STEP} --n_display_test_step ${N_DISPLAY_TEST_STEP} \
     --n_dis 3 \
     --gan_type ${GAN_TYPE} \
+    --networkG_type ${NETWORK_G_TYPE} \
     --debug > _logs/${EXEP_NAME}.out
 
-#sudo poweroff
+sudo poweroff

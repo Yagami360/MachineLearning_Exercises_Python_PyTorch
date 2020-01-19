@@ -54,6 +54,7 @@ if __name__ == '__main__':
     parser.add_argument('--lambda_gan', type=float, default=1.0, help="adv loss の重み係数値")
     parser.add_argument('--lambda_feat', type=float, default=10.0, help="feature matching loss の重み係数値")
     parser.add_argument('--lambda_vgg', type=float, default=10.0, help="vgg perceptual loss の重み係数値")
+    parser.add_argument('--networkG_type', choices=['unet', 'global'], default="global", help="GAN の生成器の種類")
     parser.add_argument('--n_display_step', type=int, default=50, help="tensorboard への表示間隔")
     parser.add_argument('--n_display_test_step', type=int, default=500, help="test データの tensorboard への表示間隔")
     parser.add_argument("--n_save_step", type=int, default=5000, help="モデルのチェックポイントの保存間隔")
@@ -127,16 +128,17 @@ if __name__ == '__main__':
     # モデルの構造を定義する。
     #======================================================================
     # Genrator
-    """
-    model_G = Pix2PixUNetGenerator( 
-        n_in_channels = 3, n_out_channels = 3,
-        n_fmaps = args.n_fmaps,
-    ).to( device )
-    """
-
-    model_G = GlobalGenerator(
-        input_nc = 3 , output_nc = 3, ngf=args.n_fmaps
-    ).to( device )
+    if( args.networkG_type == "global"):
+        model_G = GlobalGenerator(
+            input_nc = 3 , output_nc = 3, ngf=args.n_fmaps
+        ).to( device )
+    elif( args.networkG_type == "global"):
+        model_G = Pix2PixUNetGenerator( 
+            n_in_channels = 3, n_out_channels = 3,
+            n_fmaps = args.n_fmaps,
+        ).to( device )
+    else:
+        raise NotImplementedError('networkG_type %s not implemented' % args.networkG_type)
 
     # Discriminator
     model_D = MultiscaleDiscriminator( 

@@ -18,8 +18,9 @@ from torchvision.utils import save_image
 from tensorboardX import SummaryWriter
 
 # 自作クラス
-from networks import Pix2PixUNetGenerator, Pix2PixDiscriminator, Pix2PixPatchGANDiscriminator
 from map2aerial_dataset import Map2AerialDataset, Map2AerialDataLoader
+from networks import Pix2PixUNetGenerator, Pix2PixDiscriminator, Pix2PixPatchGANDiscriminator
+from losses import VanillaGANLoss, LSGANLoss, HingeGANLoss
 from utils import save_checkpoint, load_checkpoint
 from utils import board_add_image, board_add_images
 from utils import save_image_historys_gif
@@ -45,6 +46,8 @@ if __name__ == '__main__':
     parser.add_argument('--beta1', type=float, default=0.5, help="学習率の減衰率")
     parser.add_argument('--beta2', type=float, default=0.999, help="学習率の減衰率")
     parser.add_argument('--image_size', type=int, default=64, help="入力画像のサイズ（pixel単位）")
+    parser.add_argument('--gan_type', choices=['vanilla', 'lsgan', 'hinge'], default="lsgan", help="GAN の Adv loss の種類")
+    parser.add_argument('--lambda_gan', type=float, default=1.0, help="Adv loss の係数値")
     parser.add_argument('--lambda_l1', type=float, default=100.0, help="L1正則化項の係数値")
     parser.add_argument('--unetG_dropout', type=float, default=0.5, help="生成器への入力ノイズとしての Dropout 率")
     parser.add_argument('--n_fmaps', type=int, default=64, help="特徴マップの枚数")
@@ -167,10 +170,17 @@ if __name__ == '__main__':
     #======================================================================
     # loss 関数の設定
     #======================================================================
-    #loss_gan_fn = nn.BCELoss()             # when use sigmoid in Discriminator
-    #loss_gan_fn = nn.BCEWithLogitsLoss()    # when not use sigmoid in Discriminator
-    loss_gan_fn = nn.MSELoss()
+    # Adv loss
+    if( args.gan_type == "vanilla" ):
+        loss_gan_fn = VanillaGANLoss( device, w_sigmoid_D = False )
+    elif( args.gan_type == "lsgan" ):
+        loss_gan_fn = LSGANLoss( device )
+    elif( args.gan_type == "hinge" ):
+        loss_gan_fn = HingeGANLoss( device )
+    else:
+        raise NotImplementedError('gan_type %s not implemented' % args.gan_type)
 
+    # L1 loss
     loss_l1_fn = torch.nn.L1Loss()
 
     #======================================================================
@@ -213,40 +223,27 @@ if __name__ == '__main__':
 
             #----------------------------------------------------
             # 学習用データをモデルに流し込む
-            # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
             #----------------------------------------------------
-            # D(x) : 本物画像 x = image を入力したときの識別器の出力
-            D_x = model_D( pre_image, after_image )
+            # 本物画像を入力したときの識別器の出力
+            d_real = model_D( pre_image, after_image )
             if( args.debug and n_print > 0 ):
-                print( "D_x.size() :", D_x.size() )
+                print( "d_real.size() :", d_real.size() )
 
-            # G(z) : 生成器から出力される偽物画像
+            # 生成器から出力される偽物画像
             with torch.no_grad():   # 生成器 G の更新が行われないようにする。
-                G_z = model_G( after_image )
+                g_fake_img = model_G( after_image )
                 if( args.debug and n_print > 0 ):
-                    print( "G_z.size() :", G_z.size() )
+                    print( "g_fake_img.size() :", g_fake_img.size() )
                 
-            # D( G(z) ) : 偽物画像を入力したときの識別器の出力
-            D_G_z = model_D( G_z.detach(), after_image )    # detach して G_z を通じて、生成器に勾配が伝搬しないようにする
+            # 偽物画像を入力したときの識別器の出力
+            d_fake = model_D( g_fake_img.detach(), after_image )    # detach して g_fake_img を通じて、生成器に勾配が伝搬しないようにする
             if( args.debug and n_print > 0 ):
-                print( "D_G_z.size() :", D_G_z.size() )
+                print( "d_fake.size() :", d_fake.size() )
 
             #----------------------------------------------------
             # 損失関数を計算する
-            # 出力と教師データを損失関数に設定し、誤差 loss を計算
-            # この設定は、損失関数を __call__ をオーバライト
-            # loss は Pytorch の Variable として帰ってくるので、これをloss.data[0]で数値として見る必要があり
             #----------------------------------------------------
-            # real ラベルを 1、fake ラベルを 0 として定義
-            real_ones_tsr =  torch.ones( D_x.shape ).to( device )
-            fake_zeros_tsr =  torch.zeros( D_x.shape ).to( device )
-            if( args.debug and n_print > 0 ):
-                print( "real_ones_tsr.shape :", real_ones_tsr.shape )
-                print( "fake_zeros_tsr.shape :", fake_zeros_tsr.shape )
-
-            loss_D_real = loss_gan_fn( D_x, real_ones_tsr )
-            loss_D_fake = loss_gan_fn( D_G_z, fake_zeros_tsr )
-            loss_D = loss_D_real + loss_D_fake
+            loss_D, loss_D_real, loss_D_fake = loss_gan_fn.forward_D( d_real, d_fake )
 
             #----------------------------------------------------
             # ネットワークの更新処理
@@ -270,25 +267,25 @@ if __name__ == '__main__':
 
             #----------------------------------------------------
             # 学習用データをモデルに流し込む
-            # model(引数) で呼び出せるのは、__call__ をオーバライトしているため
             #----------------------------------------------------
-            # G(z) : 生成器から出力される偽物画像
-            G_z = model_G( after_image )
+            # 生成器から出力される偽物画像
+            g_fake_img = model_G( after_image )
             if( args.debug and n_print > 0 ):
-                print( "G_z.size() :", G_z.size() )
+                print( "g_fake_img.size() :", g_fake_img.size() )
 
-            # D( G(z) ) : 偽物画像を入力したときの識別器の出力
-            #with torch.no_grad():  # param.requires_grad = False しているので不要
-            D_G_z = model_D( G_z, after_image )
+            # 偽物画像を入力したときの識別器の出力
+            d_fake = model_D( g_fake_img, after_image )
             if( args.debug and n_print > 0 ):
-                print( "D_G_z.size() :", D_G_z.size() )
+                print( "d_fake.size() :", d_fake.size() )
 
             #----------------------------------------------------
             # 損失関数を計算する
             #----------------------------------------------------
-            loss_gan = loss_gan_fn( D_G_z, real_ones_tsr )
-            loss_l1 = loss_l1_fn( G_z, after_image )
-            loss_G = loss_gan + args.lambda_l1 * loss_l1
+            loss_gan = loss_gan_fn.forward_G( d_fake )
+            loss_l1 = loss_l1_fn( g_fake_img, after_image )
+
+            # total
+            loss_G = args.lambda_gan * loss_gan + args.lambda_l1 * loss_l1
 
             #----------------------------------------------------
             # ネットワークの更新処理
@@ -315,7 +312,7 @@ if __name__ == '__main__':
                 print( "epoch={}, iters={}, loss_G={:.5f}, loss_D={:.5f}".format(epoch, iterations, loss_G, loss_D) )
 
                 visuals = [
-                    [pre_image, after_image, G_z],
+                    [pre_image, after_image, g_fake_img],
                 ]
                 board_add_images(board_train, 'fake image', visuals, iterations+1)
 
@@ -351,25 +348,20 @@ if __name__ == '__main__':
                     # テスト用データをモデルに流し込む
                     #----------------------------------------------------
                     with torch.no_grad():
-                        D_x = model_D( pre_image, after_image )
-                        G_z = model_G( after_image )
-                        D_G_z = model_D( G_z, after_image )
+                        d_real = model_D( pre_image, after_image )
+                        g_fake_img = model_G( after_image )
+                        d_fake = model_D( g_fake_img, after_image )
 
                     #----------------------------------------------------
                     # 損失関数を計算する
                     #----------------------------------------------------
-                    real_ones_tsr =  torch.ones( D_x.shape ).to( device )
-                    fake_zeros_tsr =  torch.zeros( D_x.shape ).to( device )
-
                     # Discriminator
-                    loss_D_real = loss_gan_fn( D_x, real_ones_tsr )
-                    loss_D_fake = loss_gan_fn( D_G_z, fake_zeros_tsr )
-                    loss_D = loss_D_real + loss_D_fake
+                    loss_D, loss_D_real, loss_D_fake = loss_gan_fn.forward_D( d_real, d_fake )
 
                     # Generator
-                    loss_gan = loss_gan_fn( D_G_z, real_ones_tsr )
-                    loss_l1 = loss_l1_fn( G_z, after_image )
-                    loss_G = loss_gan + args.lambda_l1 * loss_l1
+                    loss_gan = loss_gan_fn.forward_G( d_fake )
+                    loss_l1 = loss_l1_fn( g_fake_img, after_image )
+                    loss_G = args.lambda_gan * loss_gan + args.lambda_l1 * loss_l1
 
                     # total
                     loss_D_total += loss_D.item()
@@ -390,7 +382,7 @@ if __name__ == '__main__':
                 board_test.add_scalar('Discriminator/loss_D_fake', (loss_D_fake_total/n_test_loop), iterations)
 
                 visuals = [
-                    [pre_image, after_image, G_z],
+                    [pre_image, after_image, g_fake_img],
                 ]
                 """
                 if( args.debug and n_print > 0 ):
@@ -425,13 +417,13 @@ if __name__ == '__main__':
             break
 
         with torch.no_grad():
-            G_z = model_G( fix_pre_image )
-            #G_z = model_G( fix_after_image )
+            g_fake_img = model_G( fix_pre_image )
+            #g_fake_img = model_G( fix_after_image )
 
-        save_image( tensor = G_z[0], filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}_batch0.png".format( epoch ) )
-        save_image( tensor = G_z, filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}_batchAll.png".format( epoch ) )
+        save_image( tensor = g_fake_img[0], filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}_batch0.png".format( epoch ) )
+        save_image( tensor = g_fake_img, filename = os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}_batchAll.png".format( epoch ) )
 
-        fake_images_historys.append(G_z[0].transpose(0,1).transpose(1,2).cpu().clone().numpy())
+        fake_images_historys.append(g_fake_img[0].transpose(0,1).transpose(1,2).cpu().clone().numpy())
         save_image_historys_gif( fake_images_historys, os.path.join(args.results_dir, args.exper_name) + "/fake_image_epoches{}.gif".format( epoch ) )        
 
     save_checkpoint( model_G, device, os.path.join(args.save_checkpoints_dir, args.exper_name, "G", 'G_final.pth'), iterations )
