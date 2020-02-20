@@ -17,6 +17,7 @@ nvidia-docker2 での動作を想定しています。
 - Docker イメージの作成 ＆ Docker コンテナの起動（docker-compose を使用する場合）
     ```sh
     $ docker-compose up -d
+    $ docker exec -it ml_exercises_pytorch_container /bin/bash
     ```
 
 <!--
