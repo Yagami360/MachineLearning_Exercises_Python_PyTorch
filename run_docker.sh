@@ -13,8 +13,8 @@ if [ ! "$(docker image ls -q ${IMAGE_NAME})" ]; then
 fi
 
 if [ ! "$(docker ps -aqf "name=${CONTAINER_NAME}")" ]; then
-    docker run -it --rm -v ${HOST_DIR}:${CONTAINER_DIR} --name ${CONTAINER_NAME} ${IMAGE_NAME} --runtime nvidia --p ${PORT}:${PORT} bin/sh
+    docker run -it --rm -v ${HOST_DIR}:${CONTAINER_DIR} --name ${CONTAINER_NAME} ${IMAGE_NAME} --runtime nvidia --p ${PORT}:${PORT} /bin/bash
 else
     docker start ${CONTAINER_NAME}
-    docker exec -it ${CONTAINER_NAME} --runtime nvidia --p ${PORT}:${PORT} bin/sh
+    docker exec -it ${CONTAINER_NAME} --runtime nvidia --p ${PORT}:${PORT} /bin/bash
 fi
