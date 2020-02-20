@@ -13,13 +13,13 @@ DCGAN の PyTorch での実装。
 
 ## ■ 動作環境
 
-- Mac OS / ubuntu server
+- Ubuntu : 16.04
 - Python : 3.6
 - Anaconda : 5.0.1
-- PyTorch : 1.1.0
-- tensorboard : 1.13.1
-- tensorboardx : 1.9
-- tqdm
+- PyTorch : 1.x 系
+- tensorboardx :
+- tqdm :
+- imageio :
 
 ## ■ 使用法
 

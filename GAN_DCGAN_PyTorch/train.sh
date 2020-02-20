@@ -19,7 +19,7 @@ NETWORK_D_TYPE=vanilla
 # RSGAN
 #-------------------
 mkdir -p ${PWD}/_logs
-EXEP_NAME=DCGAN_train_G_${NETWORK_G_TYPE}_D_${NETWORK_D_TYPE}_Epoch${N_EPOCHES}_docker_debug
+EXEP_NAME=DCGAN_train_G_${NETWORK_G_TYPE}_D_${NETWORK_D_TYPE}_Epoch${N_EPOCHES}_debug
 TENSOR_BOARD_DIR=../tensorboard
 if [ -d "${TENSOR_BOARD_DIR}/${EXEP_NAME}" ] ; then
     rm -r ${TENSOR_BOARD_DIR}/${EXEP_NAME}

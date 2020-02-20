@@ -1,5 +1,0 @@
-tqdm
-opencv-python
-imageio
-tensorflow
-tensorboardX

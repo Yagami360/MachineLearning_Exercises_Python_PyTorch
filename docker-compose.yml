@@ -1,12 +1,20 @@
-version: "3"
+version: '2.3'
+
 services:
-  app:
-    container_name: "ml_exercises_container"
-    build:
-      context: .
-      dockerfile: ./Dockerfile
-    image: ml_exercises_pytorch_image
-    volumes: 
-        - ${PWD}:/workspace/MachineLearning_Exercises_Python_PyTorch
-    tty: true
-    command: /bin/bash
+    app:
+        container_name: ml_exercises_pytorch_container
+        image: ml_exercises_pytorch_image
+        runtime: nvidia
+        build:
+            context: "./dockerfile"
+            dockerfile: Dockerfile
+        volumes:
+            -  ${PWD}:/home/user/share/MachineLearning_Exercises_Python_PyTorch
+        ports:
+            - "6007:6007"
+        tty: true
+        environment:
+            TZ: "Asia/Tokyo"
+            LC_ALL: C.UTF-8
+            LANG: C.UTF-8
+        command: bash -c "nvidia-smi && ls && /bin/bash"

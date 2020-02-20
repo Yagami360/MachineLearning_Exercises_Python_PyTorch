@@ -1,22 +1,39 @@
 # MachineLearning_Exercises_Python_PyTorch
 PyTorch 実装の練習コード集。<br>
 
-<!--
 ## ■ 動作環境
 
-- Mac OS / ubuntu server
+- Ubuntu : 16.04
 - Python : 3.6
 - Anaconda : 5.0.1
-- PyTorch : 1.0.0, 1.0.1, 1.1.0
-- scikit-learn : 0.20.2
--->
+- PyTorch : 1.x 系
+- tensorboardx :
+- tqdm :
+- imageio :
+
+### ◎ Docker 環境で動かす場合
+nvidia-docker2 での動作を想定しています。
+
+- Docker イメージの作成 ＆ Docker コンテナの起動（docker-compose を使用する場合）
+    ```sh
+    $ docker-compose up -d
+    ```
 
 <!--
-### ◎ 検証用データセット
+- Docker イメージの作成
+    ```sh
+    $ docker build ./dockerfile -t ml_exercises_pytorch_image
+    ```
 
-- MNIST
-- CIFAR-10
-- xxx
+- Docker コンテナの起動（nvidia-docker2）
+    ```sh
+    $ docker run -it --rm -v ${PWD}:/home/user/share/MachineLearning_Exercises_Python_PyTorch --name ml_exercises_container ml_exercises_pytorch_image --runtime nvidia --p 6006:6006 /bin/bash
+    ```
+
+- docker-compose を使用する場合
+    ```sh
+    $ docker-compose up -d
+    ```
 -->
 
 ## ■ 項目（フォルダ別）
@@ -35,5 +52,7 @@ PyTorch 実装の練習コード集。<br>
     1. [Pix2Pix-HD](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_Pix2PixHD_PyTorch)
 - 強化学習
     1. [【外部リンク】ReinforcementLearning](https://github.com/Yagami360/ReinforcementLearning_Exercises)
+- 仮想試着モデル
+    1. [【外部リンク】virtual-try-on_exercises_pytorch](https://github.com/Yagami360/virtual-try-on_exercises_pytorch)
 
 ## ■ 参考文献＆サイト
