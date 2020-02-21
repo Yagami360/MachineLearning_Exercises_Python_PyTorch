@@ -47,10 +47,10 @@ RUN chmod 777 /home/user
 ENV PYTHONIOENCODING utf-8
 
 # コンテナ内から全ての GPU が確認できるように環境変数 NVIDIA_VISIBLE_DEVICES で指定する。（nvidia-docker 用）
-ENV NVIDIA_VISIBLE_DEVICES all
+#ENV NVIDIA_VISIBLE_DEVICES all
 
 # utility : nvidia-smi コマンドおよび NVML, compute : CUDA / OpenCL アプリケーション（nvidia-docker 用）
-ENV NVIDIA_DRIVER_CAPABILITIES utility,compute
+#ENV NVIDIA_DRIVER_CAPABILITIES utility,compute
 
 #-----------------------------
 # 追加ライブラリのインストール
@@ -94,6 +94,7 @@ RUN conda install -y tensorboard && conda clean -ya
 RUN conda install -y tqdm && conda clean -ya
 RUN conda install -y imageio && conda clean -ya
 RUN conda install -y -c conda-forge tensorboardx && conda clean -ya
+RUN conda install -y -c anaconda pillow==6.2.1 && conda clean -ya
 
 #-----------------------------
 # コンテナ起動後に自動的に実行するコマンド

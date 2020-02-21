@@ -9,7 +9,9 @@ services:
             context: "./dockerfile"
             dockerfile: Dockerfile
         volumes:
-            -  ${PWD}:/home/user/share/MachineLearning_Exercises_Python_PyTorch
+            - ${PWD}:/home/user/share/MachineLearning_Exercises_Python_PyTorch
+            - /etc/group:/etc/group:ro
+            - /etc/passwd:/etc/passwd:ro
         ports:
             - "6007:6007"
         tty: true
