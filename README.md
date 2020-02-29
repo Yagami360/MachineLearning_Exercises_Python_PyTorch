@@ -2,17 +2,21 @@
 PyTorch 実装の練習コード集。<br>
 
 ## ■ 動作環境
+nvidia 製 GPU 搭載マシンでの動作を想定しています。
 
-- Ubuntu : 16.04
+### ◎ conda 環境
+- Ubuntu : 
+    - シェルスクリプト `.sh` のみ Ubuntu での動作を想定しています。
 - Python : 3.6
-- Anaconda : 5.0.1
+- Anaconda :
 - PyTorch : 1.x 系
 - tensorboardx :
 - tqdm :
 - imageio :
+- Pillow < 7.0.0
 
-### ◎ Docker 環境で動かす場合
-nvidia-docker2 での動作を想定しています。
+### ◎ Docker 環境
+nvidia-docker2 で動作します。
 
 - Docker イメージの作成 ＆ Docker コンテナの起動（docker-compose を使用する場合）
     ```sh

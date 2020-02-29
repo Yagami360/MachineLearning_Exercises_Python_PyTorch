@@ -10,16 +10,6 @@ WGAN の PyTorch での実装。
 1. [コードの実行結果](#コードの実行結果)
 1. [背景理論](https://github.com/Yagami360/My_NoteBook/blob/master/%E6%83%85%E5%A0%B1%E5%B7%A5%E5%AD%A6/%E6%83%85%E5%A0%B1%E5%B7%A5%E5%AD%A6_%E6%A9%9F%E6%A2%B0%E5%AD%A6%E7%BF%92_%E7%94%9F%E6%88%90%E3%83%A2%E3%83%87%E3%83%AB.md#WGAN)
 
-## ■ 動作環境
-
-- Ubuntu : 16.04
-- Python : 3.6
-- Anaconda : 5.0.1
-- PyTorch : 1.x 系
-- tensorboardx :
-- tqdm :
-- imageio :
-
 ## ■ 使用法
 
 - 学習処理

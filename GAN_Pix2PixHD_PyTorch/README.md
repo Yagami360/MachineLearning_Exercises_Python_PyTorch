@@ -10,16 +10,6 @@ pix2pix-HD の PyTorch での実装。<br>
 1. [コードの実行結果](#コードの実行結果)
 1. [背景理論](https://github.com/Yagami360/MachineLearning-Papers_Survey/issues/18)
 
-## ■ 動作環境
-
-- Ubuntu : 16.04
-- Python : 3.6
-- Anaconda : 5.0.1
-- PyTorch : 1.x 系
-- tensorboardx :
-- tqdm :
-- imageio :
-
 ## ■ 使用法
 
 - 使用データ（航空写真と地図画像）<br>

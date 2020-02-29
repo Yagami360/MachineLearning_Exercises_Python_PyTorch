@@ -12,16 +12,6 @@ ResNet-18 の PyTorch での実装
 1. [コードの実行結果](#コードの実行結果)
 1. [背景理論](http://yagami12.hatenablog.com/entry/2017/09/17/111935#ResNet%EF%BC%88%E6%AE%8B%E5%B7%AE%E3%83%8D%E3%83%83%E3%83%88%E3%83%AF%E3%83%BC%E3%82%AF%EF%BC%89)
 
-## ■ 動作環境
-
-- Ubuntu : 16.04
-- Python : 3.6
-- Anaconda : 5.0.1
-- PyTorch : 1.x 系
-- tensorboardx :
-- tqdm :
-- imageio :
-
 ## ■ 使用法
 
 - 学習処理
