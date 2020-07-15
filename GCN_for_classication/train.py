@@ -112,7 +112,7 @@ if __name__ == '__main__':
     # データセットの分類
     train_valid_idx = range(0, 2000)
     test_idx = range(2001, 2707)
-    train_idx, valid_idx = train_test_split(train_valid_idx, test_size=args.val_rate, random_state=args.seed, stratify=labels[train_valid_idx])
+    train_idx, valid_idx = train_test_split(train_valid_idx, test_size=args.val_rate, random_state=args.seed, stratify=labels[train_valid_idx].cpu().numpy())
 
     #================================
     # モデルの構造を定義する。
