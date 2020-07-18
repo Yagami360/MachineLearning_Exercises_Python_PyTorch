@@ -17,6 +17,6 @@ rm -rf tensorboard/${EXPER_NAME}_valid
 python train_intra_graph_reasoning.py \
     --exper_name ${EXPER_NAME} \
     --n_epoches ${N_EPOCHES} \
-    --batch_size ${BATCH_SIZE} \
+    --lr 0.05 --batch_size ${BATCH_SIZE} \
     --n_diaplay_step 10 --n_display_valid_step 10 \
     --debug

@@ -14,7 +14,8 @@ import torchvision
 #====================================
 class GraphConvolution( nn.Module ):
     """
-    グラフ畳み込み / 
+    グラフ畳み込み
+    Z^e = σ(A^e*Z*W^e)
     """
     def __init__(self, in_features, out_features, bias = True, activate = False, sparse = False ):
         super(GraphConvolution, self).__init__()
@@ -54,11 +55,10 @@ class GraphConvolution( nn.Module ):
             else:
                 output = torch.matmul(adj, support)
 
-        if self.bias is not None:
-            output = output + self.bias
-
         if( self.activate_layer ):
             output = self.activate_layer(output)
+        if self.bias is not None:
+            output = output + self.bias
 
         return output
 
@@ -102,8 +102,8 @@ class GraphConvolutionNetworks( nn.Module ):
 
 class FeatureMaptoGraphProjection( nn.Module ):
     """
-    特徴マップをグラフ構造に射影する
-    射影は学習可能な重み付きの行列積で行う
+    特徴マップをグラフ構造に射影する。射影は学習可能な重み付きの行列積で行う
+    Z = φ(X,W)
     """
     def __init__(self, in_features = 256, out_features = 128, n_nodes = 20 ):
         """
@@ -125,8 +125,8 @@ class FeatureMaptoGraphProjection( nn.Module ):
         return
 
     def reset_parameters(self):
-        stdv = 1. / math.sqrt(self.weight.size(1))
-        self.weight.data.uniform_(-stdv, stdv)
+        for ww in self.parameters():
+            torch.nn.init.xavier_uniform_(ww)
 
     def forward(self, input):
         batch_size, n_channels, height, width = input.shape[0], input.shape[1], input.shape[2], input.shape[3]
@@ -155,9 +155,80 @@ class FeatureMaptoGraphProjection( nn.Module ):
         return self.__class__.__name__ + ' (' + str(self.in_features) + ' -> ' + str(self.n_nodes) + ',' + str(self.out_features) + ')'
 
 
+class GraphtoFeatureMapProjection( nn.Module ):
+    """
+    グラフ構造を特徴マップに射影する。射影は学習可能な重み付きの行列積で行う
+    """
+    def __init__(self, in_features = 256, out_features = 256, n_hiddens = 128, n_nodes = 20 ):
+        """
+        [Args]
+            in_features : <int> 
+            out_features : <int> 
+            n_hiddens : <int> 
+            n_nodes : <int> グラフの頂点数（ノード数）
+        """
+        super(GraphtoFeatureMapProjection, self).__init__()
+        self.in_features = in_features
+        self.n_hiddens = n_hiddens
+        self.out_features = out_features
+        self.n_nodes = n_nodes
+
+        # nn.Parameter() でネットワークのパラメータを一括に設定
+        # この nn.Parameter() で作成したデータは、普通の Tensor 型とは異なり, <class 'torch.nn.parameter.Parameter'> という別の型になる
+        self.graph_to_feature_matrix = Parameter(torch.FloatTensor(in_features+n_hiddens, 1))
+        self.weight = Parameter(torch.FloatTensor(n_hiddens, out_features))
+        self.reset_parameters()
+        return
+
+    def reset_parameters(self):
+        for ww in self.parameters():
+            torch.nn.init.xavier_uniform_(ww)
+
+    def forward(self, in_graph, in_feature ):
+        """
+        [Args]
+            in_graph : グラフ構造 / [1,B,n_classes,n_hiddens]
+            in_feature : DeepLab v3+ からの特徴マップ / [B,C,H,W]
+        """
+        _, batch_size_graph, n_classes, n_hiddens = in_graph.shape[0], in_graph.shape[1], in_graph.shape[2], in_graph.shape[3]
+        batch_size, n_channels, height, width = in_feature.shape[0], in_feature.shape[1], in_feature.shape[2], in_feature.shape[3]
+
+        # [1,B,n_classes,n_hiddens] -> [B,H*W,n_classes,n_hiddens]
+        graph_reshape = in_graph.transpose(0,1).expand(batch_size, height*width, n_classes, n_hiddens)
+        #print( "graph_reshape.shape : ", graph_reshape.shape )      # torch.Size([2, 16384, 20, 128])
+
+        # (B,C,H,W) -> [B,H*W,n_classes,in_features]
+        feature_reshape = in_feature.view(batch_size, n_channels, height*width).transpose(1,2).unsqueeze(2).expand(batch_size,height*width,n_classes,n_channels)
+        #print( "feature_reshape.shape : ", feature_reshape.shape )  # torch.Size([2, 16384, 20, 256])
+
+        # [B,H*W,n_classes,n_hiddens] + [B,H*W,C] -> 
+        concat = torch.cat( (feature_reshape, graph_reshape), dim = 3 ) 
+        #print( "concat.shape : ", concat.shape )                    # torch.Size([2, 16384, 20, 384])
+
+        # feature_graph -> feature map / 
+        new_feature = torch.matmul(concat, self.graph_to_feature_matrix )
+        new_feature = new_feature.view(batch_size, height*width, n_classes)
+        new_feature = F.softmax(new_feature, dim=-1)
+        #print( "new_feature.shape : ", new_feature.shape )          # torch.Size([2, 16384, 20])
+
+        # weight_graph -> feature map / 
+        new_weight = torch.matmul( in_graph, self.weight )
+        #print( "new_weight.shape : ", new_weight.shape )            # torch.Size([1, 2, 20, 256])
+
+        #
+        output = torch.matmul(new_feature, new_weight)
+        output = output.transpose(2,3).contiguous().view(in_feature.size())
+        output = F.relu( output )
+        return output
+
+    def __repr__(self):
+        return self.__class__.__name__ + ' (' + str(self.in_features) + ' -> ' + str(self.n_nodes) + ',' + str(self.out_features) + ')'
+
+
 class InterGraphTransfer( nn.Module ):
     """
     Inter-Graph Transfer での異なるグラフ間での変換＆学習処理
+    Z_t = Z_t + σ(A_tr * Z_s * W_tr)
     """
     def __init__(self, in_features = 128, out_features = 128, n_nodes_source = 7, n_nodes_target = 20, bias = False, adj_matrix = None, activate = True ):
         super(InterGraphTransfer, self).__init__()
@@ -196,17 +267,21 @@ class InterGraphTransfer( nn.Module ):
             input : <Tensor> 変換元グラフ構造
             adj_matrix : <Tensor> 変換元グラフ構造から変換先グラフ構造への隣接行列
         """
+        # Z_s * W_tr
         support = torch.matmul( input, self.weight )
 
+        # A_tr * Z_s * W_tr
         adj_matrix_norm = self.norm_trans_adj_matrix(adj_matrix)
         output = torch.matmul(adj_matrix_norm,support)
 
         if adj_matrix is None:
             adj_matrix = self.adj_matrix
-        if self.bias is not None:
-            output = output + self.bias
         if( self.activate_layer ):
+            # σ(A_tr * Z_s * W_tr)
             output = self.activate_layer(output)
+        if self.bias is not None:
+            # Z_t + σ(A_tr * Z_s * W_tr)
+            output = output + self.bias
 
         return output
 

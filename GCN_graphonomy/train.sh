@@ -14,7 +14,7 @@ rm -rf tensorboard/${EXPER_NAME}
 rm -rf tensorboard/${EXPER_NAME}_valid
 #rm -rf tensorboard/${EXPER_NAME}_test
 
-python train_inter_graph_transfer.py \
+python train.py \
     --exper_name ${EXPER_NAME} \
     --n_epoches ${N_EPOCHES} \
     --batch_size ${BATCH_SIZE} \

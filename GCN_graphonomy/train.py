@@ -18,14 +18,14 @@ from tensorboardX import SummaryWriter
 
 # 自作モジュール
 from dataset import CIHPDataset, CIHPDataLoader
-from models.graphonomy import GraphonomyInterGraphTransfer
+from models.graphonomy import Graphonomy
 from models.graph_params import get_graph_adj_matrix
 from utils.utils import save_checkpoint, load_checkpoint
 from utils.utils import board_add_image, board_add_images, save_image_w_norm
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--exper_name", default="train_inter_graph_transfer", help="実験名")
+    parser.add_argument("--exper_name", default="graphonomy", help="実験名")
     parser.add_argument("--dataset_dir", type=str, default="../dataset/CIHP_4w")
     parser.add_argument("--results_dir", type=str, default="results")
     parser.add_argument('--save_checkpoints_dir', type=str, default="checkpoints", help="モデルの保存ディレクトリ")
@@ -114,7 +114,7 @@ if __name__ == '__main__':
     #================================
     # モデルの構造を定義する。
     #================================
-    model = GraphonomyInterGraphTransfer( n_in_channels = 3, n_classes_source = args.n_classes_source, n_classes_target = args.n_classes_target ).to(device)
+    model = Graphonomy( n_in_channels = 3, n_classes_source = args.n_classes_source, n_classes_target = args.n_classes_target ).to(device)
     if( args.debug ):
         print( "model\n", model )
 

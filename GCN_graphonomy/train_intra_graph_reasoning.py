@@ -20,12 +20,13 @@ from tensorboardX import SummaryWriter
 from dataset import CIHPDataset, CIHPDataLoader
 from models.graphonomy import GraphonomyIntraGraphReasoning
 from models.graph_params import get_graph_adj_matrix
+from models.losses import ParsingCrossEntropyLoss
 from utils.utils import save_checkpoint, load_checkpoint
 from utils.utils import board_add_image, board_add_images, save_image_w_norm
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("--exper_name", default="train_Intra_graph_reasoning", help="実験名")
+    parser.add_argument("--exper_name", default="graphonomy_intra_graph_reasoning", help="実験名")
     parser.add_argument("--dataset_dir", type=str, default="../dataset/CIHP_4w")
     parser.add_argument("--results_dir", type=str, default="results")
     parser.add_argument('--save_checkpoints_dir', type=str, default="checkpoints", help="モデルの保存ディレクトリ")
@@ -129,7 +130,9 @@ if __name__ == '__main__':
     #================================
     # loss 関数の設定
     #================================
-    loss_fn = nn.L1Loss()
+    #loss_fn = nn.L1Loss()
+    #loss_fn = nn.CrossEntropyLoss()
+    loss_fn = ParsingCrossEntropyLoss()
 
     #================================
     # 定義済みグラフ構造の取得
@@ -160,7 +163,7 @@ if __name__ == '__main__':
                 print( "adj_matrix_cihp_to_cihp.shape : ", adj_matrix_cihp_to_cihp.shape )
 
             # forword 処理 / output : 分類結果（各ベクトル値の値が分類の確率値）softmax 出力
-            output, encode, decode = model( image, adj_matrix_cihp_to_cihp )
+            output, encode, decode, graph, feature = model( image, adj_matrix_cihp_to_cihp )
             if( args.debug and n_print > 0 ):
                 print( "output.shape : ", output.shape )
 
@@ -183,15 +186,33 @@ if __name__ == '__main__':
 
                 # visual images
                 visuals = [
-                    [ image, target, output ],
+                    [ image, target, output[:,0,:,:].unsqueeze(1), output[:,1,:,:].unsqueeze(1), output[:,2,:,:].unsqueeze(1) ],
                 ]
                 board_add_images(board_train, 'train', visuals, step+1)
 
                 # visual encoder output
                 visuals = [
-                    [ encode[:,0,:,:].view(encode.shape[0],1,encode.shape[2],encode.shape[3]), encode[:,1,:,:].view(encode.shape[0],1,encode.shape[2],encode.shape[3]), encode[:,2,:,:].view(encode.shape[0],1,encode.shape[2],encode.shape[3]) ],
+                    [ encode[:,0,:,:].unsqueeze(1), encode[:,1,:,:].unsqueeze(1), encode[:,2,:,:].unsqueeze(1) ],
                 ]
-                board_add_images(board_train, 'train/encoder', visuals, step+1)
+                board_add_images(board_train, 'train/deeplab_encode', visuals, step+1)
+
+                # visual decode output
+                visuals = [
+                    [ decode[:,0,:,:].unsqueeze(1), decode[:,1,:,:].unsqueeze(1), decode[:,2,:,:].unsqueeze(1) ],
+                ]
+                board_add_images(board_train, 'train/deeplab_decode', visuals, step+1)
+
+                # visual graph output
+                visuals = [
+                    [ graph.transpose(1,0) ],
+                ]
+                board_add_images(board_train, 'train/graph', visuals, step+1)
+
+                # visual feature output
+                visuals = [
+                    [ feature[:,0,:,:].unsqueeze(1), feature[:,1,:,:].unsqueeze(1), feature[:,2,:,:].unsqueeze(1) ],
+                ]
+                board_add_images(board_train, 'train/re-proj_feature', visuals, step+1)
 
             if( step == 0 or ( step % args.n_display_valid_step == 0 ) ):
                 pass
