@@ -35,47 +35,47 @@ class GraphonomyIntraGraphReasoning( nn.Module ):
         return
 
     def forward(self, input, adj_matrix = None ):
-        print( "input.shape : ", input.shape )
+        #print( "input.shape : ", input.shape )
         #------------------------------
         # DeepLab v3+ での特徴量抽出処理
         #------------------------------
         # backbone ネットワーク（ResNet）で projection
         backbone, backbone_low_level = self.backbone(input)
-        print( "backbone.shape : ", backbone.shape )                        # torch.Size([2, 2048, 32, 32])
-        print( "backbone_low_level.shape : ", backbone_low_level.shape )    # torch.Size([2, 256, 128, 128])
+        #print( "backbone.shape : ", backbone.shape )                        # torch.Size([2, 2048, 32, 32])
+        #print( "backbone_low_level.shape : ", backbone_low_level.shape )    # torch.Size([2, 256, 128, 128])
 
         # ASPP で各畳み込みを統合
         encode = self.aspp(backbone)
-        print( "encode.shape : ", encode.shape )                            # torch.Size([2, 256, 32, 32])
+        #print( "encode.shape : ", encode.shape )                            # torch.Size([2, 256, 32, 32])
 
         # decode 処理
         decode = self.decoder(encode, backbone_low_level)
-        print( "decode.shape : ", decode.shape )                            # torch.Size([2, 256, 128, 128])
+        #print( "decode.shape : ", decode.shape )                            # torch.Size([2, 256, 128, 128])
 
         #---------------------------------------------
         # Intra-Graph Reasoning での処理
         #---------------------------------------------
         # DeepLab v3+ で enocder-decoder した特徴マップをグラフ構造に射影する
         graph = self.feature_to_graph_proj(decode)
-        print( "graph.shape : ", graph.shape )                              # torch.Size([2, 20, 128])
+        #print( "graph.shape : ", graph.shape )                              # torch.Size([2, 20, 128])
 
         # グラフ構造をグラフ畳み込み
         graph = self.graph_conv1(graph, adj_matrix)
         graph = self.graph_conv2(graph, adj_matrix)
         graph = self.graph_conv3(graph, adj_matrix)
-        print( "graph.shape : ", graph.shape )                              # torch.Size([adj_shape[0], 2, 20, 128])
+        #print( "graph.shape : ", graph.shape )                              # torch.Size([adj_shape[0], 2, 20, 128])
 
         # グラフ構造を特徴マップに射影する
         feature = self.graph_to_feature_proj(graph,decode)        
-        print( "feature.shape : ", feature.shape )                          # torch.Size([2, 256, 128, 128])
+        #print( "feature.shape : ", feature.shape )                          # torch.Size([2, 256, 128, 128])
 
         # セマンティクス形式の出力
         semantic = self.semantic_conv(feature)
-        print( "semantic.shape : ", semantic.shape )                        # torch.Size([2, 20, 128, 128])
+        #print( "semantic.shape : ", semantic.shape )                        # torch.Size([2, 20, 128, 128])
 
         # upsampling
         semantic_upsample = F.interpolate(semantic, size=input.size()[2:], mode='bilinear', align_corners=True)
-        print( "semantic_upsample.shape : ", semantic_upsample.shape )       # torch.Size([2, 20, 512, 512])
+        #print( "semantic_upsample.shape : ", semantic_upsample.shape )       # torch.Size([2, 20, 512, 512])
 
         return semantic_upsample, encode, decode, graph, feature
 
