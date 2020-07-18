@@ -31,6 +31,7 @@ class GraphonomyIntraGraphReasoning( nn.Module ):
         self.graph_conv2 = GraphConvolution( in_features = 128, out_features = 128, activate = True, sparse = False )
         self.graph_conv3 = GraphConvolution( in_features = 128, out_features = 128, activate = True, sparse = False )
         self.graph_to_feature_proj = GraphtoFeatureMapProjection( in_features = 256, out_features = 256, n_hiddens = 128, n_nodes = n_classes )
+        self.skip_conv = nn.Sequential(*[nn.Conv2d(256, 256, kernel_size=1), nn.ReLU(True)])
         self.semantic_conv = nn.Conv2d(256, n_classes, kernel_size=1)
         return
 
@@ -69,8 +70,13 @@ class GraphonomyIntraGraphReasoning( nn.Module ):
         feature = self.graph_to_feature_proj(graph,decode)        
         #print( "feature.shape : ", feature.shape )                          # torch.Size([2, 256, 128, 128])
 
+        # skip connection
+        skip = self.skip_conv(decode)
+        skip = skip + feature
+        #print( "skip.shape : ", skip.shape )                                 # torch.Size([2, 256, 128, 128])
+
         # セマンティクス形式の出力
-        semantic = self.semantic_conv(feature)
+        semantic = self.semantic_conv(skip)
         #print( "semantic.shape : ", semantic.shape )                        # torch.Size([2, 20, 128, 128])
 
         # upsampling

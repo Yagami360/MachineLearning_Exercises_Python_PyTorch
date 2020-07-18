@@ -17,3 +17,8 @@ python train.py \
     --n_epoches ${N_EPOCHES} \
     --n_diaplay_step 5 --n_display_valid_step 5 \
     --debug
+
+if [ $1 = "poweroff" ] ; then
+    sudo poweroff
+    sudo shutdown -h now
+fi

@@ -20,3 +20,8 @@ python train.py \
     --batch_size ${BATCH_SIZE} \
     --n_diaplay_step 10 --n_display_valid_step 10 \
     --debug
+
+if [ $1 = "poweroff" ] ; then
+    sudo poweroff
+    sudo shutdown -h now
+fi

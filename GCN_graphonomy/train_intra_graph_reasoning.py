@@ -42,19 +42,17 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=0.007, help="学習率")
     parser.add_argument('--beta1', type=float, default=0.5, help="学習率の減衰率")
     parser.add_argument('--beta2', type=float, default=0.999, help="学習率の減衰率")
-
     parser.add_argument("--n_diaplay_step", type=int, default=10,)
     parser.add_argument('--n_display_valid_step', type=int, default=10, help="valid データの tensorboard への表示間隔")
-    parser.add_argument("--n_save_epoches", type=int, default=200,)
+    parser.add_argument("--n_save_epoches", type=int, default=10,)
+    parser.add_argument('--data_augument', action='store_true')
+    parser.add_argument('--flip', action='store_true')
 
-    parser.add_argument("--val_rate", type=float, default=0.25)
     parser.add_argument("--seed", type=int, default=71)
     parser.add_argument('--device', choices=['cpu', 'gpu'], default="gpu", help="使用デバイス (CPU or GPU)")
     parser.add_argument('--n_workers', type=int, default=4, help="CPUの並列化数（0 で並列化なし）")
     parser.add_argument('--use_cuda_benchmark', action='store_true', help="torch.backends.cudnn.benchmark の使用有効化")
     parser.add_argument('--use_cuda_deterministic', action='store_true', help="再現性確保のために cuDNN に決定論的振る舞い有効化")
-    parser.add_argument('--data_augument', action='store_true')
-    parser.add_argument('--flip', action='store_true')
     parser.add_argument('--debug', action='store_true')
     args = parser.parse_args()
     if( args.debug ):
@@ -217,6 +215,14 @@ if __name__ == '__main__':
             if( step == 0 or ( step % args.n_display_valid_step == 0 ) ):
                 pass
 
+            #====================================================
+            # モデルの保存
+            #====================================================
+            if( epoch % args.n_save_epoches == 0 ):
+                save_checkpoint( model, device, os.path.join(args.save_checkpoints_dir, args.exper_name, 'model_ep%03d.pth' % (epoch)) )
+                save_checkpoint( model, device, os.path.join(args.save_checkpoints_dir, args.exper_name, 'model_final.pth') )
+                print( "saved checkpoints" )
+                
             step += 1
             n_print -= 1
 
