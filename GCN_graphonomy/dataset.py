@@ -24,13 +24,14 @@ IMG_EXTENSIONS = (
 )
 
 class CIHPDataset(data.Dataset):
-    def __init__(self, args, root_dir, datamode = "train", data_augument = False, debug = False ):
+    def __init__(self, args, root_dir, datamode = "train", flip = False, data_augument = False, debug = False ):
         super(CIHPDataset, self).__init__()
         self.args = args
         self.datamode = datamode
         self.data_augument = data_augument
         self.image_height = args.image_height
         self.image_width = args.image_width
+        self.flip = flip
         self.debug = debug
         self.image_dir = os.path.join( root_dir, "Images" )
         self.categories_dir = os.path.join( root_dir, "Categories" )
@@ -72,11 +73,11 @@ class CIHPDataset(data.Dataset):
 
             self.transform_mask = transforms.Compose(
                 [
-                    transforms.Resize( (args.image_height, args.image_width), interpolation=Image.LANCZOS ),
+                    transforms.Resize( (args.image_height, args.image_width), interpolation=Image.NEAREST ),
 #                    transforms.RandomResizedCrop( (args.image_height, args.image_width) ),
                     transforms.RandomHorizontalFlip(),
 #                    transforms.RandomVerticalFlip(),
-#                    transforms.RandomAffine( degrees = (-10,10),  translate=(0.0, 0.0), scale = (1.00,1.00), resample=Image.BICUBIC ),
+#                    transforms.RandomAffine( degrees = (-10,10),  translate=(0.0, 0.0), scale = (1.00,1.00), resample=Image.NEAREST ),
                     transforms.CenterCrop( size = (args.image_height, args.image_width) ),
                     transforms.ToTensor(),
                     transforms.Normalize( [0.5], [0.5] ),
@@ -93,7 +94,7 @@ class CIHPDataset(data.Dataset):
             )
             self.transform_mask = transforms.Compose(
                 [
-                    transforms.Resize( (args.image_height, args.image_width), interpolation=Image.LANCZOS ),
+                    transforms.Resize( (args.image_height, args.image_width), interpolation=Image.NEAREST ),
                     transforms.CenterCrop( size = (args.image_height, args.image_width) ),
                     transforms.ToTensor(),
                     transforms.Normalize( [0.5], [0.5] ),
@@ -117,6 +118,9 @@ class CIHPDataset(data.Dataset):
 
         # image
         image = Image.open(image_name).convert('RGB')
+        if( self.flip ):
+            image = image.transpose(Image.FLIP_LEFT_RIGHT)
+
         self.seed_da = random.randint(0,10000)
         if( self.data_augument ):
             set_random_seed( self.seed_da )
@@ -124,31 +128,25 @@ class CIHPDataset(data.Dataset):
         image = self.transform(image)
 
         # Categories_ids
-        categories = Image.open(categories_name).convert('L')
+        if( self.flip ):
+            target = Image.open(categories_rev_name).convert('L')
+        else:
+            target = Image.open(categories_name).convert('L')
+
         self.seed_da = random.randint(0,10000)
         if( self.data_augument ):
             set_random_seed( self.seed_da )
 
-        categories = self.transform_mask(categories)
-
-        # Categories_rev_ids
-        categories_rev = Image.open(categories_rev_name).convert('L')
-        if( self.data_augument ):
-            set_random_seed( self.seed_da )
-
-        categories_rev = self.transform_mask(categories_rev)
+        target = self.transform_mask(target)
 
         if( self.datamode == "train" ):
             results_dict = {
                 "image" : image,
-                "categories" : categories,
-                "categories_rev" : categories_rev,
+                "target" : target,
             }
         else:
             results_dict = {
                 "image" : image,
-                "categories" : categories,
-                "categories_rev" : categories_rev,
             }
 
         return results_dict
