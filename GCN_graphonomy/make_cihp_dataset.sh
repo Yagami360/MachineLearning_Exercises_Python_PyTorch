@@ -2,10 +2,17 @@
 #conda activate pytorch11_py36
 set -eu
 
-DATSET_DIR=../dataset/cihp_dataset
+DATSET_DIR=../dataset/CIHP_4w
 mkdir -p ${DATSET_DIR}
 mkdir -p ${DATSET_DIR}/Categories
 mkdir -p ${DATSET_DIR}/Category_ids
+mkdir -p ${DATSET_DIR}/Category_rev_ids
+mkdir -p ${DATSET_DIR}/Human
+mkdir -p ${DATSET_DIR}/Human_ids
+mkdir -p ${DATSET_DIR}/Images
+mkdir -p ${DATSET_DIR}/Instance_ids
+mkdir -p ${DATSET_DIR}/Instances
+mkdir -p ${DATSET_DIR}/lists
 
 #--------------
 # CIHP
@@ -38,8 +45,8 @@ FILE_NAME2=Category_rev_ids.rar
 curl -sc /tmp/cookie "https://drive.google.com/uc?export=download&id=${FILE_ID2}" > /dev/null
 CODE="$(awk '/_warning_/ {print $NF}' /tmp/cookie)"  
 curl -Lb /tmp/cookie "https://drive.google.com/uc?export=download&confirm=${CODE}&id=${FILE_ID2}" -o ${FILE_NAME2}
-mv ${FILE_NAME2} ./data/datasets/CIHP_4w/Category_rev_ids
+mv ${FILE_NAME2} ${DATSET_DIR}/Category_rev_ids
 
-cd ./data/datasets/CIHP_4w/Category_rev_ids
+cd ${DATSET_DIR}/Category_rev_ids
 unrar e ${FILE_NAME2}
 rm -rf ${FILE_NAME2}

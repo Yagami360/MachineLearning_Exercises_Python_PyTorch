@@ -6,19 +6,23 @@ mkdir -p _logs
 #----------------------
 # model
 #----------------------
-N_EPOCHES=200
-BATCH_SIZE=2
+N_EPOCHES=5
+BATCH_SIZE=4
+IMAGE_HIGHT=64
+IMAGE_WIDTH=64
+N_NODE_FEATURES=32
+
 EXPER_NAME=debug
 
 rm -rf tensorboard/${EXPER_NAME}
 rm -rf tensorboard/${EXPER_NAME}_valid
-#rm -rf tensorboard/${EXPER_NAME}_test
 
 python train.py \
     --exper_name ${EXPER_NAME} \
     --n_epoches ${N_EPOCHES} \
+    --image_height ${IMAGE_HIGHT} --image_width ${IMAGE_WIDTH} --n_node_features ${N_NODE_FEATURES} \
     --batch_size ${BATCH_SIZE} \
-    --n_diaplay_step 10 --n_display_valid_step 10 \
+    --n_diaplay_step 100 --n_display_valid_step 500 \
     --debug
 
 if [ $1 = "poweroff" ] ; then

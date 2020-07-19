@@ -7,9 +7,12 @@ from tqdm import tqdm
 from PIL import Image
 import cv2
 
+# sklearn
+from sklearn.model_selection import train_test_split
+
 # PyTorch
 import torch
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, Subset
 import torch.optim as optim
 import torch.nn as nn
 import torch.nn.functional as F
@@ -20,10 +23,14 @@ from tensorboardX import SummaryWriter
 from dataset import CIHPDataset, CIHPDataLoader
 from models.graphonomy import Graphonomy
 from models.graph_params import get_graph_adj_matrix
+from models.losses import ParsingCrossEntropyLoss, CrossEntropy2DLoss
 from utils.utils import save_checkpoint, load_checkpoint
 from utils.utils import board_add_image, board_add_images, save_image_w_norm
 
 if __name__ == '__main__':
+    """
+    Graphonomy の Intra-Graph Reasoning & Inter-Graph Transfer での学習処理
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--exper_name", default="graphonomy", help="実験名")
     parser.add_argument("--dataset_dir", type=str, default="../dataset/CIHP_4w")
@@ -39,12 +46,15 @@ if __name__ == '__main__':
     parser.add_argument('--image_width', type=int, default=512, help="入力画像の幅（pixel単位）")
     parser.add_argument("--n_classes_source", type=int, default=7, help="変換元のグラフ構造のクラス数")
     parser.add_argument("--n_classes_target", type=int, default=20, help="変換先のグラフ構造のクラス数")
+    parser.add_argument("--n_node_features", type=int, default=128, help="グラフの各頂点の特徴次元")
     parser.add_argument('--lr', type=float, default=0.007, help="学習率")
     parser.add_argument('--beta1', type=float, default=0.5, help="学習率の減衰率")
     parser.add_argument('--beta2', type=float, default=0.999, help="学習率の減衰率")
-    parser.add_argument("--n_diaplay_step", type=int, default=10,)
-    parser.add_argument('--n_display_valid_step', type=int, default=10, help="valid データの tensorboard への表示間隔")
+    parser.add_argument("--n_diaplay_step", type=int, default=100,)
+    parser.add_argument('--n_display_valid_step', type=int, default=500, help="valid データの tensorboard への表示間隔")
     parser.add_argument("--n_save_epoches", type=int, default=10,)
+    parser.add_argument("--val_rate", type=float, default=0.01)
+    parser.add_argument('--n_display_valid', type=int, default=8, help="valid データの tensorboard への表示数")
     parser.add_argument('--data_augument', action='store_true')
     parser.add_argument('--flip', action='store_true')
 
@@ -107,12 +117,23 @@ if __name__ == '__main__':
     #================================    
     # 学習用データセットとテスト用データセットの設定
     ds_train = CIHPDataset( args, args.dataset_dir, datamode = "train", flip = args.flip, data_augument = args.data_augument, debug = args.debug )
-    dloader_train = torch.utils.data.DataLoader(ds_train, batch_size=args.batch_size, shuffle=True, num_workers = args.n_workers, pin_memory = True )
+
+    # 学習用データセットとテスト用データセットの設定
+    index = np.arange(len(ds_train))
+    train_index, valid_index = train_test_split( index, test_size=args.val_rate, random_state=args.seed )
+    if( args.debug ):
+        print( "train_index.shape : ", train_index.shape )
+        print( "valid_index.shape : ", valid_index.shape )
+        print( "train_index[0:10] : ", train_index[0:10] )
+        print( "valid_index[0:10] : ", valid_index[0:10] )
+
+    dloader_train = torch.utils.data.DataLoader(Subset(ds_train, train_index), batch_size=args.batch_size, shuffle=True, num_workers = args.n_workers, pin_memory = True )
+    dloader_valid = torch.utils.data.DataLoader(Subset(ds_train, valid_index), batch_size=args.batch_size_valid, shuffle=False, num_workers = args.n_workers, pin_memory = True )
 
     #================================
     # モデルの構造を定義する。
     #================================
-    model = Graphonomy( n_in_channels = 3, n_classes_source = args.n_classes_source, n_classes_target = args.n_classes_target ).to(device)
+    model = Graphonomy( n_in_channels = 3, n_classes_source = args.n_classes_source, n_classes_target = args.n_classes_target, n_node_features = args.n_node_features ).to(device)
     if( args.debug ):
         print( "model\n", model )
 
@@ -128,7 +149,8 @@ if __name__ == '__main__':
     #================================
     # loss 関数の設定
     #================================
-    loss_fn = nn.L1Loss()
+    loss_fn = ParsingCrossEntropyLoss()
+    #loss_fn = CrossEntropy2DLoss(device)
 
     #================================
     # 定義済みグラフ構造の取得
@@ -160,14 +182,14 @@ if __name__ == '__main__':
                 print( "adj_matrix_cihp_to_cihp.shape : ", adj_matrix_cihp_to_cihp.shape )
                 print( "adj_matrix_cihp_to_pascal.shape : ", adj_matrix_cihp_to_pascal.shape )
 
-            # forword 処理 / output : 分類結果（各ベクトル値の値が分類の確率値）softmax 出力
-            output, encode, decode = model( image, adj_matrix_pascal_to_pascal, adj_matrix_cihp_to_cihp, adj_matrix_cihp_to_pascal )
+            # forword 処理
+            output, embedded, source_graph = model( image, adj_matrix_pascal_to_pascal, adj_matrix_cihp_to_cihp, adj_matrix_cihp_to_pascal )
             if( args.debug and n_print > 0 ):
                 print( "output.shape : ", output.shape )
 
             # 損失関数を計算する
             loss = loss_fn( output, target )
-            #loss = torch.zeros(1, requires_grad=True).float().to(device)
+            #loss = torch.zeros(1, requires_grad=True).float().to(device)   # dummy
 
             # ネットワークの更新処理
             optimizer.zero_grad()
@@ -184,18 +206,75 @@ if __name__ == '__main__':
 
                 # visual images
                 visuals = [
-                    [ image, target, output ],
+                    [ image, target ],
+                    [ output[:,i,:,:].unsqueeze(1) for i in range(0,args.n_classes_source//2) ],
+                    [ output[:,i,:,:].unsqueeze(1) for i in range(args.n_classes_source//2 + 1,args.n_classes_source) ],
                 ]
                 board_add_images(board_train, 'train', visuals, step+1)
 
-                # visual encoder output
+                # visual deeplab v3+ output
                 visuals = [
-                    [ encode[:,0,:,:].view(encode.shape[0],1,encode.shape[2],encode.shape[3]), encode[:,1,:,:].view(encode.shape[0],1,encode.shape[2],encode.shape[3]), encode[:,2,:,:].view(encode.shape[0],1,encode.shape[2],encode.shape[3]) ],
+                    [ embedded[:,i,:,:].unsqueeze(1) for i in range(0,args.n_classes_source//2) ],
+                    [ embedded[:,i,:,:].unsqueeze(1) for i in range(args.n_classes_source//2 + 1,args.n_classes_source) ],
                 ]
-                board_add_images(board_train, 'train/encoder', visuals, step+1)
+                board_add_images(board_train, 'train_deeplab_embedded', visuals, step+1)
+
+                # visual graph output
+                visuals = [
+                    [ source_graph.transpose(1,0) ],
+                ]
+                board_add_images(board_train, 'train_graph/source', visuals, step+1)
+
 
             if( step == 0 or ( step % args.n_display_valid_step == 0 ) ):
-                pass
+                loss_total = 0
+                n_valid_loop = 0
+                for iter, inputs in enumerate( tqdm(dloader_valid, desc = "eval iters") ):
+                    model.eval()            
+
+                    # 一番最後のミニバッチループで、バッチサイズに満たない場合は無視する（後の計算で、shape の不一致をおこすため）
+                    if inputs["image"].shape[0] != args.batch_size_valid:
+                        break
+
+                    # ミニバッチデータを GPU へ転送
+                    image = inputs["image"].to(device)
+                    target = inputs["target"].to(device)
+
+                    # 推論処理
+                    with torch.no_grad():
+                        output, embedded, source_graph = model( image, adj_matrix_pascal_to_pascal, adj_matrix_cihp_to_cihp, adj_matrix_cihp_to_pascal )
+
+                    # 損失関数を計算する
+                    loss = loss_fn( output, target )
+                    loss_total += loss
+
+                    # 生成画像表示
+                    if( iter <= args.n_display_valid ):
+                        # visual images
+                        visuals = [
+                            [ image, target ],
+                            [ output[:,i,:,:].unsqueeze(1) for i in range(0,args.n_classes_source//2) ],
+                            [ output[:,i,:,:].unsqueeze(1) for i in range(args.n_classes_source//2 + 1,args.n_classes_source) ],
+                        ]
+                        board_add_images(board_valid, 'valid/{}'.format(iter), visuals, step+1)
+
+                        # visual deeplab v3+ output
+                        visuals = [
+                            [ embedded[:,i,:,:].unsqueeze(1) for i in range(0,args.n_classes_source//2) ],
+                            [ embedded[:,i,:,:].unsqueeze(1) for i in range(args.n_classes_source//2 + 1,args.n_classes_source) ],
+                        ]
+                        board_add_images(board_train, 'valid_deeplab_embedded/{}'.format(iter), visuals, step+1)
+
+                        # visual graph output
+                        visuals = [
+                            [ graph.transpose(1,0) ],
+                        ]
+                        board_add_images(board_train, 'valid_graph/{}'.format(iter), visuals, step+1)
+
+                    n_valid_loop += 1
+
+                # loss 値表示
+                board_valid.add_scalar('G/loss', loss_total.item()/n_valid_loop, step)
 
             #====================================================
             # モデルの保存
