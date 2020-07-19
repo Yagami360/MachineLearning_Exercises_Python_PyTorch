@@ -147,8 +147,8 @@ if __name__ == '__main__':
     #================================
     # loss 関数の設定
     #================================
-    #loss_fn = ParsingCrossEntropyLoss()
-    loss_fn = CrossEntropy2DLoss(device)
+    loss_fn = ParsingCrossEntropyLoss()
+    #loss_fn = CrossEntropy2DLoss(device)
 
     #================================
     # 定義済みグラフ構造の取得
