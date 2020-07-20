@@ -26,6 +26,7 @@ from models.graph_params import get_graph_adj_matrix
 from models.losses import ParsingCrossEntropyLoss, CrossEntropy2DLoss
 from utils.utils import save_checkpoint, load_checkpoint
 from utils.utils import board_add_image, board_add_images, save_image_w_norm
+from utils.decode_labels import decode_labels_tsr
 
 if __name__ == '__main__':
     """
@@ -157,6 +158,7 @@ if __name__ == '__main__':
     #================================
     adj_matrix_cihp_to_cihp, adj_matrix_pascal_to_pascal, adj_matrix_cihp_to_pascal = get_graph_adj_matrix()
     adj_matrix_cihp_to_cihp, adj_matrix_pascal_to_pascal, adj_matrix_cihp_to_pascal = adj_matrix_cihp_to_cihp.to(device), adj_matrix_pascal_to_pascal.to(device), adj_matrix_cihp_to_pascal.to(device)
+    adj_matrix_pascal_to_cihp = adj_matrix_cihp_to_pascal.transpose(2,3)
 
     #================================
     # モデルの学習
@@ -181,11 +183,18 @@ if __name__ == '__main__':
                 print( "adj_matrix_pascal_to_pascal.shape : ", adj_matrix_pascal_to_pascal.shape )
                 print( "adj_matrix_cihp_to_cihp.shape : ", adj_matrix_cihp_to_cihp.shape )
                 print( "adj_matrix_cihp_to_pascal.shape : ", adj_matrix_cihp_to_pascal.shape )
+                print( "adj_matrix_pascal_to_cihp.shape : ", adj_matrix_pascal_to_cihp.shape )
 
             # forword 処理
-            output, embedded, source_graph = model( image, adj_matrix_pascal_to_pascal, adj_matrix_cihp_to_cihp, adj_matrix_cihp_to_pascal )
+            output, embedded, target_graph = model( image, adj_matrix_pascal_to_pascal, adj_matrix_cihp_to_cihp, adj_matrix_cihp_to_pascal, adj_matrix_pascal_to_cihp )
+            _, output_vis = torch.max(output, 1)
+            output_vis_rgb = decode_labels_tsr(output_vis)
             if( args.debug and n_print > 0 ):
                 print( "output.shape : ", output.shape )
+                print( "output_vis.shape : ", output_vis.shape )
+                print( "output_vis_rgb.shape : ", output_vis_rgb.shape )
+                print( "embedded.shape : ", embedded.shape )
+                print( "target_graph.shape : ", target_graph.shape )
 
             # 損失関数を計算する
             loss = loss_fn( output, target )
@@ -206,7 +215,7 @@ if __name__ == '__main__':
 
                 # visual images
                 visuals = [
-                    [ image, target ],
+                    [ image, target, output_vis.unsqueeze(1), output_vis_rgb ],
                     [ output[:,i,:,:].unsqueeze(1) for i in range(0,args.n_classes_source//2) ],
                     [ output[:,i,:,:].unsqueeze(1) for i in range(args.n_classes_source//2 + 1,args.n_classes_source) ],
                 ]
@@ -221,9 +230,9 @@ if __name__ == '__main__':
 
                 # visual graph output
                 visuals = [
-                    [ source_graph.transpose(1,0) ],
+                    [ target_graph.transpose(1,0) ],
                 ]
-                board_add_images(board_train, 'train_graph/source', visuals, step+1)
+                board_add_images(board_train, 'train_graph/target', visuals, step+1)
 
 
             if( step == 0 or ( step % args.n_display_valid_step == 0 ) ):
@@ -242,7 +251,9 @@ if __name__ == '__main__':
 
                     # 推論処理
                     with torch.no_grad():
-                        output, embedded, source_graph = model( image, adj_matrix_pascal_to_pascal, adj_matrix_cihp_to_cihp, adj_matrix_cihp_to_pascal )
+                        output, embedded, target_graph = model( image, adj_matrix_pascal_to_pascal, adj_matrix_cihp_to_cihp, adj_matrix_cihp_to_pascal, adj_matrix_pascal_to_cihp )
+                        _, output_vis = torch.max(output, 1)
+                        output_vis_rgb = decode_labels_tsr(output_vis)
 
                     # 損失関数を計算する
                     loss = loss_fn( output, target )
@@ -252,7 +263,7 @@ if __name__ == '__main__':
                     if( iter <= args.n_display_valid ):
                         # visual images
                         visuals = [
-                            [ image, target ],
+                            [ image, target, output_vis.unsqueeze(1), output_vis_rgb ],
                             [ output[:,i,:,:].unsqueeze(1) for i in range(0,args.n_classes_source//2) ],
                             [ output[:,i,:,:].unsqueeze(1) for i in range(args.n_classes_source//2 + 1,args.n_classes_source) ],
                         ]
@@ -267,7 +278,7 @@ if __name__ == '__main__':
 
                         # visual graph output
                         visuals = [
-                            [ graph.transpose(1,0) ],
+                            [ target_graph.transpose(1,0) ],
                         ]
                         board_add_images(board_train, 'valid_graph/{}'.format(iter), visuals, step+1)
 

@@ -1,4 +1,4 @@
-# graph_convolutional_networks
+# GCN_sample_classication
 cora dataset を使用して、論文中の頻出単語情報からその論文の論文カテゴリを予想する Graph Convolutional Networks (GCN) ベースの分類器
 
 - 参考コード

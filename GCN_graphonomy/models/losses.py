@@ -42,7 +42,7 @@ class CrossEntropy2DLoss(nn.Module):
         # logit = logit.permute(0, 2, 3, 1)
         target = target.squeeze(1)
 
-        print( "logit.shape : ", logit.shape )
-        print( "target.shape : ", target.shape )
+        #print( "logit.shape : ", logit.shape )
+        #print( "target.shape : ", target.shape )
         loss = self.loss_fn(logit, target.long())
         return loss

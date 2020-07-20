@@ -26,6 +26,7 @@ from models.graph_params import get_graph_adj_matrix
 from models.losses import ParsingCrossEntropyLoss, CrossEntropy2DLoss
 from utils.utils import save_checkpoint, load_checkpoint
 from utils.utils import board_add_image, board_add_images, save_image_w_norm
+from utils.decode_labels import decode_labels_tsr
 
 if __name__ == '__main__':
     """
@@ -180,12 +181,18 @@ if __name__ == '__main__':
 
             # forword 処理
             output, embedded, graph, reproj_feature = model( image, adj_matrix_cihp_to_cihp )
+            _, output_vis = torch.max(output, 1)               # 最大値（＝最大確率）の要素数を出力画像とする
+            output_vis_rgb = decode_labels_tsr(output_vis)     #  
             if( args.debug and n_print > 0 ):
                 print( "output.shape : ", output.shape )
+                print( "output_vis.shape : ", output_vis.shape )
+                print( "output_vis_rgb.shape : ", output_vis_rgb.shape )
+                print( "embedded.shape : ", embedded.shape )
+                print( "graph.shape : ", graph.shape )
+                print( "reproj_feature.shape : ", reproj_feature.shape )
 
             # 損失関数を計算する
             loss = loss_fn( output, target )
-            #loss = torch.zeros(1, requires_grad=True).float().to(device)
 
             # ネットワークの更新処理
             optimizer.zero_grad()
@@ -202,7 +209,7 @@ if __name__ == '__main__':
 
                 # visual images
                 visuals = [
-                    [ image, target ],
+                    [ image, target, output_vis.unsqueeze(1), output_vis_rgb ],
                     [ output[:,i,:,:].unsqueeze(1) for i in range(0,args.n_classes//4) ],
                     [ output[:,i,:,:].unsqueeze(1) for i in range(args.n_classes//4 + 1, args.n_classes//2) ],
                     [ output[:,i,:,:].unsqueeze(1) for i in range(args.n_classes//2 + 1, args.n_classes//2 + args.n_classes//4) ],
@@ -251,6 +258,8 @@ if __name__ == '__main__':
                     # 推論処理
                     with torch.no_grad():
                         output, embedded, graph, reproj_feature = model( image, adj_matrix_cihp_to_cihp )
+                        _, output_vis = torch.max(output, 1)
+                        output_vis_rgb = decode_labels_tsr(output_vis)
 
                     # 損失関数を計算する
                     loss = loss_fn( output, target )
@@ -260,7 +269,7 @@ if __name__ == '__main__':
                     if( iter <= args.n_display_valid ):
                         # visual images
                         visuals = [
-                            [ image, target ],
+                            [ image, target, output_vis.unsqueeze(1), output_vis_rgb ],
                             [ output[:,i,:,:].unsqueeze(1) for i in range(0,args.n_classes//4) ],
                             [ output[:,i,:,:].unsqueeze(1) for i in range(args.n_classes//4 + 1, args.n_classes//2) ],
                             [ output[:,i,:,:].unsqueeze(1) for i in range(args.n_classes//2 + 1, args.n_classes//2 + args.n_classes//4) ],
