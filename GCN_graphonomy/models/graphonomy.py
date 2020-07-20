@@ -90,7 +90,7 @@ class Graphonomy( nn.Module ):
     """
     Graphonomy の ２つのデータセットでの Intra-Graph Reasoning & Inter-Graph Transfer
     """
-    def __init__( self, n_in_channels = 3, n_classes_source = 7, n_classes_target = 20, n_node_features = 128 ):
+    def __init__( self, n_in_channels = 3, n_classes_source = 7, n_classes_target = 20, n_node_features = 128, n_output_channels = 20 ):
         super(Graphonomy, self).__init__()
         self.backbone = ResNet( block = Bottleneck, layers = [3, 4, 23, 3], n_in_channels = n_in_channels, output_stride = 16, BatchNorm = nn.BatchNorm2d, pretrained = True )
         self.aspp = ASPP( backbone = "resnet", output_stride = 16, BatchNorm = nn.BatchNorm2d, dropout = 0.0 )
@@ -105,7 +105,8 @@ class Graphonomy( nn.Module ):
         self.source_graph_conv_fc = GraphConvolution( in_features = n_node_features * 3, out_features = n_node_features, activate = True, sparse = False )
         self.source_graph_to_feature_proj = GraphtoFeatureMapProjection( in_features = 256, out_features = 256, n_hiddens = n_node_features, n_nodes = n_classes_source )
         self.source_skip_conv = nn.Sequential(*[nn.Conv2d(256, 256, kernel_size=1), nn.ReLU(True)])
-        self.source_semantic_conv = nn.Conv2d(256, n_classes_source, kernel_size=1)
+        #self.source_semantic_conv = nn.Conv2d(256, n_classes_source, kernel_size=1)
+        self.source_semantic_conv = nn.Conv2d(256, n_output_channels, kernel_size=1)
 
         # target
         self.target_feature_to_graph_proj = FeatureMaptoGraphProjection( in_features = 256, out_features = n_node_features, n_nodes = n_classes_target )
@@ -116,7 +117,13 @@ class Graphonomy( nn.Module ):
         self.target_graph_conv_fc = GraphConvolution( in_features = n_node_features * 3, out_features = n_node_features, activate = True, sparse = False )
         self.target_graph_to_feature_proj = GraphtoFeatureMapProjection( in_features = 256, out_features = 256, n_hiddens = n_node_features, n_nodes = n_classes_target )
         self.target_skip_conv = nn.Sequential(*[nn.Conv2d(256, 256, kernel_size=1), nn.ReLU(True)])
-        self.target_semantic_conv = nn.Conv2d(256, n_classes_target, kernel_size=1)
+        #self.target_semantic_conv = nn.Conv2d(256, n_classes_target, kernel_size=1)
+        self.target_semantic_conv = nn.Conv2d(256, n_output_channels, kernel_size=1)
+
+        self.n_output_channels = n_output_channels
+        if( n_output_channels == 1 ):
+            self.activate = nn.Tanh()
+
         return
 
     def similarity_trans(self, source, target):
@@ -278,4 +285,9 @@ class Graphonomy( nn.Module ):
         source_semantic = F.interpolate(source_semantic, size=input.size()[2:], mode='bilinear', align_corners=True)
         target_semantic = F.interpolate(target_semantic, size=input.size()[2:], mode='bilinear', align_corners=True)
         #print( "source_semantic.shape : ", source_semantic.shape )       # torch.Size([2, 20, 512, 512])
+        
+        if( self.n_output_channels == 1 ):
+            source_semantic = self.activate(source_semantic)
+            target_semantic = self.activate(target_semantic)
+
         return target_semantic, embedded, target_graph3
