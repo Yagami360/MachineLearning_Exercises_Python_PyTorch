@@ -254,8 +254,13 @@ class InterGraphTransfer( nn.Module ):
         if( self.activate ):
             self.activate_layer = nn.ReLU()
 
+        self.reset_parameters()
         return
 
+    def reset_parameters(self):
+        torch.nn.init.xavier_uniform_(self.weight)
+        return
+        
     def norm_trans_adj_matrix(self,adj_matrix):  # maybe can use softmax
         adj_matrix = F.relu(adj_matrix)
         r = F.softmax(adj_matrix,dim=-1)
@@ -267,15 +272,21 @@ class InterGraphTransfer( nn.Module ):
             input : <Tensor> 変換元グラフ構造
             adj_matrix : <Tensor> 変換元グラフ構造から変換先グラフ構造への隣接行列
         """
+        if adj_matrix is None:
+            adj_matrix = self.adj_matrix
+
+        #print( "[InterGraphTransfer] torch.isnan(input).any() : ", torch.isnan(input).any() )
+
         # Z_s * W_tr
         support = torch.matmul( input, self.weight )
+        #print( "[InterGraphTransfer] torch.isnan(support).any() : ", torch.isnan(support).any() )
 
         # A_tr * Z_s * W_tr
         adj_matrix_norm = self.norm_trans_adj_matrix(adj_matrix)
+        #print( "[InterGraphTransfer] torch.isnan(adj_matrix_norm).any() : ", torch.isnan(adj_matrix_norm).any() )
+        
         output = torch.matmul(adj_matrix_norm,support)
-
-        if adj_matrix is None:
-            adj_matrix = self.adj_matrix
+        #print( "[InterGraphTransfer] torch.isnan(output).any() : ", torch.isnan(output).any() )
         if( self.activate_layer ):
             # σ(A_tr * Z_s * W_tr)
             output = self.activate_layer(output)

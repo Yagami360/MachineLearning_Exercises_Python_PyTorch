@@ -17,14 +17,15 @@ import torch.optim as optim
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
+from torchvision.utils import save_image
 from tensorboardX import SummaryWriter
 
 # 自作モジュール
 from dataset import CIHPDataset, CIHPDataLoader
 from models.graphonomy import Graphonomy
 from models.graph_params import get_graph_adj_matrix
-from models.losses import ParsingCrossEntropyLoss, CrossEntropy2DLoss, VGGLoss, LSGANLoss
 from models.discriminators import PatchGANDiscriminator
+from models.losses import ParsingCrossEntropyLoss, CrossEntropy2DLoss, VGGLoss, LSGANLoss
 from utils.utils import save_checkpoint, load_checkpoint
 from utils.utils import board_add_image, board_add_images, save_image_w_norm
 from utils.decode_labels import decode_labels_tsr
@@ -71,7 +72,9 @@ if __name__ == '__main__':
     parser.add_argument('--n_workers', type=int, default=4, help="CPUの並列化数（0 で並列化なし）")
     parser.add_argument('--use_cuda_benchmark', action='store_true', help="torch.backends.cudnn.benchmark の使用有効化")
     parser.add_argument('--use_cuda_deterministic', action='store_true', help="再現性確保のために cuDNN に決定論的振る舞い有効化")
+    parser.add_argument('--detect_nan', action='store_true')
     parser.add_argument('--debug', action='store_true')
+
     args = parser.parse_args()
     if( args.debug ):
         for key, value in vars(args).items():
@@ -115,10 +118,13 @@ if __name__ == '__main__':
     torch.cuda.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
 
+    # NAN 値の検出
+    if( args.detect_nan ):
+        torch.autograd.set_detect_anomaly(True)
+
     # tensorboard 出力
     board_train = SummaryWriter( log_dir = os.path.join(args.tensorboard_dir, args.exper_name) )
     board_valid = SummaryWriter( log_dir = os.path.join(args.tensorboard_dir, args.exper_name + "_valid") )
-    #board_test = SummaryWriter( log_dir = os.path.join(args.tensorboard_dir, args.exper_name + "_test") )
 
     #================================
     # データセットの読み込み
@@ -165,8 +171,8 @@ if __name__ == '__main__':
         loss_vgg_fn = VGGLoss(device, n_channels = args.n_output_channels)
         loss_adv_fn = LSGANLoss(device)
     else:
-        loss_fn = ParsingCrossEntropyLoss()
-        #loss_fn = CrossEntropy2DLoss(device)
+        loss_entropy_fn = ParsingCrossEntropyLoss()
+        #loss_entropy_fn = CrossEntropy2DLoss(device)
 
     #================================
     # 定義済みグラフ構造の取得
@@ -196,52 +202,57 @@ if __name__ == '__main__':
             if( args.debug and n_print > 0):
                 print( "image.shape : ", image.shape )
                 print( "target.shape : ", target.shape )
+                print( "target.dtype : ", target.dtype )
+                print( "target[0,0,:,:] : ", target[0,0,:,:] )
                 print( "adj_matrix_pascal_to_pascal.shape : ", adj_matrix_pascal_to_pascal.shape )
                 print( "adj_matrix_cihp_to_cihp.shape : ", adj_matrix_cihp_to_cihp.shape )
                 print( "adj_matrix_cihp_to_pascal.shape : ", adj_matrix_cihp_to_pascal.shape )
                 print( "adj_matrix_pascal_to_cihp.shape : ", adj_matrix_pascal_to_cihp.shape )
 
+            #save_image_w_norm( target, "_debug/target.png" )
+            #save_image( target, "_debug/target.png" )
+
             #----------------------------------------------------
             # 生成器 の forword 処理
             #----------------------------------------------------
             output, embedded, target_graph = model_G( image, adj_matrix_pascal_to_pascal, adj_matrix_cihp_to_cihp, adj_matrix_cihp_to_pascal, adj_matrix_pascal_to_cihp )
-            if( args.n_output_channels != 1 ):
-                _, output_vis = torch.max(output, 1)
-                output_vis_rgb = decode_labels_tsr(output_vis)
-
+            _, output_vis = torch.max(output, 1)
+            output_vis_rgb = decode_labels_tsr(output_vis)
             if( args.debug and n_print > 0 ):
                 print( "output.shape : ", output.shape )
-                if( args.n_output_channels != 1 ):
-                    print( "output_vis.shape : ", output_vis.shape )
-                    print( "output_vis_rgb.shape : ", output_vis_rgb.shape )
+                print( "output_vis.shape : ", output_vis.shape )
+                print( "output_vis_rgb.shape : ", output_vis_rgb.shape )
                 print( "embedded.shape : ", embedded.shape )
                 print( "target_graph.shape : ", target_graph.shape )
+
+            #print( "torch.isnan(output).any() : ", torch.isnan(output).any() )
 
             #----------------------------------------------------
             # 識別器の更新処理
             #----------------------------------------------------
-            # 無効化していた識別器 D のネットワークの勾配計算を有効化。
-            for param in model_D.parameters():
-                param.requires_grad = True
+            if( args.n_output_channels == 1 ):
+                # 無効化していた識別器 D のネットワークの勾配計算を有効化。
+                for param in model_D.parameters():
+                    param.requires_grad = True
 
-            # 学習用データをモデルに流し込む
-            d_real = model_D( output )
-            d_fake = model_D( output.detach() )
-            if( args.debug and n_print > 0 ):
-                print( "d_real.shape :", d_real.shape )
-                print( "d_fake.shape :", d_fake.shape )
+                # 学習用データをモデルに流し込む
+                d_real = model_D( output )
+                d_fake = model_D( output.detach() )
+                if( args.debug and n_print > 0 ):
+                    print( "d_real.shape :", d_real.shape )
+                    print( "d_fake.shape :", d_fake.shape )
 
-            # 損失関数を計算する
-            loss_D, loss_D_real, loss_D_fake = loss_adv_fn.forward_D( d_real, d_fake )
+                # 損失関数を計算する
+                loss_D, loss_D_real, loss_D_fake = loss_adv_fn.forward_D( d_real, d_fake )
 
-            # ネットワークの更新処理
-            optimizer_D.zero_grad()
-            loss_D.backward(retain_graph=True)
-            optimizer_D.step()
+                # ネットワークの更新処理
+                optimizer_D.zero_grad()
+                loss_D.backward(retain_graph=True)
+                optimizer_D.step()
 
-            # 無効化していた識別器 D のネットワークの勾配計算を有効化。
-            for param in model_D.parameters():
-                param.requires_grad = False
+                # 無効化していた識別器 D のネットワークの勾配計算を有効化。
+                for param in model_D.parameters():
+                    param.requires_grad = False
 
             #----------------------------------------------------
             # 生成器の更新処理
@@ -253,7 +264,7 @@ if __name__ == '__main__':
                 loss_adv = loss_adv_fn.forward_G( d_fake )
                 loss_G = args.lambda_l1 * loss_l1 + args.lambda_vgg * loss_vgg + args.lambda_adv * loss_adv
             else:
-                loss_G = loss_fn( output, target )
+                loss_G = loss_entropy_fn( output, target )
 
             # ネットワークの更新処理
             optimizer_G.zero_grad()
@@ -276,8 +287,8 @@ if __name__ == '__main__':
                     print( "step={}, loss_G={:.5f}, loss_l1={:.5f}, loss_vgg={:.5f}, loss_adv={:.5f}".format(step, loss_G.item(), loss_l1.item(), loss_vgg.item(), loss_adv.item()) )
                     print( "step={}, loss_D={:.5f}, loss_D_real={:.5f}, loss_D_fake={:.5f}".format(step, loss_D.item(), loss_D_real.item(), loss_D_fake.item()) )
                 else:
-                    board_train.add_scalar('G/loss', loss.item(), step)
-                    print( "step={}, loss={:.5f}".format(step, loss.item()) )
+                    board_train.add_scalar('G/loss', loss_G.item(), step)
+                    print( "step={}, loss_G={:.5f}".format(step, loss_G.item()) )
 
                 # visual images
                 if( args.n_output_channels == 1 ):
@@ -305,7 +316,9 @@ if __name__ == '__main__':
                 ]
                 board_add_images(board_train, 'train_graph/target', visuals, step+1)
 
-
+            #====================================================
+            # valid データでの処理
+            #====================================================
             if( step == 0 or ( step % args.n_display_valid_step == 0 ) ):
                 loss_G_total, loss_l1_total, loss_vgg_total, loss_adv_total = 0, 0, 0, 0
                 loss_D_total, loss_D_real_total, loss_D_fake_total = 0, 0, 0
@@ -329,8 +342,9 @@ if __name__ == '__main__':
                         output_vis_rgb = decode_labels_tsr(output_vis)
 
                     with torch.no_grad():
-                        d_real = model_D( output )
-                        d_fake = model_D( output.detach() )
+                        if( args.n_output_channels == 1 ):
+                            d_real = model_D( output )
+                            d_fake = model_D( output.detach() )
 
                     # 損失関数を計算する
                     if( args.n_output_channels == 1 ):
@@ -350,8 +364,8 @@ if __name__ == '__main__':
                         loss_D_real_total += loss_D_real
                         loss_D_fake_total += loss_D_fake
                     else:
-                        loss = loss_fn( output, target )
-                        loss_total += loss
+                        loss = loss_entropy_fn( output, target )
+                        loss_G_total += loss
 
                     # 生成画像表示
                     if( iter <= args.n_display_valid ):
@@ -394,18 +408,18 @@ if __name__ == '__main__':
                     board_valid.add_scalar('D/loss_D_real', loss_D_real_total.item()/n_valid_loop, step)
                     board_valid.add_scalar('D/loss_D_fake', loss_D_fake_total.item()/n_valid_loop, step)
                 else:
-                    board_valid.add_scalar('G/loss', loss_total.item()/n_valid_loop, step)
-
-            #====================================================
-            # モデルの保存
-            #====================================================
-            if( epoch % args.n_save_epoches == 0 ):
-                save_checkpoint( model_G, device, os.path.join(args.save_checkpoints_dir, args.exper_name, 'model_G_ep%03d.pth' % (epoch)) )
-                save_checkpoint( model_G, device, os.path.join(args.save_checkpoints_dir, args.exper_name, 'model_G_final.pth') )
-                print( "saved checkpoints" )
+                    board_valid.add_scalar('G/loss', loss_G_total.item()/n_valid_loop, step)
                 
             step += 1
             n_print -= 1
+
+        #====================================================
+        # モデルの保存
+        #====================================================
+        if( epoch % args.n_save_epoches == 0 ):
+            save_checkpoint( model_G, device, os.path.join(args.save_checkpoints_dir, args.exper_name, 'model_G_ep%03d.pth' % (epoch)) )
+            save_checkpoint( model_G, device, os.path.join(args.save_checkpoints_dir, args.exper_name, 'model_G_final.pth') )
+            print( "saved checkpoints" )
 
     print("Finished Training Loop.")
     save_checkpoint( model_G, device, os.path.join(args.save_checkpoints_dir, args.exper_name, 'model_G_final.pth') )
