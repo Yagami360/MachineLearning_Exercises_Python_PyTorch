@@ -167,8 +167,8 @@ if __name__ == '__main__':
         loss_vgg_fn = VGGLoss(device, n_channels = args.n_output_channels)
         loss_adv_fn = LSGANLoss(device)
     else:
-        loss_bce_fn = ParsingCrossEntropyLoss()
-        #loss_bce_fn = CrossEntropy2DLoss(device)
+        #loss_bce_fn = ParsingCrossEntropyLoss()
+        loss_bce_fn = CrossEntropy2DLoss(device)
 
     #================================
     # 定義済みグラフ構造の取得
@@ -194,6 +194,7 @@ if __name__ == '__main__':
             # ミニバッチデータを GPU へ転送
             image = inputs["image"].to(device)
             target = inputs["target"].to(device)
+            target_rgb = decode_labels_tsr(target)
             if( args.debug and n_print > 0):
                 print( "image.shape : ", image.shape )
                 print( "target.shape : ", target.shape )
@@ -204,8 +205,8 @@ if __name__ == '__main__':
             #----------------------------------------------------
             output, embedded, graph, reproj_feature = model_G( image, adj_matrix_cihp_to_cihp )
             _, output_vis = torch.max(output, 1)
+            output_vis = output_vis.unsqueeze(1)
             output_vis_rgb = decode_labels_tsr(output_vis)
-
             if( args.debug and n_print > 0 ):
                 print( "output.shape : ", output.shape )
                 print( "output_vis.shape : ", output_vis.shape )
@@ -217,28 +218,29 @@ if __name__ == '__main__':
             #----------------------------------------------------
             # 識別器の更新処理
             #----------------------------------------------------
-            # 無効化していた識別器 D のネットワークの勾配計算を有効化。
-            for param in model_D.parameters():
-                param.requires_grad = True
+            if( args.n_output_channels == 1 ):
+                # 無効化していた識別器 D のネットワークの勾配計算を有効化。
+                for param in model_D.parameters():
+                    param.requires_grad = True
 
-            # 学習用データをモデルに流し込む
-            d_real = model_D( target )
-            d_fake = model_D( output.detach() )
-            if( args.debug and n_print > 0 ):
-                print( "d_real.shape :", d_real.shape )
-                print( "d_fake.shape :", d_fake.shape )
+                # 学習用データをモデルに流し込む
+                d_real = model_D( target )
+                d_fake = model_D( output.detach() )
+                if( args.debug and n_print > 0 ):
+                    print( "d_real.shape :", d_real.shape )
+                    print( "d_fake.shape :", d_fake.shape )
 
-            # 損失関数を計算する
-            loss_D, loss_D_real, loss_D_fake = loss_adv_fn.forward_D( d_real, d_fake )
+                # 損失関数を計算する
+                loss_D, loss_D_real, loss_D_fake = loss_adv_fn.forward_D( d_real, d_fake )
 
-            # ネットワークの更新処理
-            optimizer_D.zero_grad()
-            loss_D.backward(retain_graph=True)
-            optimizer_D.step()
+                # ネットワークの更新処理
+                optimizer_D.zero_grad()
+                loss_D.backward(retain_graph=True)
+                optimizer_D.step()
 
-            # 無効化していた識別器 D のネットワークの勾配計算を有効化。
-            for param in model_D.parameters():
-                param.requires_grad = False
+                # 無効化していた識別器 D のネットワークの勾配計算を有効化。
+                for param in model_D.parameters():
+                    param.requires_grad = False
 
             #----------------------------------------------------
             # 生成器の更新処理
@@ -273,8 +275,8 @@ if __name__ == '__main__':
                     print( "step={}, loss_G={:.5f}, loss_l1={:.5f}, loss_vgg={:.5f}, loss_adv={:.5f}".format(step, loss_G.item(), loss_l1.item(), loss_vgg.item(), loss_adv.item()) )
                     print( "step={}, loss_D={:.5f}, loss_D_real={:.5f}, loss_D_fake={:.5f}".format(step, loss_D.item(), loss_D_real.item(), loss_D_fake.item()) )
                 else:
-                    board_train.add_scalar('G/loss', loss.item(), step)
-                    print( "step={}, loss={:.5f}".format(step, loss.item()) )
+                    board_train.add_scalar('G/loss_G', loss_G.item(), step)
+                    print( "step={}, loss_G={:.5f}".format(step, loss_G.item()) )
 
                 # visual images
                 if( args.n_output_channels == 1 ):
@@ -283,9 +285,12 @@ if __name__ == '__main__':
                     ]
                 else:
                     visuals = [
-                        [ image, target, output_vis.unsqueeze(1), output_vis_rgb ],
-                        [ output[:,i,:,:].unsqueeze(1) for i in range(0,args.n_classes_source//2) ],
-                        [ output[:,i,:,:].unsqueeze(1) for i in range(args.n_classes_source//2 + 1,args.n_classes_source) ],
+                        [ image, target_rgb, output_vis_rgb ],
+                        [ output[:,i,:,:].unsqueeze(1) for i in range(0,args.n_classes//4) ],
+                        [ output[:,i,:,:].unsqueeze(1) for i in range(args.n_classes//4 + 1, args.n_classes//2) ],
+                        [ output[:,i,:,:].unsqueeze(1) for i in range(args.n_classes//2 + 1, args.n_classes//2 + args.n_classes//4) ],
+                        [ output[:,i,:,:].unsqueeze(1) for i in range(args.n_classes//2 + args.n_classes//4 + 1, args.n_classes) ],
+
                     ]
                 board_add_images(board_train, 'train', visuals, step+1)
 
@@ -331,16 +336,19 @@ if __name__ == '__main__':
                     # ミニバッチデータを GPU へ転送
                     image = inputs["image"].to(device)
                     target = inputs["target"].to(device)
+                    target_rgb = decode_labels_tsr(target)
 
                     # 推論処理
                     with torch.no_grad():
                         output, embedded, graph, reproj_feature = model_G( image, adj_matrix_cihp_to_cihp )
                         _, output_vis = torch.max(output, 1)
+                        output_vis = output_vis.unsqueeze(1)
                         output_vis_rgb = decode_labels_tsr(output_vis)
 
-                    with torch.no_grad():
-                        d_real = model_D( target )
-                        d_fake = model_D( output.detach() )
+                    if( args.n_output_channels == 1 ):
+                        with torch.no_grad():
+                            d_real = model_D( target )
+                            d_fake = model_D( output.detach() )
 
                     # 損失関数を計算する
                     if( args.n_output_channels == 1 ):
@@ -360,8 +368,8 @@ if __name__ == '__main__':
                         loss_D_real_total += loss_D_real
                         loss_D_fake_total += loss_D_fake
                     else:
-                        loss = loss_bce_fn( output, target )
-                        loss_G_total += loss
+                        loss_G = loss_bce_fn( output, target )
+                        loss_G_total += loss_G
 
                     # 生成画像表示
                     if( iter <= args.n_display_valid ):
@@ -372,9 +380,11 @@ if __name__ == '__main__':
                             ]
                         else:
                             visuals = [
-                                [ image, target, output_vis.unsqueeze(1), output_vis_rgb ],
-                                [ output[:,i,:,:].unsqueeze(1) for i in range(0,args.n_classes_source//2) ],
-                                [ output[:,i,:,:].unsqueeze(1) for i in range(args.n_classes_source//2 + 1,args.n_classes_source) ],
+                                [ image, target_rgb, output_vis_rgb ],
+                                [ output[:,i,:,:].unsqueeze(1) for i in range(0,args.n_classes//4) ],
+                                [ output[:,i,:,:].unsqueeze(1) for i in range(args.n_classes//4 + 1, args.n_classes//2) ],
+                                [ output[:,i,:,:].unsqueeze(1) for i in range(args.n_classes//2 + 1, args.n_classes//2 + args.n_classes//4) ],
+                                [ output[:,i,:,:].unsqueeze(1) for i in range(args.n_classes//2 + args.n_classes//4 + 1, args.n_classes) ],
                             ]
 
                         board_add_images(board_valid, 'valid/{}'.format(iter), visuals, step+1)
@@ -415,7 +425,7 @@ if __name__ == '__main__':
                     board_valid.add_scalar('D/loss_D_real', loss_D_real_total.item()/n_valid_loop, step)
                     board_valid.add_scalar('D/loss_D_fake', loss_D_fake_total.item()/n_valid_loop, step)
                 else:
-                    board_valid.add_scalar('G/loss', loss_G_total.item()/n_valid_loop, step)
+                    board_valid.add_scalar('G/loss_G', loss_G_total.item()/n_valid_loop, step)
                 
             step += 1
             n_print -= 1

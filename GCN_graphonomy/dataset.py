@@ -35,7 +35,7 @@ class CIHPDataset(data.Dataset):
         self.flip = flip
         self.debug = debug
         self.image_dir = os.path.join( root_dir, "Images" )
-        self.categories_dir = os.path.join( root_dir, "Categories" )
+        self.categories_dir = os.path.join( root_dir, "Category_ids" )
         self.categories_rev_dir = os.path.join( root_dir, "Category_rev_ids" )
 
         self.image_names = []
@@ -147,20 +147,17 @@ class CIHPDataset(data.Dataset):
 
         # Categories_ids
         if( self.flip ):
-            target = Image.open(categories_rev_name).convert("L")
+            target = Image.open(categories_rev_name)
         else:
-            target = Image.open(categories_name).convert("L")
+            target = Image.open(categories_name)
 
         self.seed_da = random.randint(0,10000)
         if( self.data_augument ):
             set_random_seed( self.seed_da )
 
-        #print( "[np] target : ", np.asarray(target).astype("int64") )        
         if( self.args.n_output_channels == 1 ):
             target = self.transform_mask(target)
         else:
-            #target = self.transform_mask(target)
-            #target = torch.from_numpy( np.asarray(self.transform_mask_woToTensor(target)).astype("float32").transpose(2,0,1) )
             target = torch.from_numpy( np.asarray(self.transform_mask_woToTensor(target)).astype("float32") ).unsqueeze(0)
 
         if( self.datamode == "train" ):

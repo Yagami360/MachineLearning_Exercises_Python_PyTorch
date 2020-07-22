@@ -171,8 +171,8 @@ if __name__ == '__main__':
         loss_vgg_fn = VGGLoss(device, n_channels = args.n_output_channels)
         loss_adv_fn = LSGANLoss(device)
     else:
-        loss_entropy_fn = ParsingCrossEntropyLoss()
-        #loss_entropy_fn = CrossEntropy2DLoss(device)
+        #loss_entropy_fn = ParsingCrossEntropyLoss()
+        loss_entropy_fn = CrossEntropy2DLoss(device)
 
     #================================
     # 定義済みグラフ構造の取得
@@ -199,11 +199,12 @@ if __name__ == '__main__':
             # ミニバッチデータを GPU へ転送
             image = inputs["image"].to(device)
             target = inputs["target"].to(device)
+            target_rgb = decode_labels_tsr(target)
             if( args.debug and n_print > 0):
                 print( "image.shape : ", image.shape )
                 print( "target.shape : ", target.shape )
                 print( "target.dtype : ", target.dtype )
-                print( "target[0,0,:,:] : ", target[0,0,:,:] )
+                print( "torch.min(target)={}, torch.max(target)={} ".format(torch.min(target), torch.max(target) ) )
                 print( "adj_matrix_pascal_to_pascal.shape : ", adj_matrix_pascal_to_pascal.shape )
                 print( "adj_matrix_cihp_to_cihp.shape : ", adj_matrix_cihp_to_cihp.shape )
                 print( "adj_matrix_cihp_to_pascal.shape : ", adj_matrix_cihp_to_pascal.shape )
@@ -217,6 +218,7 @@ if __name__ == '__main__':
             #----------------------------------------------------
             output, embedded, target_graph = model_G( image, adj_matrix_pascal_to_pascal, adj_matrix_cihp_to_cihp, adj_matrix_cihp_to_pascal, adj_matrix_pascal_to_cihp )
             _, output_vis = torch.max(output, 1)
+            output_vis = output_vis.unsqueeze(1)
             output_vis_rgb = decode_labels_tsr(output_vis)
             if( args.debug and n_print > 0 ):
                 print( "output.shape : ", output.shape )
@@ -297,16 +299,16 @@ if __name__ == '__main__':
                     ]
                 else:
                     visuals = [
-                        [ image, target, output_vis.unsqueeze(1), output_vis_rgb ],
-                        [ output[:,i,:,:].unsqueeze(1) for i in range(0,args.n_classes_source//2) ],
-                        [ output[:,i,:,:].unsqueeze(1) for i in range(args.n_classes_source//2 + 1,args.n_classes_source) ],
+                        [ image, target_rgb, output_vis_rgb ],
+                        [ output[:,i,:,:].unsqueeze(1) for i in range(0,args.n_classes_target//2) ],
+                        [ output[:,i,:,:].unsqueeze(1) for i in range(args.n_classes_target//2 + 1,args.n_classes_target) ],
                     ]
                 board_add_images(board_train, 'train', visuals, step+1)
 
                 # visual deeplab v3+ output
                 visuals = [
-                    [ embedded[:,i,:,:].unsqueeze(1) for i in range(0,args.n_classes_source//2) ],
-                    [ embedded[:,i,:,:].unsqueeze(1) for i in range(args.n_classes_source//2 + 1,args.n_classes_source) ],
+                    [ embedded[:,i,:,:].unsqueeze(1) for i in range(0,args.n_classes_target//2) ],
+                    [ embedded[:,i,:,:].unsqueeze(1) for i in range(args.n_classes_target//2 + 1,args.n_classes_target) ],
                 ]
                 board_add_images(board_train, 'train_deeplab_embedded', visuals, step+1)
 
@@ -334,11 +336,13 @@ if __name__ == '__main__':
                     # ミニバッチデータを GPU へ転送
                     image = inputs["image"].to(device)
                     target = inputs["target"].to(device)
+                    target_rgb = decode_labels_tsr(target)
 
                     # 推論処理
                     with torch.no_grad():
                         output, embedded, target_graph = model_G( image, adj_matrix_pascal_to_pascal, adj_matrix_cihp_to_cihp, adj_matrix_cihp_to_pascal, adj_matrix_pascal_to_cihp )
                         _, output_vis = torch.max(output, 1)
+                        output_vis = output_vis.unsqueeze(1)
                         output_vis_rgb = decode_labels_tsr(output_vis)
 
                     with torch.no_grad():
@@ -376,17 +380,17 @@ if __name__ == '__main__':
                             ]
                         else:
                             visuals = [
-                                [ image, target, output_vis.unsqueeze(1), output_vis_rgb ],
-                                [ output[:,i,:,:].unsqueeze(1) for i in range(0,args.n_classes_source//2) ],
-                                [ output[:,i,:,:].unsqueeze(1) for i in range(args.n_classes_source//2 + 1,args.n_classes_source) ],
+                                [ image, target_rgb, output_vis_rgb ],
+                                [ output[:,i,:,:].unsqueeze(1) for i in range(0,args.n_classes_target//2) ],
+                                [ output[:,i,:,:].unsqueeze(1) for i in range(args.n_classes_target//2 + 1,args.n_classes_target) ],
                             ]
 
                         board_add_images(board_valid, 'valid/{}'.format(iter), visuals, step+1)
 
                         # visual deeplab v3+ output
                         visuals = [
-                            [ embedded[:,i,:,:].unsqueeze(1) for i in range(0,args.n_classes_source//2) ],
-                            [ embedded[:,i,:,:].unsqueeze(1) for i in range(args.n_classes_source//2 + 1,args.n_classes_source) ],
+                            [ embedded[:,i,:,:].unsqueeze(1) for i in range(0,args.n_classes_target//2) ],
+                            [ embedded[:,i,:,:].unsqueeze(1) for i in range(args.n_classes_target//2 + 1,args.n_classes_target) ],
                         ]
                         board_add_images(board_train, 'valid_deeplab_embedded/{}'.format(iter), visuals, step+1)
 

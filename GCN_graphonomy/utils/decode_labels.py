@@ -24,7 +24,7 @@ map_pascal_idx_to_rgb = {
 def decode_labels_tsr( semantics, dataset_type = "pascal" ):
     """
     [Args]
-        semantics : <Tensor> shape = [B,H,W]
+        semantics : <Tensor> shape = [B,C,H,W]
     """
     if( dataset_type == "pascal" ):
         n_classes = 21
@@ -32,7 +32,7 @@ def decode_labels_tsr( semantics, dataset_type = "pascal" ):
     else:
         raise NotImplementedError
 
-    semantics_np = semantics.detach().cpu().numpy()
+    semantics_np = semantics[:,0,:,:].detach().cpu().numpy()
 
     # batch でループ
     semantic_np_rgbs = []

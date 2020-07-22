@@ -337,13 +337,13 @@ class Graphonomy( nn.Module ):
         #print( "source_semantic.shape : ", source_semantic.shape )       # torch.Size([2, 20, 512, 512])
         #print( "[upsample] torch.isnan(source_semantic).any() : ", torch.isnan(source_semantic).any() )
         #print( "[upsample] torch.isnan(target_semantic).any() : ", torch.isnan(target_semantic).any() )
-        print( "[upsample] target_semantic[0,0,:,:] : ", target_semantic[0,0,:,:] )
+        #print( "[upsample] target_semantic[0,0,:,:] : ", target_semantic[0,0,:,:] )
 
         if( self.n_output_channels == 1 ):
             source_semantic = self.activate(source_semantic)
             target_semantic = self.activate(target_semantic)
             #print( "[activate] torch.isnan(source_semantic).any() : ", torch.isnan(source_semantic).any() )
             #print( "[activate] torch.isnan(target_semantic).any() : ", torch.isnan(target_semantic).any() )
-            print( "[activate] target_semantic[0,0,:,:] : ", target_semantic[0,0,:,:] )
+            #print( "[activate] target_semantic[0,0,:,:] : ", target_semantic[0,0,:,:] )
 
         return target_semantic, embedded, target_graph3
