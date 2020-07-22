@@ -222,7 +222,7 @@ if __name__ == '__main__':
                 param.requires_grad = True
 
             # 学習用データをモデルに流し込む
-            d_real = model_D( output )
+            d_real = model_D( target )
             d_fake = model_D( output.detach() )
             if( args.debug and n_print > 0 ):
                 print( "d_real.shape :", d_real.shape )
@@ -316,7 +316,7 @@ if __name__ == '__main__':
             #====================================================
             # valid データでの処理
             #====================================================
-            if( step == 0 or ( step % args.n_display_valid_step == 0 ) ):
+            if( step != 0 and ( step % args.n_display_valid_step == 0 ) ):
                 loss_G_total, loss_l1_total, loss_vgg_total, loss_adv_total = 0, 0, 0, 0
                 loss_D_total, loss_D_real_total, loss_D_fake_total = 0, 0, 0
                 n_valid_loop = 0
@@ -339,7 +339,7 @@ if __name__ == '__main__':
                         output_vis_rgb = decode_labels_tsr(output_vis)
 
                     with torch.no_grad():
-                        d_real = model_D( output )
+                        d_real = model_D( target )
                         d_fake = model_D( output.detach() )
 
                     # 損失関数を計算する

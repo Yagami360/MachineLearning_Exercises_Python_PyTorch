@@ -87,6 +87,7 @@ class ASPP(nn.Module):
 
         x = torch.cat((x1, x2, x3, x4, x5), dim=1)
         #print( "[ASPP] x.shape={}".format( x.shape) )
+        #print( "[ASPP] x[0,0,:,:]", x[0,0,:,:] )
 
         x = self.conv1(x)
         x = self.bn1(x)

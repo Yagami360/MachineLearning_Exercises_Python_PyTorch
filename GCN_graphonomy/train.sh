@@ -24,7 +24,7 @@ python train.py \
     --n_epoches ${N_EPOCHES} \
     --image_height ${IMAGE_HIGHT} --image_width ${IMAGE_WIDTH} --n_node_features ${N_NODE_FEATURES} --n_output_channels 1 \
     --batch_size ${BATCH_SIZE} \
-    --n_diaplay_step 100 --n_display_valid_step 500 \
+    --n_diaplay_step 10 --n_display_valid_step 100 \
     --debug
 
 if [ $1 = "poweroff" ] ; then

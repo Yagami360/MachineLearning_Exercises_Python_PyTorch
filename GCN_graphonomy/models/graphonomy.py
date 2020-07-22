@@ -10,7 +10,7 @@ from torch.nn.parameter import Parameter
 import torchvision
 
 from models.backbone import ResNet, Bottleneck
-from models.aspp import ASPP
+from models.aspp import ASPP, ASPPModule
 from models.decoder import Decoder
 from models.gcn import GraphConvolution, FeatureMaptoGraphProjection, GraphtoFeatureMapProjection, InterGraphTransfer
 
@@ -159,10 +159,14 @@ class Graphonomy( nn.Module ):
         # ASPP で各畳み込みを統合
         embedded = self.aspp(backbone)
         #print( "embedded.shape : ", embedded.shape )                        # torch.Size([2, 256, 32, 32])
+        #print( "backbone_low_level[0,0,:,:] : ", backbone_low_level[0,0,:,:] )
+        #print( "backbone[0,0,:,:] : ", backbone[0,0,:,:] )
+        #print( "embedded[0,0,:,:] : ", embedded[0,0,:,:] )
 
         # decode 処理
         embedded = self.decoder(embedded, backbone_low_level)
         #print( "embedded.shape : ", embedded.shape )                        # torch.Size([2, 256, 128, 128])
+        #print( "embedded[0,0,:,:] : ", embedded[0,0,:,:] )
 
         #--------------------------------------------
         # １段目の処理
@@ -333,11 +337,13 @@ class Graphonomy( nn.Module ):
         #print( "source_semantic.shape : ", source_semantic.shape )       # torch.Size([2, 20, 512, 512])
         #print( "[upsample] torch.isnan(source_semantic).any() : ", torch.isnan(source_semantic).any() )
         #print( "[upsample] torch.isnan(target_semantic).any() : ", torch.isnan(target_semantic).any() )
+        print( "[upsample] target_semantic[0,0,:,:] : ", target_semantic[0,0,:,:] )
 
         if( self.n_output_channels == 1 ):
             source_semantic = self.activate(source_semantic)
             target_semantic = self.activate(target_semantic)
             #print( "[activate] torch.isnan(source_semantic).any() : ", torch.isnan(source_semantic).any() )
             #print( "[activate] torch.isnan(target_semantic).any() : ", torch.isnan(target_semantic).any() )
+            print( "[activate] target_semantic[0,0,:,:] : ", target_semantic[0,0,:,:] )
 
         return target_semantic, embedded, target_graph3
