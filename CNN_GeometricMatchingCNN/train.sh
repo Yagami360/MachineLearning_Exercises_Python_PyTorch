@@ -6,6 +6,9 @@ mkdir -p _logs
 #----------------------
 # model
 #----------------------
+GEOMETRIC_MODEL=affine
+GEOMETRIC_MODEL=tps
+
 N_EPOCHES=5
 BATCH_SIZE=4
 IMAGE_HIGHT=240
@@ -25,6 +28,7 @@ fi
 python train.py \
     --exper_name ${EXPER_NAME} \
     --dataset_dir ${HOME}/ML_dataset/VOCdevkit/VOC2012/JPEGImages \
+    --geometric_model ${GEOMETRIC_MODEL} \
     --n_epoches ${N_EPOCHES} \
     --image_height ${IMAGE_HIGHT} --image_width ${IMAGE_WIDTH} --batch_size ${BATCH_SIZE} \
     --n_diaplay_step ${N_DISPLAY_STEP} --n_display_valid_step ${N_DISPLAY_VALID_STEP} \

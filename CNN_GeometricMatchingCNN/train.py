@@ -25,6 +25,7 @@ from dataset import SynthDataset, SynthDataLoader
 from models.geometric_matching_cnn import GeometricMatchingCNN
 from utils.utils import save_checkpoint, load_checkpoint
 from utils.utils import board_add_image, board_add_images, save_image_w_norm
+from utils.transform import ImagePadSymmetric, AffineTransform, TpsTransform
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -185,6 +186,19 @@ if __name__ == '__main__':
             if( args.debug and n_print > 0 ):
                 print( "theta.shape : ", theta.shape )
                 print( "correlation.shape : ", correlation.shape )
+
+
+            # 
+            image_pad_sym = ImagePadSymmetric(device)(image)
+            save_image( image, "_debug/image.png" )
+            save_image( image_pad_sym, "_debug/image_pad_sym.png" )
+
+            if( args.geometric_model == "affine" ):
+                warp_affine_image, affine_grid = AffineTransform()(image, theta )
+                save_image( warp_affine_image, "_debug/warp_affine_image.png" )
+            elif( args.geometric_model == "tps" ):
+                warp_tps_image, tps_grid = TpsTransform(device)(image, theta )
+                save_image( warp_tps_image, "_debug/warp_tps_image.png" )
 
             #----------------------------------------------------
             # 生成器の更新処理
