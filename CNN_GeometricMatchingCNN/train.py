@@ -21,24 +21,25 @@ from torchvision.utils import save_image
 from tensorboardX import SummaryWriter
 
 # 自作モジュール
-from dataset import TempleteDataset, TempleteDataLoader
-from models.networks import TempleteNetworks
+from dataset import SynthDataset, SynthDataLoader
+from models.geometric_matching_cnn import GeometricMatchingCNN
 from utils.utils import save_checkpoint, load_checkpoint
 from utils.utils import board_add_image, board_add_images, save_image_w_norm
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--exper_name", default="debug", help="実験名")
-    parser.add_argument("--dataset_dir", type=str, default="dataset/templete_dataset")
+    parser.add_argument("--dataset_dir", type=str, default="VOCdevkit/VOC2012/JPEGImages")
     parser.add_argument("--results_dir", type=str, default="results")
     parser.add_argument('--save_checkpoints_dir', type=str, default="checkpoints", help="モデルの保存ディレクトリ")
     parser.add_argument('--load_checkpoints_path', type=str, default="", help="モデルの読み込みファイルのパス")
     parser.add_argument('--tensorboard_dir', type=str, default="tensorboard", help="TensorBoard のディレクトリ")
+    parser.add_argument('--geometric_model', choices=['affine','tps','hom'], default="affine", help="幾何学的変換モデル")
     parser.add_argument("--n_epoches", type=int, default=100, help="エポック数")    
     parser.add_argument('--batch_size', type=int, default=4, help="バッチサイズ")
     parser.add_argument('--batch_size_valid', type=int, default=1, help="バッチサイズ")
-    parser.add_argument('--image_height', type=int, default=128, help="入力画像の高さ（pixel単位）")
-    parser.add_argument('--image_width', type=int, default=128, help="入力画像の幅（pixel単位）")
+    parser.add_argument('--image_height', type=int, default=240, help="入力画像の高さ（pixel単位）")
+    parser.add_argument('--image_width', type=int, default=240, help="入力画像の幅（pixel単位）")
     parser.add_argument('--lr', type=float, default=0.007, help="学習率")
     parser.add_argument('--beta1', type=float, default=0.5, help="学習率の減衰率")
     parser.add_argument('--beta2', type=float, default=0.999, help="学習率の減衰率")
@@ -111,7 +112,7 @@ if __name__ == '__main__':
     # データセットの読み込み
     #================================    
     # 学習用データセットとテスト用データセットの設定
-    ds_train = TempleteDataset( args, args.dataset_dir, datamode = "train", image_height = args.image_height, image_width = args.image_width, data_augument = args.data_augument, debug = args.debug )
+    ds_train = SynthDataset( args, args.dataset_dir, datamode = "train", image_height = args.image_height, image_width = args.image_width, data_augument = args.data_augument, debug = args.debug )
 
     # 学習用データセットとテスト用データセットの設定
     index = np.arange(len(ds_train))
@@ -128,7 +129,15 @@ if __name__ == '__main__':
     #================================
     # モデルの構造を定義する。
     #================================
-    model_G = TempleteNetworks().to(device)
+    if( args.geometric_model == "affine" ):
+        model_G = GeometricMatchingCNN( n_out_channels = 6 ).to(device)
+    elif( args.geometric_model == "tps" ):
+        model_G = GeometricMatchingCNN( n_out_channels = 18 ).to(device)
+    elif( args.geometric_model == "hom" ):
+        model_G = GeometricMatchingCNN( n_out_channels = 9 ).to(device)
+    else:
+        NotImplementedError
+
     if( args.debug ):
         print( "model_G\n", model_G )
 
@@ -162,26 +171,26 @@ if __name__ == '__main__':
 
             # ミニバッチデータを GPU へ転送
             image = inputs["image"].to(device)
-            target = inputs["target"].to(device)
+            target_theta = inputs["target_theta"].to(device)
             if( args.debug and n_print > 0):
                 print( "image.shape : ", image.shape )
-                print( "target.shape : ", target.shape )
-                print( "target.dtype : ", target.dtype )
-                print( "torch.min(target)={}, torch.max(target)={} ".format(torch.min(target), torch.max(target) ) )
+                print( "target_theta.shape : ", target_theta.shape )
+                print( "target_theta.dtype : ", target_theta.dtype )
+                print( "torch.min(target_theta)={}, torch.max(target_theta)={} ".format(torch.min(target_theta), torch.max(target_theta) ) )
 
             #----------------------------------------------------
             # 生成器 の forword 処理
             #----------------------------------------------------
-            output = model_G( image )
+            theta, correlation = model_G( image, image )
             if( args.debug and n_print > 0 ):
-                print( "output.shape : ", output.shape )
+                print( "theta.shape : ", theta.shape )
+                print( "correlation.shape : ", correlation.shape )
 
             #----------------------------------------------------
             # 生成器の更新処理
             #----------------------------------------------------
             # 損失関数を計算する
-            #loss_G = loss_fn( output, target )
-            loss_G = torch.zeros(1, requires_grad=True).float().to(device)
+            loss_G = torch.ones(1, requires_grad=True).float().to(device)
 
             # ネットワークの更新処理
             optimizer_G.zero_grad()
@@ -194,13 +203,18 @@ if __name__ == '__main__':
             if( step == 0 or ( step % args.n_diaplay_step == 0 ) ):
                 # loss
                 board_train.add_scalar('G/loss_G', loss_G.item(), step)
-                print( "step={}, loss_G={:.5f}".format(step, loss_G.item()) )
+                print( "step={}, loss_G={:.5f}".format(step, loss_G.item() ) )
 
                 # visual images
                 visuals = [
-                    [ image, target, output ],
+                    [ image, image ],
                 ]
-                board_add_images(board_train, 'train', visuals, step+1)
+                board_add_images(board_train, 'train/image', visuals, step+1)
+
+                visuals = [
+                    [ correlation[:,0,:,:].unsqueeze(1) ],
+                ]
+                board_add_images(board_train, 'train/correlation', visuals, step+1)
 
             #====================================================
             # valid データでの処理
@@ -217,24 +231,28 @@ if __name__ == '__main__':
 
                     # ミニバッチデータを GPU へ転送
                     image = inputs["image"].to(device)
-                    target = inputs["target"].to(device)
+                    target_theta = inputs["target_theta"].to(device)
 
                     # 推論処理
                     with torch.no_grad():
-                        output = model_G( image )
+                        theta, correlation = model_G( image )
 
                     # 損失関数を計算する
-                    #loss_G = loss_fn( output, target )
-                    loss_G = torch.zeros(1, requires_grad=True).float().to(device)
+                    loss_G = torch.ones(1, requires_grad=True).float().to(device)
                     loss_G_total += loss_G
 
                     # 生成画像表示
                     if( iter <= args.n_display_valid ):
                         # visual images
                         visuals = [
-                            [ image, target, output ],
+                            [ image, image ],
                         ]
-                        board_add_images(board_valid, 'valid/{}'.format(iter), visuals, step+1)
+                        board_add_images(board_valid, 'valid/image/{}'.format(iter), visuals, step+1)
+
+                        visuals = [
+                            [ correlation[:,0,:,:].unsqueeze(1) ],
+                        ]
+                        board_add_images(board_valid, 'valid/correlation/{}'.format(iter), visuals, step+1)
 
                     n_valid_loop += 1
 

@@ -46,6 +46,8 @@ nvidia-docker2 で動作します。
 1. Deep Neural Network（基礎モデル）
     1. [ResNet](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/ResNet_PyTorch)
     1. [UNet](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/UNet_PyTorch)
+1. CNN 系
+    1. [【実装中】CNN_GeometricMatchingCNN](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/CNN_GeometricMatchingCNN)
 1. GANs
     1. [Deep Convolutional GAN（DCGAN）](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_DCGAN_PyTorch)
     1. [Conditional GAN（cGAN）](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_cGAN_PyTorch)
