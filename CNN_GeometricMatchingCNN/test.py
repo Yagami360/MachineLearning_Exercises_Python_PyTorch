@@ -21,22 +21,24 @@ from torchvision.utils import save_image
 from tensorboardX import SummaryWriter
 
 # 自作モジュール
-from dataset import SynthDataset, SynthDataLoader
+from data.pf_dataset import PFDataset, PFDataLoader
 from models.geometric_matching_cnn import GeometricMatchingCNN
+from models.geo_transform import AffineTransform, TpsTransform
 from utils.utils import save_checkpoint, load_checkpoint
 from utils.utils import board_add_image, board_add_images, save_image_w_norm
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--exper_name", default="debug", help="実験名")
-    parser.add_argument("--dataset_dir", type=str, default="dataset/templete_dataset")
+    parser.add_argument("--dataset_dir", type=str, default="proposal-flow-willow/PF-dataset")
     parser.add_argument("--results_dir", type=str, default="results")
     parser.add_argument('--load_checkpoints_path', type=str, default="", help="モデルの読み込みファイルのパス")
     parser.add_argument('--tensorboard_dir', type=str, default="tensorboard", help="TensorBoard のディレクトリ")
+    parser.add_argument('--geometric_model', choices=['affine','tps','hom'], default="affine", help="幾何学的変換モデル")
     parser.add_argument('--n_samplings', type=int, default=100000, help="サンプリング最大数")
     parser.add_argument('--batch_size_test', type=int, default=1, help="バッチサイズ")
-    parser.add_argument('--image_height', type=int, default=128, help="入力画像の高さ（pixel単位）")
-    parser.add_argument('--image_width', type=int, default=128, help="入力画像の幅（pixel単位）")
+    parser.add_argument('--image_height', type=int, default=240, help="入力画像の高さ（pixel単位）")
+    parser.add_argument('--image_width', type=int, default=240, help="入力画像の幅（pixel単位）")
     parser.add_argument("--seed", type=int, default=71)
     parser.add_argument('--device', choices=['cpu', 'gpu'], default="gpu", help="使用デバイス (CPU or GPU)")
     parser.add_argument('--n_workers', type=int, default=4, help="CPUの並列化数（0 で並列化なし）")
@@ -97,15 +99,33 @@ if __name__ == '__main__':
     # データセットの読み込み
     #================================    
     # 学習用データセットとテスト用データセットの設定
-    ds_test = SynthDataset( args, args.dataset_dir, datamode = "test", image_height = args.image_height, image_width = args.image_width, data_augument = False, debug = args.debug )
+    ds_test = PFDataset( args, args.dataset_dir, image_height = args.image_height, image_width = args.image_width, debug = args.debug )
     dloader_test = torch.utils.data.DataLoader(ds_test, batch_size=args.batch_size_test, shuffle = False, num_workers = args.n_workers, pin_memory = True )
 
     #================================
     # モデルの構造を定義する。
     #================================
-    model_G = GeometricMatchingCNN().to(device)
+    # GeometricMatchingCNN モデル
+    if( args.geometric_model == "affine" ):
+        model_G = GeometricMatchingCNN( n_out_channels = 6 ).to(device)
+    elif( args.geometric_model == "tps" ):
+        model_G = GeometricMatchingCNN( n_out_channels = 18 ).to(device)
+    elif( args.geometric_model == "hom" ):
+        model_G = GeometricMatchingCNN( n_out_channels = 9 ).to(device)
+    else:
+        NotImplementedError()
+
+    # 幾何学的変換モデル
+    if( args.geometric_model == "affine" ):
+        geo_transform = AffineTransform( image_height = args.image_height, image_width = args.image_width, n_out_channels = 3, padding_mode = "border" )
+    elif( args.geometric_model == "tps" ):
+        geo_transform = TpsTransform( device = device, image_height = args.image_height, image_width = args.image_width, use_regular_grid = True, grid_size = 3, reg_factor = 0, padding_mode = "border" )
+    else:
+        NotImplementedError()
+
     if( args.debug ):
-        print( "model_G\n", model_G )
+        print( "model_G :\n", model_G )
+        print( "geo_transform :\n", geo_transform )
 
     # モデルを読み込む
     if not args.load_checkpoints_path == '' and os.path.exists(args.load_checkpoints_path):
@@ -118,31 +138,38 @@ if __name__ == '__main__':
     n_print = 1
     model_G.eval()
     for step, inputs in enumerate( tqdm( dloader_test, desc = "Samplings" ) ):
-        if inputs["image"].shape[0] != args.batch_size_test:
+        if inputs["image_s"].shape[0] != args.batch_size_test:
             break
 
         # ミニバッチデータを GPU へ転送
-        image_name = inputs["image_name"]
-        image = inputs["image"].to(device)
+        image_s_name = inputs["image_s_name"]
+        image_t_name = inputs["image_t_name"]
+        image_s = inputs["image_s"].to(device)
+        image_t = inputs["image_t"].to(device)
         if( args.debug and n_print > 0):
-            print( "image.shape : ", image.shape )
+            print( "image_s.shape : ", image_s.shape )
+            print( "image_t.shape : ", image_t.shape )
 
         #----------------------------------------------------
         # 生成器の推論処理
         #----------------------------------------------------
+        # 変換パラメータを推論
         with torch.no_grad():
-            output = model_G( image )
+            theta = model_G( image_s, image_t )
             if( args.debug and n_print > 0 ):
-                print( "output.shape : ", output.shape )
+                print( "theta.shape : ", theta.shape )
+
+        # 幾何学的変換モデルを用いて変換パラメータで変形
+        warp_image, grid = geo_transform( image_s, theta )
 
         #====================================================
         # 推論結果の保存
         #====================================================
-        save_image_w_norm( output, os.path.join( args.results_dir, args.exper_name, "output", image_name[0] ) )
+        save_image_w_norm( warp_image, os.path.join( args.results_dir, args.exper_name, "output", image_s_name[0].split(".")[0] + "-" + image_t_name[0].split(".")[0] + ".png" ) )
 
         # tensorboard
         visuals = [
-            [ image, output ],
+            [ image_s, image_t, warp_image ],
         ]
         board_add_images(board_test, 'test', visuals, step+1)
 

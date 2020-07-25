@@ -21,7 +21,7 @@ from torchvision.utils import save_image
 from tensorboardX import SummaryWriter
 
 # 自作モジュール
-from dataset import TempleteDataset, TempleteDataLoader
+from data.dataset import TempleteDataset, TempleteDataLoader
 from models.networks import TempleteNetworks
 from utils.utils import save_checkpoint, load_checkpoint
 from utils.utils import board_add_image, board_add_images, save_image_w_norm

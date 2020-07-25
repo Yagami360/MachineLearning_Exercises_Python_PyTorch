@@ -21,7 +21,7 @@ from torchvision.utils import save_image
 from tensorboardX import SummaryWriter
 
 # 自作モジュール
-from dataset import TempleteDataset, TempleteDataLoader
+from data.dataset import TempleteDataset, TempleteDataLoader
 from models.networks import TempleteNetworks
 from utils.utils import save_checkpoint, load_checkpoint
 from utils.utils import board_add_image, board_add_images, save_image_w_norm
@@ -153,7 +153,7 @@ if __name__ == '__main__':
     n_print = 1
     step = 0
     for epoch in tqdm( range(args.n_epoches), desc = "epoches" ):
-        for iter, inputs in enumerate( tqdm( dloader_train, desc = "minbatch iters" ) ):
+        for iter, inputs in enumerate( tqdm( dloader_train, desc = "epoch={}".format(epoch) ) ):
             model_G.train()
 
             # 一番最後のミニバッチループで、バッチサイズに満たない場合は無視する（後の計算で、shape の不一致をおこすため）

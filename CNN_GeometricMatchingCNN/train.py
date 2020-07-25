@@ -21,11 +21,12 @@ from torchvision.utils import save_image
 from tensorboardX import SummaryWriter
 
 # 自作モジュール
-from dataset import SynthDataset, SynthDataLoader
+from data.geo_dataset import GeoDataset, GeoDataLoader
 from models.geometric_matching_cnn import GeometricMatchingCNN
+from models.geo_transform import GeoPadTransform
+from models.losses import TransformedGridLoss
 from utils.utils import save_checkpoint, load_checkpoint
 from utils.utils import board_add_image, board_add_images, save_image_w_norm
-from utils.transform import ImagePadSymmetric, AffineTransform, TpsTransform
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -113,7 +114,7 @@ if __name__ == '__main__':
     # データセットの読み込み
     #================================    
     # 学習用データセットとテスト用データセットの設定
-    ds_train = SynthDataset( args, args.dataset_dir, datamode = "train", image_height = args.image_height, image_width = args.image_width, data_augument = args.data_augument, debug = args.debug )
+    ds_train = GeoDataset( args, args.dataset_dir, image_height = args.image_height, image_width = args.image_width, data_augument = args.data_augument, geometric_model = args.geometric_model, debug = args.debug )
 
     # 学習用データセットとテスト用データセットの設定
     index = np.arange(len(ds_train))
@@ -130,6 +131,7 @@ if __name__ == '__main__':
     #================================
     # モデルの構造を定義する。
     #================================
+    # GeometricMatchingCNN モデル
     if( args.geometric_model == "affine" ):
         model_G = GeometricMatchingCNN( n_out_channels = 6 ).to(device)
     elif( args.geometric_model == "tps" ):
@@ -137,10 +139,14 @@ if __name__ == '__main__':
     elif( args.geometric_model == "hom" ):
         model_G = GeometricMatchingCNN( n_out_channels = 9 ).to(device)
     else:
-        NotImplementedError
+        NotImplementedError()
+
+    # SynthPairTransform
+    geo_pad_transform = GeoPadTransform( device = device, image_height = args.image_height, image_width = args.image_width, geometric_model = args.geometric_model )
 
     if( args.debug ):
-        print( "model_G\n", model_G )
+        print( "model_G :\n", model_G )
+        print( "geo_pad_transform :\n", geo_pad_transform )
 
     # モデルを読み込む
     if not args.load_checkpoints_path == '' and os.path.exists(args.load_checkpoints_path):
@@ -154,7 +160,7 @@ if __name__ == '__main__':
     #================================
     # loss 関数の設定
     #================================
-    loss_fn = nn.L1Loss()
+    loss_fn = TransformedGridLoss( device = device, geometric_model = args.geometric_model )
 
     #================================
     # モデルの学習
@@ -163,48 +169,46 @@ if __name__ == '__main__':
     n_print = 1
     step = 0
     for epoch in tqdm( range(args.n_epoches), desc = "epoches" ):
-        for iter, inputs in enumerate( tqdm( dloader_train, desc = "minbatch iters" ) ):
+        for iter, inputs in enumerate( tqdm( dloader_train, desc = "epoch={}".format(epoch) ) ):
             model_G.train()
 
             # 一番最後のミニバッチループで、バッチサイズに満たない場合は無視する（後の計算で、shape の不一致をおこすため）
-            if inputs["image"].shape[0] != args.batch_size:
+            if inputs["image_s"].shape[0] != args.batch_size:
                 break
 
             # ミニバッチデータを GPU へ転送
-            image = inputs["image"].to(device)
-            target_theta = inputs["target_theta"].to(device)
+            image_s = inputs["image_s"].to(device)
+            theta_gt = inputs["theta_gt"].to(device)
             if( args.debug and n_print > 0):
-                print( "image.shape : ", image.shape )
-                print( "target_theta.shape : ", target_theta.shape )
-                print( "target_theta.dtype : ", target_theta.dtype )
-                print( "torch.min(target_theta)={}, torch.max(target_theta)={} ".format(torch.min(target_theta), torch.max(target_theta) ) )
+                print( "image_s.shape : ", image_s.shape )
+                print( "theta_gt.shape : ", theta_gt.shape )
+            
+            #----------------------------------------------------
+            # ランダムに生成した theta_gt から image_t（目標画像）を生成
+            #----------------------------------------------------
+            image_s_crop, image_t, grid_t = geo_pad_transform( image_s, theta_gt )
+            if( args.debug and n_print > 0):
+                print( "image_s_crop.shape : ", image_s_crop.shape )
+                print( "image_t.shape : ", image_t.shape )
+                print( "grid_t.shape : ", grid_t.shape )
 
             #----------------------------------------------------
             # 生成器 の forword 処理
             #----------------------------------------------------
-            theta, correlation = model_G( image, image )
+            theta = model_G( image_s_crop, image_t )
             if( args.debug and n_print > 0 ):
                 print( "theta.shape : ", theta.shape )
-                print( "correlation.shape : ", correlation.shape )
 
-
-            # 
-            image_pad_sym = ImagePadSymmetric(device)(image)
-            save_image( image, "_debug/image.png" )
-            save_image( image_pad_sym, "_debug/image_pad_sym.png" )
-
-            if( args.geometric_model == "affine" ):
-                warp_affine_image, affine_grid = AffineTransform()(image, theta )
-                save_image( warp_affine_image, "_debug/warp_affine_image.png" )
-            elif( args.geometric_model == "tps" ):
-                warp_tps_image, tps_grid = TpsTransform(device)(image, theta )
-                save_image( warp_tps_image, "_debug/warp_tps_image.png" )
+            #----------------------------------------------------
+            # 変換服
+            #----------------------------------------------------
+            #warp_image = F.grid_sample(image_s_crop, grid, padding_mode = "boader" )
 
             #----------------------------------------------------
             # 生成器の更新処理
             #----------------------------------------------------
             # 損失関数を計算する
-            loss_G = torch.ones(1, requires_grad=True).float().to(device)
+            loss_G = loss_fn( theta, theta_gt )
 
             # ネットワークの更新処理
             optimizer_G.zero_grad()
@@ -221,58 +225,49 @@ if __name__ == '__main__':
 
                 # visual images
                 visuals = [
-                    [ image, image ],
+                    [ image_s, image_s_crop, image_t ],
                 ]
                 board_add_images(board_train, 'train/image', visuals, step+1)
-
-                visuals = [
-                    [ correlation[:,0,:,:].unsqueeze(1) ],
-                ]
-                board_add_images(board_train, 'train/correlation', visuals, step+1)
 
             #====================================================
             # valid データでの処理
             #====================================================
-            if( step != 0 and ( step % args.n_display_valid_step == 0 ) ):
+            if( step % args.n_display_valid_step == 0 ):
                 loss_G_total = 0
                 n_valid_loop = 0
                 for iter, inputs in enumerate( tqdm(dloader_valid, desc = "eval iters") ):
                     model_G.eval()            
 
                     # 一番最後のミニバッチループで、バッチサイズに満たない場合は無視する（後の計算で、shape の不一致をおこすため）
-                    if inputs["image"].shape[0] != args.batch_size_valid:
+                    if inputs["image_s"].shape[0] != args.batch_size_valid:
                         break
 
                     # ミニバッチデータを GPU へ転送
-                    image = inputs["image"].to(device)
-                    target_theta = inputs["target_theta"].to(device)
+                    image_s = inputs["image_s"].to(device)
+                    theta_gt = inputs["theta_gt"].to(device)
 
                     # 推論処理
                     with torch.no_grad():
-                        theta, correlation = model_G( image )
+                        image_s_crop, image_t, grid_t = geo_pad_transform( image_s, theta_gt )
+                        theta = model_G( image_s_crop, image_t )
 
                     # 損失関数を計算する
-                    loss_G = torch.ones(1, requires_grad=True).float().to(device)
+                    loss_G = loss_fn( theta, theta_gt )
                     loss_G_total += loss_G
 
                     # 生成画像表示
                     if( iter <= args.n_display_valid ):
                         # visual images
                         visuals = [
-                            [ image, image ],
+                            [ image_s, image_s_crop, image_t ],
                         ]
                         board_add_images(board_valid, 'valid/image/{}'.format(iter), visuals, step+1)
-
-                        visuals = [
-                            [ correlation[:,0,:,:].unsqueeze(1) ],
-                        ]
-                        board_add_images(board_valid, 'valid/correlation/{}'.format(iter), visuals, step+1)
 
                     n_valid_loop += 1
 
                 # loss 値表示
                 board_valid.add_scalar('G/loss_G', loss_G_total.item()/n_valid_loop, step)
-                
+
             step += 1
             n_print -= 1
 

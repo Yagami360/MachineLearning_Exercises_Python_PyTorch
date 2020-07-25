@@ -174,4 +174,4 @@ class GeometricMatchingCNN( nn.Module ):
 
         # ２つの特徴量の類似を幾何変換パラメータ θ に回帰
         theta = self.feature_regression(correlation)
-        return theta, correlation
+        return theta

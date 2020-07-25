@@ -6,8 +6,12 @@ mkdir -p _logs
 #----------------------
 # model
 #----------------------
-IMAGE_HIGHT=128
-IMAGE_WIDTH=128
+#GEOMETRIC_MODEL=affine
+GEOMETRIC_MODEL=tps
+#GEOMETRIC_MODEL=hom
+
+IMAGE_HIGHT=240
+IMAGE_WIDTH=240
 
 EXPER_NAME=debug
 LOAD_CHECKPOINTS_PATH=checkpoints/${EXPER_NAME}/model_G_final.pth
@@ -21,7 +25,9 @@ fi
 
 python test.py \
     --exper_name ${EXPER_NAME} \
+    --dataset_dir ${HOME}/ML_dataset/proposal-flow-willow/PF-dataset \
     --load_checkpoints_path ${LOAD_CHECKPOINTS_PATH} \
+    --geometric_model ${GEOMETRIC_MODEL} \
     --n_samplings ${N_SAMPLING} \
     --image_height ${IMAGE_HIGHT} --image_width ${IMAGE_WIDTH} --batch_size_test 1 \
     --debug
