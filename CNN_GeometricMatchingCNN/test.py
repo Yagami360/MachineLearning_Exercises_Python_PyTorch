@@ -93,7 +93,7 @@ if __name__ == '__main__':
         torch.autograd.set_detect_anomaly(True)
 
     # tensorboard 出力
-    board_test = SummaryWriter( log_dir = os.path.join(args.tensorboard_dir, args.exper_name) )
+    board_test = SummaryWriter( log_dir = os.path.join(args.tensorboard_dir, args.exper_name + "_test") )
 
     #================================
     # データセットの読み込み
@@ -159,8 +159,8 @@ if __name__ == '__main__':
             if( args.debug and n_print > 0 ):
                 print( "theta.shape : ", theta.shape )
 
-        # 幾何学的変換モデルを用いて変換パラメータで変形
-        warp_image, grid = geo_transform( image_s, theta )
+            # 幾何学的変換モデルを用いて変換パラメータで変形
+            warp_image, grid = geo_transform( image_s, theta )
 
         #====================================================
         # 推論結果の保存

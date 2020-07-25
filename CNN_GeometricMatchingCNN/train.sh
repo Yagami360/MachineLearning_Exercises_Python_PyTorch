@@ -19,6 +19,7 @@ EXPER_NAME=debug
 #EXPER_NAME=${GEOMETRIC_MODEL}_image${IMAGE_HIGHT}_ep${N_EPOCHES}_b${BATCH_SIZE}_200725
 rm -rf tensorboard/${EXPER_NAME}
 rm -rf tensorboard/${EXPER_NAME}_valid
+rm -rf tensorboard/${EXPER_NAME}_eval
 if [ ${EXPER_NAME} = "debug" ] ; then
     N_DISPLAY_STEP=10
     N_DISPLAY_VALID_STEP=50
@@ -31,7 +32,8 @@ fi
 
 python train.py \
     --exper_name ${EXPER_NAME} \
-    --dataset_dir ${HOME}/ML_dataset/VOCdevkit/VOC2012/JPEGImages \
+    --dataset_train_dir ${HOME}/ML_dataset/VOCdevkit/VOC2012/JPEGImages \
+    --dataset_eval_dir ${HOME}/ML_dataset/proposal-flow-willow/PF-dataset \
     --geometric_model ${GEOMETRIC_MODEL} \
     --n_epoches ${N_EPOCHES} \
     --image_height ${IMAGE_HIGHT} --image_width ${IMAGE_WIDTH} --batch_size ${BATCH_SIZE} \

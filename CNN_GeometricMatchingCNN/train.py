@@ -22,8 +22,9 @@ from tensorboardX import SummaryWriter
 
 # 自作モジュール
 from data.geo_dataset import GeoDataset, GeoDataLoader
+from data.pf_dataset import PFDataset, PFDataLoader
 from models.geometric_matching_cnn import GeometricMatchingCNN
-from models.geo_transform import GeoPadTransform
+from models.geo_transform import AffineTransform, TpsTransform, GeoPadTransform
 from models.losses import TransformedGridLoss
 from utils.utils import save_checkpoint, load_checkpoint
 from utils.utils import board_add_image, board_add_images, save_image_w_norm
@@ -31,7 +32,8 @@ from utils.utils import board_add_image, board_add_images, save_image_w_norm
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--exper_name", default="debug", help="実験名")
-    parser.add_argument("--dataset_dir", type=str, default="VOCdevkit/VOC2012/JPEGImages")
+    parser.add_argument("--dataset_train_dir", type=str, default="VOCdevkit/VOC2012/JPEGImages")
+    parser.add_argument("--dataset_eval_dir", type=str, default="proposal-flow-willow/PF-dataset")
     parser.add_argument("--results_dir", type=str, default="results")
     parser.add_argument('--save_checkpoints_dir', type=str, default="checkpoints", help="モデルの保存ディレクトリ")
     parser.add_argument('--load_checkpoints_path', type=str, default="", help="モデルの読み込みファイルのパス")
@@ -109,14 +111,14 @@ if __name__ == '__main__':
     # tensorboard 出力
     board_train = SummaryWriter( log_dir = os.path.join(args.tensorboard_dir, args.exper_name) )
     board_valid = SummaryWriter( log_dir = os.path.join(args.tensorboard_dir, args.exper_name + "_valid") )
+    board_eval = SummaryWriter( log_dir = os.path.join(args.tensorboard_dir, args.exper_name + "_eval") )
 
     #================================
     # データセットの読み込み
     #================================    
     # 学習用データセットとテスト用データセットの設定
-    ds_train = GeoDataset( args, args.dataset_dir, image_height = args.image_height, image_width = args.image_width, data_augument = args.data_augument, geometric_model = args.geometric_model, debug = args.debug )
+    ds_train = GeoDataset( args, args.dataset_train_dir, image_height = args.image_height, image_width = args.image_width, data_augument = args.data_augument, geometric_model = args.geometric_model, debug = args.debug )
 
-    # 学習用データセットとテスト用データセットの設定
     index = np.arange(len(ds_train))
     train_index, valid_index = train_test_split( index, test_size=args.val_rate, random_state=args.seed )
     if( args.debug ):
@@ -127,6 +129,10 @@ if __name__ == '__main__':
 
     dloader_train = torch.utils.data.DataLoader(Subset(ds_train, train_index), batch_size=args.batch_size, shuffle=True, num_workers = args.n_workers, pin_memory = True )
     dloader_valid = torch.utils.data.DataLoader(Subset(ds_train, valid_index), batch_size=args.batch_size_valid, shuffle=False, num_workers = args.n_workers, pin_memory = True )
+
+    # eval 用データ
+    ds_eval = PFDataset( args, args.dataset_eval_dir, image_height = args.image_height, image_width = args.image_width, debug = args.debug )
+    dloader_eval = torch.utils.data.DataLoader(ds_eval, batch_size=1, shuffle = False, num_workers = args.n_workers, pin_memory = True )
 
     #================================
     # モデルの構造を定義する。
@@ -141,8 +147,16 @@ if __name__ == '__main__':
     else:
         NotImplementedError()
 
-    # SynthPairTransform
+    # Padding 付き GeoPadTransform
     geo_pad_transform = GeoPadTransform( device = device, image_height = args.image_height, image_width = args.image_width, geometric_model = args.geometric_model )
+
+    # 幾何学的変換モデル
+    if( args.geometric_model == "affine" ):
+        geo_transform = AffineTransform( image_height = args.image_height, image_width = args.image_width, n_out_channels = 3, padding_mode = "border" )
+    elif( args.geometric_model == "tps" ):
+        geo_transform = TpsTransform( device = device, image_height = args.image_height, image_width = args.image_width, use_regular_grid = True, grid_size = 3, reg_factor = 0, padding_mode = "border" )
+    else:
+        NotImplementedError()
 
     if( args.debug ):
         print( "model_G :\n", model_G )
@@ -227,7 +241,7 @@ if __name__ == '__main__':
                 visuals = [
                     [ image_s, image_s_crop, image_t ],
                 ]
-                board_add_images(board_train, 'train/image', visuals, step+1)
+                board_add_images(board_train, 'train', visuals, step+1)
 
             #====================================================
             # valid データでの処理
@@ -235,7 +249,7 @@ if __name__ == '__main__':
             if( step % args.n_display_valid_step == 0 ):
                 loss_G_total = 0
                 n_valid_loop = 0
-                for iter, inputs in enumerate( tqdm(dloader_valid, desc = "eval iters") ):
+                for iter, inputs in enumerate( tqdm(dloader_valid, desc = "valid") ):
                     model_G.eval()            
 
                     # 一番最後のミニバッチループで、バッチサイズに満たない場合は無視する（後の計算で、shape の不一致をおこすため）
@@ -261,12 +275,44 @@ if __name__ == '__main__':
                         visuals = [
                             [ image_s, image_s_crop, image_t ],
                         ]
-                        board_add_images(board_valid, 'valid/image/{}'.format(iter), visuals, step+1)
+                        board_add_images(board_valid, 'valid/{}'.format(iter), visuals, step+1)
 
                     n_valid_loop += 1
 
                 # loss 値表示
                 board_valid.add_scalar('G/loss_G', loss_G_total.item()/n_valid_loop, step)
+
+            #====================================================
+            # eval データでの処理
+            #====================================================
+            if( step % args.n_display_valid_step == 0 ):
+                n_eval_loop = 0
+                for iter, inputs in enumerate( tqdm(dloader_eval, desc = "eval") ):
+                    model_G.eval()            
+
+                    # 一番最後のミニバッチループで、バッチサイズに満たない場合は無視する（後の計算で、shape の不一致をおこすため）
+                    if inputs["image_s"].shape[0] != 1:
+                        break
+
+                    # ミニバッチデータを GPU へ転送
+                    image_s_name = inputs["image_s_name"]
+                    image_t_name = inputs["image_t_name"]
+                    image_s = inputs["image_s"].to(device)
+                    image_t = inputs["image_t"].to(device)
+
+                    # 推論処理
+                    with torch.no_grad():
+                        theta = model_G( image_s, image_t )
+
+                        # 幾何学的変換モデルを用いて変換パラメータで変形
+                        warp_image, grid = geo_transform( image_s, theta )
+
+                    # 生成画像表示
+                    if( iter <= args.n_display_valid ):
+                        visuals = [
+                            [ image_s, image_t, warp_image ],
+                        ]
+                        board_add_images(board_eval, 'eval/{}'.format(iter), visuals, step+1)
 
             step += 1
             n_print -= 1

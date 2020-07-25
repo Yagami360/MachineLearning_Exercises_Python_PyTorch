@@ -208,7 +208,7 @@ if __name__ == '__main__':
             if( step != 0 and ( step % args.n_display_valid_step == 0 ) ):
                 loss_G_total = 0
                 n_valid_loop = 0
-                for iter, inputs in enumerate( tqdm(dloader_valid, desc = "eval iters") ):
+                for iter, inputs in enumerate( tqdm(dloader_valid, desc = "valid") ):
                     model_G.eval()            
 
                     # 一番最後のミニバッチループで、バッチサイズに満たない場合は無視する（後の計算で、shape の不一致をおこすため）
