@@ -9,6 +9,8 @@ from torch.autograd import Variable
 import torchvision
 from torchvision.utils import save_image
 
+from utils.utils import expand_dim_tsr
+
 #=======================================
 # Geometric transform 関連
 #=======================================
@@ -55,12 +57,13 @@ class AffineTransform( nn.Module ):
     affine 変換
     """
     def __init__( 
-        self, 
+        self, device = torch.device("cuda"), 
         image_height = 240, image_width = 240, n_out_channels = 3, 
         padding_mode = "border",
-        offset_factor = 1.0, padding_factor = 1.0, crop_factor = 1.0,
+        offset_factor = None, padding_factor = 1.0, crop_factor = 1.0,
     ):
         super(AffineTransform, self).__init__()        
+        self.device = device
         self.image_height = image_height
         self.image_width = image_width
         self.n_out_channels = n_out_channels
@@ -68,7 +71,6 @@ class AffineTransform( nn.Module ):
         self.offset_factor = offset_factor
         self.padding_factor = padding_factor
         self.crop_factor = crop_factor
-
         self.theta_identity = torch.Tensor( np.expand_dims(np.array([[1,0,0],[0,1,0]]),0).astype(np.float32) )
         return
         
@@ -81,7 +83,7 @@ class AffineTransform( nn.Module ):
         if theta is None:
             theta = self.theta_identity
             theta = theta.expand(image.shape[0],2,3).contiguous()
-            theta = Variable(theta, requires_grad=False)
+            theta = Variable(theta, requires_grad=False).to(self.device)
         if not theta.shape == (theta.shape[0],2,3):
             theta = theta.view(-1,2,3).contiguous()
 
@@ -99,7 +101,75 @@ class AffineTransform( nn.Module ):
         if( self.padding_factor != 1 or self.crop_factor != 1 ):
             grid = grid * (self.padding_factor * self.crop_factor)
         # rescale grid according to offset_factor
-        if( self.offset_factor != 1 ):
+        if( self.offset_factor is not None ):
+            grid = grid * self.offset_factor
+
+        warp_image = F.grid_sample(image, grid, padding_mode = self.padding_mode )
+        return warp_image, grid
+
+
+class AffineOffsetTransform(nn.Module):
+    """
+    Offset 処理可能な Affine 変形
+    """
+    def __init__( 
+        self, device = torch.device("cuda"), 
+        image_height = 240, image_width = 240, n_out_channels = 3, 
+        padding_mode = "border",
+        offset_factor = None, padding_factor = 1.0, crop_factor = 1.0,
+    ):
+        super(AffineOffsetTransform, self).__init__()        
+        self.device = device
+        self.image_height = image_height
+        self.image_width = image_width
+        self.n_out_channels = n_out_channels
+        self.padding_mode = padding_mode
+        self.offset_factor = offset_factor
+        self.padding_factor = padding_factor
+        self.crop_factor = crop_factor
+
+        # create grid in numpy
+        # sampling grid with dim-0 coords (Y)
+        self.grid_X,self.grid_Y = np.meshgrid(np.linspace(-1,1,self.image_width),np.linspace(-1,1,self.image_height))
+        # grid_X,grid_Y: size [1,H,W,1,1]
+        self.grid_X = torch.FloatTensor(self.grid_X).unsqueeze(0).unsqueeze(3)
+        self.grid_Y = torch.FloatTensor(self.grid_Y).unsqueeze(0).unsqueeze(3)
+        self.grid_X = Variable(self.grid_X,requires_grad=False).to(self.device)
+        self.grid_Y = Variable(self.grid_Y,requires_grad=False).to(self.device)
+        if self.offset_factor is not None:
+            self.grid_X = self.grid_X / self.offset_factor
+            self.grid_Y = self.grid_Y / self.offset_factor
+
+        return
+            
+    def forward(self, image, theta ):
+        if not theta.shape == (theta.shape[0],6):
+            theta = theta.view(theta.shape[0],6).contiguous()
+
+        t0 = theta[:,0].unsqueeze(1).unsqueeze(2).unsqueeze(3)
+        t1 = theta[:,1].unsqueeze(1).unsqueeze(2).unsqueeze(3)
+        t2 = theta[:,2].unsqueeze(1).unsqueeze(2).unsqueeze(3)
+        t3 = theta[:,3].unsqueeze(1).unsqueeze(2).unsqueeze(3)
+        t4 = theta[:,4].unsqueeze(1).unsqueeze(2).unsqueeze(3)
+        t5 = theta[:,5].unsqueeze(1).unsqueeze(2).unsqueeze(3)
+
+        #print( "self.grid_X.shape : ", self.grid_X.shape )
+        grid_X = expand_dim_tsr( tensor = self.grid_X, dim = 0, desired_dim_len = theta.shape[0] )
+        #print( "[expand] grid_X.shape : ", grid_X.shape )
+
+        grid_Y = expand_dim_tsr( tensor = self.grid_Y, dim = 0, desired_dim_len = theta.shape[0] )
+        grid_Xp = grid_X*t0 + grid_Y*t1 + t2
+        grid_Yp = grid_X*t3 + grid_Y*t4 + t5
+        grid = torch.cat((grid_Xp,grid_Yp),3)
+
+        #-------------------------------
+        # sampling_grid から変換画像を生成
+        #-------------------------------
+        # rescale grid according to crop_factor and padding_factor
+        if( self.padding_factor != 1 or self.crop_factor != 1 ):
+            grid = grid * (self.padding_factor * self.crop_factor)
+        # rescale grid according to offset_factor
+        if( self.offset_factor is not None ):
             grid = grid * self.offset_factor
 
         warp_image = F.grid_sample(image, grid, padding_mode = self.padding_mode )
@@ -114,7 +184,7 @@ class TpsTransform(nn.Module):
         self, device = torch.device("cuda"), 
         image_height = 240, image_width = 240,
         use_regular_grid = True, grid_size = 3, reg_factor = 0, padding_mode = "border",
-        offset_factor = 1.0, padding_factor = 1.0, crop_factor = 1.0,
+        offset_factor = None, padding_factor = 1.0, crop_factor = 1.0,
     ):
         super(TpsTransform, self).__init__()
         self.device = device
@@ -133,6 +203,9 @@ class TpsTransform(nn.Module):
         self.grid_Y = torch.FloatTensor(self.grid_Y).unsqueeze(0).unsqueeze(3)
         self.grid_X = Variable(self.grid_X,requires_grad=False).to(self.device)
         self.grid_Y = Variable(self.grid_Y,requires_grad=False).to(self.device)
+        if self.offset_factor is not None:
+            self.grid_X = self.grid_X / self.offset_factor
+            self.grid_Y = self.grid_Y / self.offset_factor
 
         # initialize regular grid for control points P_i
         if use_regular_grid:
@@ -143,11 +216,12 @@ class TpsTransform(nn.Module):
             P_Y = np.reshape(P_Y,(-1,1)) # size (N,1)
             P_X = torch.FloatTensor(P_X)
             P_Y = torch.FloatTensor(P_Y)
-            self.Li = Variable(self.compute_L_inverse(P_X,P_Y).unsqueeze(0),requires_grad=False)
+            self.Li = Variable(self.compute_L_inverse(P_X,P_Y).unsqueeze(0),requires_grad=False).to(self.device)
             self.P_X = P_X.unsqueeze(2).unsqueeze(3).unsqueeze(4).transpose(0,4)
             self.P_Y = P_Y.unsqueeze(2).unsqueeze(3).unsqueeze(4).transpose(0,4)
             self.P_X = Variable(self.P_X,requires_grad=False).to(self.device)
             self.P_Y = Variable(self.P_Y,requires_grad=False).to(self.device)
+
 
         self.theta_identity = torch.Tensor( np.expand_dims(np.array([[1,0,0],[0,1,0]]),0).astype(np.float32) )
         return
@@ -156,7 +230,7 @@ class TpsTransform(nn.Module):
         if theta is None:
             theta = self.theta_identity
             theta = theta.expand(image.shape[0],2,3).contiguous()
-            theta = Variable(theta, requires_grad=False)
+            theta = Variable(theta, requires_grad=False).to(self.device)
 
         #----------------------
         # TPS 変換
@@ -170,7 +244,7 @@ class TpsTransform(nn.Module):
         if( self.padding_factor != 1 or self.crop_factor != 1 ):
             grid = grid * (self.padding_factor * self.crop_factor)
         # rescale grid according to offset_factor
-        if( self.offset_factor != 1 ):
+        if( self.offset_factor is not None ):
             grid = grid * self.offset_factor
 
         warp_image = F.grid_sample(image, grid, padding_mode = self.padding_mode )
@@ -365,13 +439,14 @@ class GeoPadTransform(nn.Module):
         self, device = torch.device("cuda"),
         image_height = 240, image_width = 240,
         geometric_model = "affine",
-        padding_factor = 0.5, crop_factor = 9/16, occlusion_factor = 0.0,
+        offset_factor = None, padding_factor = 0.5, crop_factor = 9/16, occlusion_factor = 0.0,
     ):
         super(GeoPadTransform, self).__init__()
         self.device = device
         self.image_height = image_height
         self.image_width = image_width
         self.geometric_model = geometric_model
+        self.offset_factor = offset_factor
         self.padding_factor = padding_factor
         self.crop_factor = crop_factor
         self.occlusion_factor = occlusion_factor
@@ -380,18 +455,17 @@ class GeoPadTransform(nn.Module):
         self.image_pad_sym = ImagePadSymmetric(self.device, self.padding_factor)
 
         # 参照画像の crop 処理用アフィン変換
-        self.affine_transform = AffineTransform( image_height = self.image_height, image_width = self.image_width, n_out_channels = 3, padding_mode = "border", padding_factor = self.padding_factor, crop_factor = self.crop_factor )
+        self.affine_transform = AffineTransform( device = self.device, image_height = self.image_height, image_width = self.image_width, n_out_channels = 3, padding_mode = "border", padding_factor = self.padding_factor, crop_factor = self.crop_factor )
 
         # 参照画像を変形する幾何学的変換モデル
-        if( geometric_model == "affine" ):
-            self.geo_transform = AffineTransform( image_height = self.image_height, image_width = self.image_width, n_out_channels = 3, padding_mode = "border", padding_factor = self.padding_factor, crop_factor = self.crop_factor )
+        if( geometric_model == "affine" and self.offset_factor is None ):
+            self.geo_transform = AffineTransform( device = self.device, image_height = self.image_height, image_width = self.image_width, n_out_channels = 3, padding_mode = "border", offset_factor = self.offset_factor, padding_factor = self.padding_factor, crop_factor = self.crop_factor )
+        elif( geometric_model == "affine" and self.offset_factor is not None ):
+            self.geo_transform = AffineOffsetTransform( device = self.device, image_height = self.image_height, image_width = self.image_width, n_out_channels = 3, padding_mode = "border", offset_factor = self.offset_factor, padding_factor = self.padding_factor, crop_factor = self.crop_factor )
         elif( geometric_model == "tps" ):
-            self.geo_transform = TpsTransform(device = self.device, image_height = self.image_height, image_width = self.image_width, use_regular_grid = True, grid_size = 3, reg_factor = 0, padding_mode = "border", padding_factor = self.padding_factor, crop_factor = self.crop_factor )
+            self.geo_transform = TpsTransform( device = self.device, image_height = self.image_height, image_width = self.image_width, use_regular_grid = True, grid_size = 3, reg_factor = 0, padding_mode = "border", offset_factor = self.offset_factor, padding_factor = self.padding_factor, crop_factor = self.crop_factor )
         else:
             NotImplementedError()
-
-        # [ToDO] crop_factor != 0 時の処理 / AffineGridGenV2
-        pass
 
         return
 
@@ -403,8 +477,8 @@ class GeoPadTransform(nn.Module):
         image_s = self.image_pad_sym(image_s)
 
         # convert to variables
-        image_s = Variable(image_s, requires_grad = False )
-        theta_gt =  Variable(theta_gt, requires_grad = False )        
+        image_s = Variable(image_s, requires_grad = False ).to(self.device)
+        theta_gt =  Variable(theta_gt, requires_grad = False ).to(self.device)        
 
         # affine 変換で参照画像をクロップ
         image_s_crop, _ = self.affine_transform(image_s, None)
@@ -413,9 +487,9 @@ class GeoPadTransform(nn.Module):
         # 幾何学的変換モデルで、変換画像を生成
         #---------------------------------------------------------------------------
         # 目標画像を取得 / 参照画像を theta_gt で変形
-        image_t, grid_t = self.geo_transform( image_s, theta_gt )
+        image_t, _ = self.geo_transform( image_s, theta_gt )
 
         # [ToDO] occlusion_factor !=0 時の処理
         pass
 
-        return image_s_crop, image_t, grid_t
+        return image_s_crop, image_t

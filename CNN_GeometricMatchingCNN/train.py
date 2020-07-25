@@ -25,7 +25,7 @@ from data.geo_dataset import GeoDataset, GeoDataLoader
 from data.pf_dataset import PFDataset, PFDataLoader
 from models.geometric_matching_cnn import GeometricMatchingCNN
 from models.geo_transform import AffineTransform, TpsTransform, GeoPadTransform
-from models.losses import TransformedGridLoss
+from models.losses import TransformedGridLoss, VGGLoss
 from utils.utils import save_checkpoint, load_checkpoint
 from utils.utils import board_add_image, board_add_images, save_image_w_norm
 
@@ -39,12 +39,12 @@ if __name__ == '__main__':
     parser.add_argument('--load_checkpoints_path', type=str, default="", help="モデルの読み込みファイルのパス")
     parser.add_argument('--tensorboard_dir', type=str, default="tensorboard", help="TensorBoard のディレクトリ")
     parser.add_argument('--geometric_model', choices=['affine','tps','hom'], default="affine", help="幾何学的変換モデル")
-    parser.add_argument("--n_epoches", type=int, default=100, help="エポック数")    
-    parser.add_argument('--batch_size', type=int, default=4, help="バッチサイズ")
+    parser.add_argument("--n_epoches", type=int, default=20, help="エポック数")    
+    parser.add_argument('--batch_size', type=int, default=16, help="バッチサイズ")
     parser.add_argument('--batch_size_valid', type=int, default=1, help="バッチサイズ")
     parser.add_argument('--image_height', type=int, default=240, help="入力画像の高さ（pixel単位）")
     parser.add_argument('--image_width', type=int, default=240, help="入力画像の幅（pixel単位）")
-    parser.add_argument('--lr', type=float, default=0.007, help="学習率")
+    parser.add_argument('--lr', type=float, default=0.001, help="学習率")
     parser.add_argument('--beta1', type=float, default=0.5, help="学習率の減衰率")
     parser.add_argument('--beta2', type=float, default=0.999, help="学習率の減衰率")
     parser.add_argument("--n_diaplay_step", type=int, default=100,)
@@ -53,6 +53,10 @@ if __name__ == '__main__':
     parser.add_argument("--val_rate", type=float, default=0.01)
     parser.add_argument('--n_display_valid', type=int, default=8, help="valid データの tensorboard への表示数")
     parser.add_argument('--data_augument', action='store_true')
+    parser.add_argument("--lambda_grid", type=float, default=1.0)
+    parser.add_argument("--lambda_l1", type=float, default=0.0)
+    parser.add_argument("--lambda_vgg", type=float, default=0.0)
+    #parser.add_argument("--lambda_adv", type=float, default=0.0)
     parser.add_argument("--seed", type=int, default=71)
     parser.add_argument('--device', choices=['cpu', 'gpu'], default="gpu", help="使用デバイス (CPU or GPU)")
     parser.add_argument('--n_workers', type=int, default=4, help="CPUの並列化数（0 で並列化なし）")
@@ -152,7 +156,7 @@ if __name__ == '__main__':
 
     # 幾何学的変換モデル
     if( args.geometric_model == "affine" ):
-        geo_transform = AffineTransform( image_height = args.image_height, image_width = args.image_width, n_out_channels = 3, padding_mode = "border" )
+        geo_transform = AffineTransform( device = device, image_height = args.image_height, image_width = args.image_width, n_out_channels = 3, padding_mode = "border" )
     elif( args.geometric_model == "tps" ):
         geo_transform = TpsTransform( device = device, image_height = args.image_height, image_width = args.image_width, use_regular_grid = True, grid_size = 3, reg_factor = 0, padding_mode = "border" )
     else:
@@ -174,7 +178,9 @@ if __name__ == '__main__':
     #================================
     # loss 関数の設定
     #================================
-    loss_fn = TransformedGridLoss( device = device, geometric_model = args.geometric_model )
+    loss_grid_fn = TransformedGridLoss( device = device, geometric_model = args.geometric_model )
+    loss_l1_fn = nn.L1Loss()
+    loss_vgg_fn = VGGLoss(device = device, layids = [4] )
 
     #================================
     # モデルの学習
@@ -196,15 +202,14 @@ if __name__ == '__main__':
             if( args.debug and n_print > 0):
                 print( "image_s.shape : ", image_s.shape )
                 print( "theta_gt.shape : ", theta_gt.shape )
-            
+
             #----------------------------------------------------
             # ランダムに生成した theta_gt から image_t（目標画像）を生成
             #----------------------------------------------------
-            image_s_crop, image_t, grid_t = geo_pad_transform( image_s, theta_gt )
+            image_s_crop, image_t = geo_pad_transform( image_s, theta_gt )
             if( args.debug and n_print > 0):
                 print( "image_s_crop.shape : ", image_s_crop.shape )
                 print( "image_t.shape : ", image_t.shape )
-                print( "grid_t.shape : ", grid_t.shape )
 
             #----------------------------------------------------
             # 生成器 の forword 処理
@@ -213,16 +218,19 @@ if __name__ == '__main__':
             if( args.debug and n_print > 0 ):
                 print( "theta.shape : ", theta.shape )
 
-            #----------------------------------------------------
-            # 変換服
-            #----------------------------------------------------
-            #warp_image = F.grid_sample(image_s_crop, grid, padding_mode = "boader" )
+            # 幾何学的変換モデルを用いて変換パラメータで変形
+            warp_image, _ = geo_transform( image_s_crop, theta )
+            if( args.debug and n_print > 0 ):
+                print( "warp_image.shape : ", warp_image.shape )
 
             #----------------------------------------------------
             # 生成器の更新処理
             #----------------------------------------------------
             # 損失関数を計算する
-            loss_G = loss_fn( theta, theta_gt )
+            loss_grid = loss_grid_fn( theta, theta_gt )         # theta 間での損失関数 / Geometric-matching CNN の論文&公式実装に準拠
+            loss_l1 = loss_l1_fn( warp_image, image_t )         # 変形画像間での L1 Loss / Geometric-matching CNN の論文&公式実装から新規に追加
+            loss_vgg = loss_vgg_fn( warp_image, image_t )       # 変形画像間での VGG Loss / Geometric-matching CNN の論文&公式実装から新規に追加
+            loss_G = args.lambda_grid * loss_grid + args.lambda_l1 * loss_l1 + args.lambda_vgg * loss_vgg
 
             # ネットワークの更新処理
             optimizer_G.zero_grad()
@@ -235,11 +243,16 @@ if __name__ == '__main__':
             if( step == 0 or ( step % args.n_diaplay_step == 0 ) ):
                 # loss
                 board_train.add_scalar('G/loss_G', loss_G.item(), step)
-                print( "step={}, loss_G={:.5f}".format(step, loss_G.item() ) )
+                board_train.add_scalar('G/loss_grid', loss_grid.item(), step)
+                board_train.add_scalar('G/loss_l1', loss_l1.item(), step)
+                board_train.add_scalar('G/loss_vgg', loss_vgg.item(), step)
+                print( "step={}, loss_G={:.5f}, loss_grid={:.5f}, loss_ls={:.5f}, loss_vgg={:.5f}".format(step, loss_G.item(), loss_grid.item(), loss_l1.item(), loss_vgg.item() ) )
 
                 # visual images
+                zero_tsr = torch.zeros( image_s.shape ).to(device)
                 visuals = [
-                    [ image_s, image_s_crop, image_t ],
+                    [ image_s,  image_s_crop, image_t       ],
+                    [ zero_tsr, image_s_crop, warp_image    ],
                 ]
                 board_add_images(board_train, 'train', visuals, step+1)
 
@@ -247,7 +260,7 @@ if __name__ == '__main__':
             # valid データでの処理
             #====================================================
             if( step % args.n_display_valid_step == 0 ):
-                loss_G_total = 0
+                loss_G_total, loss_grid_total, loss_l1_total, loss_vgg_total = 0, 0, 0, 0
                 n_valid_loop = 0
                 for iter, inputs in enumerate( tqdm(dloader_valid, desc = "valid") ):
                     model_G.eval()            
@@ -262,18 +275,28 @@ if __name__ == '__main__':
 
                     # 推論処理
                     with torch.no_grad():
-                        image_s_crop, image_t, grid_t = geo_pad_transform( image_s, theta_gt )
+                        image_s_crop, image_t = geo_pad_transform( image_s, theta_gt )
                         theta = model_G( image_s_crop, image_t )
+                        warp_image, _ = geo_transform( image_s_crop, theta )
 
                     # 損失関数を計算する
-                    loss_G = loss_fn( theta, theta_gt )
+                    loss_grid = loss_grid_fn( theta, theta_gt )
+                    loss_l1 = loss_l1_fn( warp_image, image_t )
+                    loss_vgg = loss_vgg_fn( warp_image, image_t )
+                    loss_G = args.lambda_grid * loss_grid + args.lambda_l1 * loss_l1 + args.lambda_vgg * loss_vgg
+
                     loss_G_total += loss_G
+                    loss_grid_total += loss_grid
+                    loss_l1_total += loss_l1
+                    loss_vgg_total += loss_vgg
 
                     # 生成画像表示
                     if( iter <= args.n_display_valid ):
                         # visual images
+                        zero_tsr = torch.zeros( image_s.shape ).to(device)
                         visuals = [
-                            [ image_s, image_s_crop, image_t ],
+                            [ image_s,  image_s_crop, image_t       ],
+                            [ zero_tsr, image_s_crop, warp_image    ],
                         ]
                         board_add_images(board_valid, 'valid/{}'.format(iter), visuals, step+1)
 
@@ -281,6 +304,9 @@ if __name__ == '__main__':
 
                 # loss 値表示
                 board_valid.add_scalar('G/loss_G', loss_G_total.item()/n_valid_loop, step)
+                board_valid.add_scalar('G/loss_grid', loss_grid_total.item()/n_valid_loop, step)
+                board_valid.add_scalar('G/loss_l1', loss_l1_total.item()/n_valid_loop, step)
+                board_valid.add_scalar('G/loss_vgg', loss_vgg_total.item()/n_valid_loop, step)
 
             #====================================================
             # eval データでの処理

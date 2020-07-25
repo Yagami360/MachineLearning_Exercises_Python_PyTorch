@@ -118,6 +118,14 @@ def board_add_images(board, tag_name, img_tensors_list, step_count, n_max_images
     return
 
 #====================================================
+# Tensor 操作
+#====================================================
+def expand_dim_tsr( tensor, dim, desired_dim_len ):
+    sz = list(tensor.size())
+    sz[dim] = desired_dim_len
+    return tensor.expand(tuple(sz))
+        
+#====================================================
 # その他
 #====================================================
 def set_random_seed(seed=72):
