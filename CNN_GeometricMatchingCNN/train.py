@@ -39,6 +39,7 @@ if __name__ == '__main__':
     parser.add_argument('--load_checkpoints_path', type=str, default="", help="モデルの読み込みファイルのパス")
     parser.add_argument('--tensorboard_dir', type=str, default="tensorboard", help="TensorBoard のディレクトリ")
     parser.add_argument('--geometric_model', choices=['affine','tps','hom'], default="affine", help="幾何学的変換モデル")
+    parser.add_argument('--train_feature_regression', action='store_false', help="Geometric-matching CNN の FeatureRegression 層のみ学習対象とする")
     parser.add_argument("--n_epoches", type=int, default=20, help="エポック数")    
     parser.add_argument('--batch_size', type=int, default=16, help="バッチサイズ")
     parser.add_argument('--batch_size_valid', type=int, default=1, help="バッチサイズ")
@@ -47,6 +48,8 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=0.001, help="学習率")
     parser.add_argument('--beta1', type=float, default=0.5, help="学習率の減衰率")
     parser.add_argument('--beta2', type=float, default=0.999, help="学習率の減衰率")
+    parser.add_argument('--lr_scheduler', action='store_false', help='Bool (default True), whether to use a decaying lr_scheduler')
+    parser.add_argument('--lr_max_iter', type=int, default=1000, help='Number of steps between lr starting value and 1e-6 / (lr default min) when choosing lr_scheduler')
     parser.add_argument("--n_diaplay_step", type=int, default=100,)
     parser.add_argument('--n_display_valid_step', type=int, default=500, help="valid データの tensorboard への表示間隔")
     parser.add_argument("--n_save_epoches", type=int, default=10,)
@@ -162,18 +165,30 @@ if __name__ == '__main__':
     else:
         NotImplementedError()
 
+    # モデルを読み込む
+    if not args.load_checkpoints_path == '' and os.path.exists(args.load_checkpoints_path):
+        load_checkpoint(model_G, device, args.load_checkpoints_path )
+        #load_checkpoint(model_G.feature_regression, device, args.load_checkpoints_path )
+
     if( args.debug ):
         print( "model_G :\n", model_G )
         print( "geo_pad_transform :\n", geo_pad_transform )
 
-    # モデルを読み込む
-    if not args.load_checkpoints_path == '' and os.path.exists(args.load_checkpoints_path):
-        load_checkpoint(model_G, device, args.load_checkpoints_path )
-        
     #================================
     # optimizer_G の設定
     #================================
-    optimizer_G = optim.Adam( params = model_G.parameters(), lr = args.lr, betas = (args.beta1,args.beta2) )
+    if( args.lr_scheduler ):
+        if( args.train_feature_regression ):
+            optimizer_G = optim.Adam( params = model_G.feature_regression.parameters(), lr = args.lr )
+        else:
+            optimizer_G = optim.Adam( params = model_G.parameters(), lr = args.lr )
+
+        scheduler_G = torch.optim.lr_scheduler.CosineAnnealingLR( optimizer_G, T_max = args.lr_max_iter, eta_min = 1e-6 )
+    else:
+        if( args.train_feature_regression ):
+            optimizer_G = optim.Adam( params = model_G.feature_regression.parameters(), lr = args.lr, betas = (args.beta1,args.beta2) )
+        else:
+            optimizer_G = optim.Adam( params = model_G.parameters(), lr = args.lr, betas = (args.beta1,args.beta2) )
 
     #================================
     # loss 関数の設定
@@ -237,11 +252,24 @@ if __name__ == '__main__':
             loss_G.backward()
             optimizer_G.step()
 
+            if( args.lr_scheduler ):
+                scheduler_G.step()
+
             #====================================================
             # 学習過程の表示
             #====================================================
             if( step == 0 or ( step % args.n_diaplay_step == 0 ) ):
+                # lr
+                if( args.lr_scheduler ):
+                    board_train.add_scalar('lr/learning rate', scheduler_G.get_lr()[-1], step )
+                else:
+                    for param_group in optimizer_G.param_groups:
+                        lr = param_group['lr']
+
+                    board_train.add_scalar('lr/learning rate', lr, step )
+
                 # loss
+                board_train.add_scalar('G/loss_G', loss_G.item(), step)
                 board_train.add_scalar('G/loss_G', loss_G.item(), step)
                 board_train.add_scalar('G/loss_grid', loss_grid.item(), step)
                 board_train.add_scalar('G/loss_l1', loss_l1.item(), step)

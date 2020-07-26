@@ -44,7 +44,7 @@ class GeoDataset(data.Dataset):
         self.geometric_model = geometric_model
         self.random_t_tps = random_t_tps
         self.debug = debug
-        self.image_dir = dataset_dir
+        self.image_dir = dataset_dir        
         self.image_names = sorted( [f for f in os.listdir(self.image_dir) if f.endswith(IMG_EXTENSIONS)], key=lambda s: int(re.search(r'\d+', s).group()) )
 
         # transform
@@ -93,6 +93,7 @@ class GeoDataset(data.Dataset):
             set_random_seed( self.seed_da )
 
         image_s = self.transform(image_s)
+        #print( "torch.sum(image_s) : ", torch.sum(image_s) )
         #print( "image_s.shape : ", image_s.shape )
 
         #-----------------------------------------------

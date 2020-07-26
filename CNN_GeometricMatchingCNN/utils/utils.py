@@ -34,20 +34,20 @@ def save_checkpoint_w_step(model, device, save_path, step):
     model.to(device)
     return
 
-def load_checkpoint(model, device, checkpoint_path):
+def load_checkpoint(model, device, checkpoint_path, strict = True ):
     if not os.path.exists(checkpoint_path):
         return
         
-    model.load_state_dict(torch.load(checkpoint_path))
+    model.load_state_dict( torch.load(checkpoint_path), strict )
     model.to(device)
     return
 
-def load_checkpoint_w_step(model, device, checkpoint_path):
+def load_checkpoint_w_step(model, device, checkpoint_path, strict = True):
     if not os.path.exists(checkpoint_path):
         return
         
     checkpoint = torch.load(checkpoint_path)
-    model.load_state_dict(checkpoint["model_state_dict"])
+    model.load_state_dict(checkpoint["model_state_dict"], strict)
     step = checkpoint['step']
     model.to(device)
     return step

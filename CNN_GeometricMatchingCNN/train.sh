@@ -7,8 +7,8 @@ mkdir -p _logs
 #----------------------
 # model
 #----------------------
-GEOMETRIC_MODEL=affine
-#GEOMETRIC_MODEL=tps
+#GEOMETRIC_MODEL=affine
+GEOMETRIC_MODEL=tps
 #GEOMETRIC_MODEL=hom
 
 N_EPOCHES=5
@@ -24,8 +24,8 @@ if [ ${EXPER_NAME} = "debug" ] ; then
     N_DISPLAY_VALID_STEP=50
     VAL_RATE=0.001
 else
-    N_DISPLAY_STEP=100
-    N_DISPLAY_VALID_STEP=100
+    N_DISPLAY_STEP=500
+    N_DISPLAY_VALID_STEP=500
     VAL_RATE=0.01
 fi
 
@@ -43,6 +43,9 @@ python train.py \
     --n_diaplay_step ${N_DISPLAY_STEP} --n_display_valid_step ${N_DISPLAY_VALID_STEP} --val_rate ${VAL_RATE} \
     --lambda_grid 1.0 --lambda_l1 0.0 --lambda_vgg 0.0 \
     --debug
+
+
+#    --dataset_train_dir ${HOME}/GitHub/Clones/cnngeometric_pytorch/datasets/pascal-voc11/TrainVal/VOCdevkit/VOC2011/JPEGImages \
 
 if [ $1 = "poweroff" ] ; then
     sudo poweroff

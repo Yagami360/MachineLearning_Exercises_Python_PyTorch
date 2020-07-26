@@ -32,9 +32,11 @@ if __name__ == '__main__':
     parser.add_argument("--exper_name", default="debug", help="実験名")
     parser.add_argument("--dataset_dir", type=str, default="proposal-flow-willow/PF-dataset")
     parser.add_argument("--results_dir", type=str, default="results")
-    parser.add_argument('--load_checkpoints_path', type=str, default="", help="モデルの読み込みファイルのパス")
+    parser.add_argument('--load_checkpoints_path_1', type=str, default="", help="モデルの読み込みファイルのパス")
+    parser.add_argument('--load_checkpoints_path_2', type=str, default="", help="モデルの読み込みファイルのパス")
     parser.add_argument('--tensorboard_dir', type=str, default="tensorboard", help="TensorBoard のディレクトリ")
-    parser.add_argument('--geometric_model', choices=['affine','tps','hom'], default="affine", help="幾何学的変換モデル")
+    parser.add_argument('--geometric_model_1', choices=['affine','tps','hom'], default="affine", help="幾何学的変換モデル")
+    parser.add_argument('--geometric_model_2', choices=['affine','tps','hom'], default="tps", help="幾何学的変換モデル")
     parser.add_argument('--n_samplings', type=int, default=100000, help="サンプリング最大数")
     parser.add_argument('--batch_size_test', type=int, default=1, help="バッチサイズ")
     parser.add_argument('--image_height', type=int, default=240, help="入力画像の高さ（pixel単位）")
@@ -57,8 +59,10 @@ if __name__ == '__main__':
         os.mkdir(args.results_dir)
     if not os.path.isdir( os.path.join(args.results_dir, args.exper_name) ):
         os.mkdir(os.path.join(args.results_dir, args.exper_name))
-    if not os.path.isdir( os.path.join(args.results_dir, args.exper_name, "output" ) ):
-        os.mkdir(os.path.join(args.results_dir, args.exper_name, "output"))
+    if not os.path.isdir( os.path.join(args.results_dir, args.exper_name, "stage1" ) ):
+        os.mkdir(os.path.join(args.results_dir, args.exper_name, "stage1"))
+    if not os.path.isdir( os.path.join(args.results_dir, args.exper_name, "stage2" ) ):
+        os.mkdir(os.path.join(args.results_dir, args.exper_name, "stage2"))
 
     # 実行 Device の設定
     if( args.device == "gpu" ):
@@ -105,38 +109,69 @@ if __name__ == '__main__':
     #================================
     # モデルの構造を定義する。
     #================================
+    #------------------------
+    # stage 1
+    #------------------------
     # GeometricMatchingCNN モデル
-    if( args.geometric_model == "affine" ):
-        model_G = GeometricMatchingCNN( n_out_channels = 6 ).to(device)
-    elif( args.geometric_model == "tps" ):
-        model_G = GeometricMatchingCNN( n_out_channels = 18 ).to(device)
-    elif( args.geometric_model == "hom" ):
-        model_G = GeometricMatchingCNN( n_out_channels = 9 ).to(device)
+    if( args.geometric_model_1 == "affine" ):
+        model_G_1 = GeometricMatchingCNN( n_out_channels = 6 ).to(device)
+    elif( args.geometric_model_1 == "tps" ):
+        model_G_1 = GeometricMatchingCNN( n_out_channels = 18 ).to(device)
+    elif( args.geometric_model_1 == "hom" ):
+        model_G_1 = GeometricMatchingCNN( n_out_channels = 9 ).to(device)
     else:
         NotImplementedError()
 
     # 幾何学的変換モデル
-    if( args.geometric_model == "affine" ):
-        geo_transform = AffineTransform( image_height = args.image_height, image_width = args.image_width, n_out_channels = 3, padding_mode = "border" )
-    elif( args.geometric_model == "tps" ):
-        geo_transform = TpsTransform( device = device, image_height = args.image_height, image_width = args.image_width, use_regular_grid = True, grid_size = 3, reg_factor = 0, padding_mode = "border" )
+    if( args.geometric_model_1 == "affine" ):
+        geo_transform_1 = AffineTransform( image_height = args.image_height, image_width = args.image_width, n_out_channels = 3, padding_mode = "border" )
+    elif( args.geometric_model_1 == "tps" ):
+        geo_transform_1 = TpsTransform( device = device, image_height = args.image_height, image_width = args.image_width, use_regular_grid = True, grid_size = 3, reg_factor = 0, padding_mode = "border" )
+    else:
+        NotImplementedError()
+        
+    # モデルを読み込む
+    if not args.load_checkpoints_path_1 == '' and os.path.exists(args.load_checkpoints_path_1):
+        load_checkpoint(model_G_1, device, args.load_checkpoints_path_1 )
+        #load_checkpoint(model_G_1.feature_regression, device, args.load_checkpoints_path_1 )
+
+    if( args.debug ):
+        print( "model_G_1 :\n", model_G_1 )
+        print( "geo_transform_1 :\n", geo_transform_1 )
+
+    #------------------------
+    # stage 2
+    #------------------------
+    if( args.geometric_model_2 == "affine" ):
+        model_G_2 = GeometricMatchingCNN( n_out_channels = 6 ).to(device)
+    elif( args.geometric_model_2 == "tps" ):
+        model_G_2 = GeometricMatchingCNN( n_out_channels = 18 ).to(device)
+    elif( args.geometric_model_2 == "hom" ):
+        model_G_2 = GeometricMatchingCNN( n_out_channels = 9 ).to(device)
     else:
         NotImplementedError()
 
-    if( args.debug ):
-        print( "model_G :\n", model_G )
-        print( "geo_transform :\n", geo_transform )
+    if( args.geometric_model_2 == "affine" ):
+        geo_transform_2 = AffineTransform( image_height = args.image_height, image_width = args.image_width, n_out_channels = 3, padding_mode = "border" )
+    elif( args.geometric_model_2 == "tps" ):
+        geo_transform_2 = TpsTransform( device = device, image_height = args.image_height, image_width = args.image_width, use_regular_grid = True, grid_size = 3, reg_factor = 0, padding_mode = "border" )
+    else:
+        NotImplementedError()
 
-    # モデルを読み込む
-    if not args.load_checkpoints_path == '' and os.path.exists(args.load_checkpoints_path):
-        load_checkpoint(model_G, device, args.load_checkpoints_path )
-        
+    if not args.load_checkpoints_path_2 == '' and os.path.exists(args.load_checkpoints_path_2):
+        load_checkpoint(model_G_2, device, args.load_checkpoints_path_2 )
+        #load_checkpoint(model_G_2.feature_regression, device, args.load_checkpoints_path_2 )
+
+    if( args.debug ):
+        print( "model_G_2 :\n", model_G_2 )
+        print( "geo_transform_2 :\n", geo_transform_2 )
+
     #================================
     # モデルの推論
     #================================    
     print("Starting Testing Loop...")
     n_print = 1
-    model_G.eval()
+    model_G_1.eval()
     for step, inputs in enumerate( tqdm( dloader_test, desc = "Samplings" ) ):
         if inputs["image_s"].shape[0] != args.batch_size_test:
             break
@@ -151,25 +186,36 @@ if __name__ == '__main__':
             print( "image_t.shape : ", image_t.shape )
 
         #----------------------------------------------------
-        # 生成器の推論処理
+        # stage 1 での推論
         #----------------------------------------------------
         # 変換パラメータを推論
         with torch.no_grad():
-            theta = model_G( image_s, image_t )
+            theta1 = model_G_1( image_s, image_t )
             if( args.debug and n_print > 0 ):
-                print( "theta.shape : ", theta.shape )
+                print( "theta1.shape : ", theta1.shape )
 
             # 幾何学的変換モデルを用いて変換パラメータで変形
-            warp_image, grid = geo_transform( image_s, theta )
+            warp_image1, _ = geo_transform_1( image_s, theta1 )
 
-        #====================================================
         # 推論結果の保存
-        #====================================================
-        save_image_w_norm( warp_image, os.path.join( args.results_dir, args.exper_name, "output", image_s_name[0].split(".")[0] + "-" + image_t_name[0].split(".")[0] + ".png" ) )
+        save_image_w_norm( warp_image1, os.path.join( args.results_dir, args.exper_name, "stage1", image_s_name[0].split(".")[0] + "-" + image_t_name[0].split(".")[0] + ".png" ) )
+
+        #----------------------------------------------------
+        # stage 2 での推論
+        #----------------------------------------------------
+        # 変換パラメータを推論
+        with torch.no_grad():
+            theta2 = model_G_2( warp_image1, image_t )
+
+            # 幾何学的変換モデルを用いて変換パラメータで変形
+            warp_image2, _ = geo_transform_1( warp_image1, theta2 )
+
+        # 推論結果の保存
+        save_image_w_norm( warp_image2, os.path.join( args.results_dir, args.exper_name, "stage2", image_s_name[0].split(".")[0] + "-" + image_t_name[0].split(".")[0] + ".png" ) )
 
         # tensorboard
         visuals = [
-            [ image_s, image_t, warp_image ],
+            [ image_s, image_t, warp_image1, warp_image2 ],
         ]
         board_add_images(board_test, 'test', visuals, step+1)
 
