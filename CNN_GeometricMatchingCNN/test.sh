@@ -6,17 +6,17 @@ mkdir -p _logs
 #----------------------
 # model
 #----------------------
-GEOMETRIC_MODEL_1=tps
+GEOMETRIC_MODEL_1=affine
 GEOMETRIC_MODEL_2=tps
 
 IMAGE_HIGHT=240
 IMAGE_WIDTH=240
 
 EXPER_NAME=debug
-EXPER_NAME=tps_image240_ep20_b16_200725
+EXPER_NAME=affine_tps_image240_ep20_b4_200726
 
-LOAD_CHECKPOINTS_PATH_1=checkpoints/${EXPER_NAME}/model_G_final.pth
-LOAD_CHECKPOINTS_PATH_2=checkpoints/${EXPER_NAME}/model_G_final.pth
+LOAD_CHECKPOINTS_PATH_1=checkpoints/affine_image240_ep20_b4_200726/model_G_final.pth
+LOAD_CHECKPOINTS_PATH_2=checkpoints/tps_image240_ep20_b4_200726/model_G_final.pth
 rm -rf results/${EXPER_NAME}
 rm -rf tensorboard/${EXPER_NAME}_test
 if [ ${EXPER_NAME} = "debug" ] ; then

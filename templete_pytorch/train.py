@@ -192,6 +192,12 @@ if __name__ == '__main__':
             # 学習過程の表示
             #====================================================
             if( step == 0 or ( step % args.n_diaplay_step == 0 ) ):
+                # lr
+                for param_group in optimizer_G.param_groups:
+                    lr = param_group['lr']
+
+                board_train.add_scalar('lr/learning rate', lr, step )
+
                 # loss
                 board_train.add_scalar('G/loss_G', loss_G.item(), step)
                 print( "step={}, loss_G={:.5f}".format(step, loss_G.item()) )

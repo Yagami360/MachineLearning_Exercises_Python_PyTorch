@@ -208,7 +208,7 @@ if __name__ == '__main__':
             theta2 = model_G_2( warp_image1, image_t )
 
             # 幾何学的変換モデルを用いて変換パラメータで変形
-            warp_image2, _ = geo_transform_1( warp_image1, theta2 )
+            warp_image2, _ = geo_transform_2( warp_image1, theta2 )
 
         # 推論結果の保存
         save_image_w_norm( warp_image2, os.path.join( args.results_dir, args.exper_name, "stage2", image_s_name[0].split(".")[0] + "-" + image_t_name[0].split(".")[0] + ".png" ) )
