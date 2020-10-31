@@ -22,7 +22,7 @@ from tensorboardX import SummaryWriter
 
 # 自作モジュール
 from data.dataset import TempleteDataset, TempleteDataLoader
-from models.networks import Pix2PixHD, Pix2PixHDAdaIN
+from models.generators import Pix2PixHDGenerator, Pix2PixHDAdaINGenerator
 from models.discriminators import PatchGANDiscriminator
 from models.losses import VGGLoss, LSGANLoss
 from utils.utils import save_checkpoint, load_checkpoint
@@ -42,7 +42,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size_valid', type=int, default=1, help="バッチサイズ")
     parser.add_argument('--image_height', type=int, default=128, help="入力画像の高さ（pixel単位）")
     parser.add_argument('--image_width', type=int, default=128, help="入力画像の幅（pixel単位）")
-    parser.add_argument('--lr', type=float, default=0.007, help="学習率")
+    parser.add_argument('--lr', type=float, default=0.0001, help="学習率")
     parser.add_argument('--beta1', type=float, default=0.5, help="学習率の減衰率")
     parser.add_argument('--beta2', type=float, default=0.999, help="学習率の減衰率")
     parser.add_argument("--n_diaplay_step", type=int, default=100,)
@@ -136,13 +136,13 @@ if __name__ == '__main__':
     # モデルの構造を定義する。
     #================================
     if( args.net_G_type == "pix2pixhd" ):
-        model_G = Pix2PixHD(input_nc = 3, output_nc = 3).to(device)
+        model_G = Pix2PixHDGenerator(input_nc = 3, output_nc = 3).to(device)
     elif( args.net_G_type == "pix2pixhd_adain" ):
-        model_G = Pix2PixHDAdaIN(input_nc = 3, output_nc = 3).to(device)
+        model_G = Pix2PixHDAdaINGenerator(input_nc = 3, output_nc = 3).to(device)
     else:
         NotImplementedError()
 
-    model_D = PatchGANDiscriminator( n_in_channels = 3, n_fmaps = 64 ).to( device )
+    model_D = PatchGANDiscriminator( n_in_channels = 3+3, n_fmaps = 64 ).to( device )
     if( args.debug ):
         print( "model_G\n", model_G )
         print( "model_D\n", model_D )
@@ -205,8 +205,8 @@ if __name__ == '__main__':
                 param.requires_grad = True
 
             # 学習用データをモデルに流し込む
-            d_real = model_D( target )
-            d_fake = model_D( output.detach() )
+            d_real = model_D( torch.cat([image, target], dim=1) )
+            d_fake = model_D( torch.cat([image, output.detach()], dim=1) )
             if( args.debug and n_print > 0 ):
                 print( "d_real.shape :", d_real.shape )
                 print( "d_fake.shape :", d_fake.shape )
@@ -289,8 +289,8 @@ if __name__ == '__main__':
                         output = model_G( image )
 
                     with torch.no_grad():
-                        d_real = model_D( target )
-                        d_fake = model_D( output.detach() )
+                        d_real = model_D( torch.cat([image, target], dim=1) )
+                        d_fake = model_D( torch.cat([image, output.detach()], dim=1) )
 
                     # 損失関数を計算する
                     loss_l1 = loss_l1_fn( target, output )

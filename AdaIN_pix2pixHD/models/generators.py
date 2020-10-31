@@ -7,6 +7,8 @@ import torch.nn as nn
 from torch.nn import functional as F
 import torchvision
 
+from models.adain import AdaIN, AdaINResBlock
+
 def weights_init(m):
     classname = m.__class__.__name__
     if classname.find('Conv') != -1:
@@ -58,10 +60,10 @@ class ResnetBlock(nn.Module):
         return out
 
 
-class Pix2PixHD( nn.Module ):
+class Pix2PixHDGenerator( nn.Module ):
     def __init__( self, input_nc = 3, output_nc = 3, ngf=64, n_downsampling=3, n_blocks=9, norm_layer=nn.BatchNorm2d, padding_type='reflect'):
         assert(n_blocks >= 0)
-        super(Pix2PixHD, self).__init__()        
+        super(Pix2PixHDGenerator, self).__init__()        
         activation = nn.ReLU(True)        
 
         model = [nn.ReflectionPad2d(3), nn.Conv2d(input_nc, ngf, kernel_size=7, padding=0), norm_layer(ngf), activation]
@@ -87,72 +89,53 @@ class Pix2PixHD( nn.Module ):
         return self.model(input)        
         
 
-class AdaIN(nn.Module):
-    def __init__( self, n_in_channles = 3, n_out_channles = 3 , net_type = "conv" ):
-        super(AdaIN, self).__init__()
-        self.net_type = net_type
-        self.batch_norm = nn.BatchNorm2d(n_in_channles)
-        if( self.net_type == "fc" ):
-            self.gamma = nn.Linear(n_in_channles, n_out_channles)
-            self.beta = nn.Linear(n_in_channles, n_out_channles)
-        elif( self.net_type == "conv" ):
-            self.gamma = nn.Conv2d(n_in_channles, n_out_channles, kernel_size=3, stride=1, padding=1)
-            self.beta = nn.Conv2d(n_in_channles, n_out_channles, kernel_size=3, stride=1, padding=1)
-        else:
-            NotImplementedError()
-
-        return
-
-    def forward(self, input):
-        h_act = self.batch_norm(input)
-
-        if( self.net_type == "fc" ):
-            input_fc = torch.flatten(input)
-            gamma = self.gamma(input_fc)
-            beta = self.beta(input_fc)
-            gamma = gamma.view(input.shape)
-            beta = beta.view(input.shape)
-
-        elif( self.net_type == "conv" ):
-            gamma = self.gamma(input)
-            beta = self.beta(input)
-
-        print( "gamma.shape", gamma.shape )     # torch.Size([B, 3, 128, 128]) 
-        print( "beta.shape", beta.shape )       # torch.Size([B, 3, 128, 128]) 
-        h_after = gamma * h_act + beta
-        print( "h_after.shape", h_after.shape )
-        return h_after
-
-class Pix2PixHDAdaIN( nn.Module ):
-    def __init__( self, input_nc = 3, output_nc = 3, ngf=64, n_downsampling=3, n_blocks=9, norm_layer=nn.BatchNorm2d, padding_type='reflect'):
+class Pix2PixHDAdaINGenerator( nn.Module ):
+    def __init__( self, input_nc = 3, output_nc = 3, ngf=64, n_downsampling=3, n_blocks=9, norm_layer=nn.BatchNorm2d, padding_type='reflect', resize_type = "nearest"):
         assert(n_blocks >= 0)
-        super(Pix2PixHDAdaIN, self).__init__()        
-        activation = nn.ReLU(True)        
+        super(Pix2PixHDAdaINGenerator, self).__init__()        
+        self.n_downsampling = n_downsampling
 
-        model = [nn.ReflectionPad2d(3), nn.Conv2d(input_nc, ngf, kernel_size=7, padding=0), norm_layer(ngf), activation]
-        ### downsample
+        activation = nn.ReLU(True)
+        # encoder
+        encoder = [nn.ReflectionPad2d(3), nn.Conv2d(input_nc, ngf, kernel_size=7, padding=0), norm_layer(ngf), activation]
         for i in range(n_downsampling):
             mult = 2**i
-            model += [nn.Conv2d(ngf * mult, ngf * mult * 2, kernel_size=3, stride=2, padding=1), norm_layer(ngf * mult * 2), activation]
+            encoder += [nn.Conv2d(ngf * mult, ngf * mult * 2, kernel_size=3, stride=2, padding=1), norm_layer(ngf * mult * 2), activation]
 
-        ### resnet blocks
+        self.encoder = nn.Sequential(*encoder)
+
+        # bottle_neck / resnet blocks
+        bottle_neck = []
         mult = 2**n_downsampling
         for i in range(n_blocks):
-            model += [ResnetBlock(ngf * mult, padding_type=padding_type, activation=activation, norm_layer=norm_layer)]
+            bottle_neck += [ResnetBlock(ngf * mult, padding_type=padding_type, activation=activation, norm_layer=norm_layer)]
         
-        ### upsample         
-        for i in range(n_downsampling):
-            mult = 2**(n_downsampling - i)
-            model += [nn.ConvTranspose2d(ngf * mult, int(ngf * mult / 2), kernel_size=3, stride=2, padding=1, output_padding=1), norm_layer(int(ngf * mult / 2)), activation]
+        self.bottle_neck = nn.Sequential(*bottle_neck)
 
-        model += [nn.ReflectionPad2d(3), nn.Conv2d(ngf, output_nc, kernel_size=7, padding=0), nn.Tanh()]        
-        self.model = nn.Sequential(*model)
+        # decoder / upsample
+        self.decoder = nn.ModuleDict(
+            { "decoder_{}".format(i) : AdaINResBlock(
+                n_hin_channles = int(ngf * 2**(n_downsampling - i)), 
+                n_hout_channles = int(ngf * 2**(n_downsampling - i) / 2), 
+                n_in_channles = input_nc,
+                resize_type = resize_type
+            ) for i in range(n_downsampling) }
+        )
 
-        # AdaIN
-        self.adain = AdaIN( n_in_channles = 3, n_out_channles = 3 , net_type = "conv" )
+        # output layer
+        self.output_layer = nn.Sequential(
+            nn.ReflectionPad2d(3), nn.Conv2d(ngf, output_nc, kernel_size=7, padding=0), nn.Tanh()
+        )
         return
 
     def forward(self, input):
-        h_after = self.adain(input)
-        output = self.model(h_after)
+        output = self.encoder(input)
+        output = self.bottle_neck(output)
+        #print( "[bottle_neck] output.shape : ", output.shape )
+        for i in range(self.n_downsampling):
+            output = self.decoder["decoder_{}".format(i)](output, input)
+            output = F.interpolate(output, scale_factor=2, mode='bilinear', align_corners=True)
+            #print( "[decoder] output.shape : ", output.shape )
+
+        output = self.output_layer(output)
         return output

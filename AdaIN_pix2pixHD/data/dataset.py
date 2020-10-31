@@ -45,7 +45,7 @@ class TempleteDataset(data.Dataset):
                     transforms.Resize( (args.image_height, args.image_width), interpolation=Image.LANCZOS ),
                     transforms.RandomHorizontalFlip(),
                     transforms.RandomVerticalFlip(),
-                    transforms.RandomAffine( degrees = (-10,10),  translate=(0.0, 0.0), scale = (1.00,1.00), resample=Image.BICUBIC ),
+                    transforms.RandomAffine( degrees = (-10,10),  translate=(5.0, 5.0), scale = (0.80,1.25), resample=Image.BICUBIC ),
                     transforms.CenterCrop( size = (args.image_height, args.image_width) ),
                     transforms.ToTensor(),
                     transforms.Normalize( [0.5,0.5,0.5], [0.5,0.5,0.5] ),
@@ -57,7 +57,7 @@ class TempleteDataset(data.Dataset):
                     transforms.Resize( (args.image_height, args.image_width), interpolation=Image.NEAREST ),
                     transforms.RandomHorizontalFlip(),
                     transforms.RandomVerticalFlip(),
-                    transforms.RandomAffine( degrees = (-10,10),  translate=(0.0, 0.0), scale = (1.00,1.00), resample=Image.NEAREST ),
+                    transforms.RandomAffine( degrees = (-10,10),  translate=(5.0, 5.0), scale = (0.80,1.25), resample=Image.NEAREST ),
                     transforms.CenterCrop( size = (args.image_height, args.image_width) ),
                     transforms.ToTensor(),
                     transforms.Normalize( [0.5], [0.5] ),
@@ -69,7 +69,7 @@ class TempleteDataset(data.Dataset):
                     transforms.Resize( (args.image_height, args.image_width), interpolation=Image.NEAREST ),
                     transforms.RandomHorizontalFlip(),
                     transforms.RandomVerticalFlip(),
-                    transforms.RandomAffine( degrees = (-10,10),  translate=(0.0, 0.0), scale = (1.00,1.00), resample=Image.NEAREST ),
+                    transforms.RandomAffine( degrees = (-10,10),  translate=(5.0, 5.0), scale = (0.80,1.25), resample=Image.NEAREST ),
                     transforms.CenterCrop( size = (args.image_height, args.image_width) ),
                 ]
             )
