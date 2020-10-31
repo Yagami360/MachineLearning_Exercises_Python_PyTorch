@@ -21,7 +21,8 @@ NETWORK_G_TYPE=global
 # Pix2Pix-HD
 #-------------------
 mkdir -p ${PWD}/_logs
-EXEP_NAME=Pix2PixHD_train_networkG_${NETWORK_G_TYPE}_gantype_${GAN_TYPE}_Epoch${N_EPOCHES}_200120_1
+EXEP_NAME=debug
+#EXEP_NAME=Pix2PixHD_train_networkG_${NETWORK_G_TYPE}_gantype_${GAN_TYPE}_Epoch${N_EPOCHES}_200120_1
 TENSOR_BOARD_DIR=../tensorboard
 if [ -d "${TENSOR_BOARD_DIR}/${EXEP_NAME}" ] ; then
     rm -r ${TENSOR_BOARD_DIR}/${EXEP_NAME}
@@ -50,6 +51,9 @@ python train.py \
     --n_dis 3 \
     --gan_type ${GAN_TYPE} \
     --networkG_type ${NETWORK_G_TYPE} \
-    --debug > _logs/${EXEP_NAME}.out
+    --debug
 
-sudo poweroff
+if [ $1 = "poweroff" ] ; then
+    sudo poweroff
+    sudo shutdown -h now
+fi

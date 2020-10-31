@@ -20,6 +20,7 @@
 __pycache__
 dataset
 _tmp/
+_Old/
 
 templete_pytorch/results/*
 !templete_pytorch/dataset
