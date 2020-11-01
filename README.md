@@ -60,9 +60,11 @@ nvidia-docker2 で動作します。
 1. Graph Convolutional Networks
     1. [GCN_simple_classication](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GCN_simple_classication)
     1. [GCN_graphonomy](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GCN_graphonomy)
-- 強化学習
+1. 正則化層
+    1. [AdaIN_SPADE_pix2pixHD](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/AdaIN_SPADE_pix2pixHD)
+1. 強化学習
     1. [【外部リンク】ReinforcementLearning](https://github.com/Yagami360/ReinforcementLearning_Exercises)
-- 仮想試着モデル
+1. 仮想試着モデル
     1. [【外部リンク】virtual-try-on_exercises_pytorch](https://github.com/Yagami360/virtual-try-on_exercises_pytorch)
 
 ## ■ 参考文献＆サイト
