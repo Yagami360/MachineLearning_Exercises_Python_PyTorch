@@ -21,17 +21,18 @@ from torchvision.utils import save_image
 from tensorboardX import SummaryWriter
 
 # 自作モジュール
-from data.dataset import TempleteDataset, TempleteDataLoader
-from models.generators import Pix2PixHDGenerator, Pix2PixHDAdaINGenerator
+from data.zalando_dataset import ZalandoDataset, ZalandoDataLoader
+from models.generators import Pix2PixHDGenerator, Pix2PixHDAdaINGenerator, Pix2PixHDSPADEGenerator
 from models.discriminators import PatchGANDiscriminator
 from models.losses import VGGLoss, LSGANLoss
 from utils.utils import save_checkpoint, load_checkpoint
 from utils.utils import board_add_image, board_add_images, save_image_w_norm
+from utils.decode_labels import decode_labels_tsr
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--exper_name", default="adain_sample", help="実験名")
-    parser.add_argument("--dataset_dir", type=str, default="dataset/templete_dataset")
+    parser.add_argument("--dataset_dir", type=str, default="dataset/zalando_dataset")
     parser.add_argument("--results_dir", type=str, default="results")
     parser.add_argument('--save_checkpoints_dir', type=str, default="checkpoints", help="モデルの保存ディレクトリ")
     parser.add_argument('--load_checkpoints_G_path', type=str, default="", help="生成器モデルの読み込みファイルのパス")
@@ -42,6 +43,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size_valid', type=int, default=1, help="バッチサイズ")
     parser.add_argument('--image_height', type=int, default=128, help="入力画像の高さ（pixel単位）")
     parser.add_argument('--image_width', type=int, default=128, help="入力画像の幅（pixel単位）")
+    parser.add_argument('--n_classes', type=int, default=20, help="セグメンテーション画像のラベル数")
     parser.add_argument('--lr', type=float, default=0.0001, help="学習率")
     parser.add_argument('--beta1', type=float, default=0.5, help="学習率の減衰率")
     parser.add_argument('--beta2', type=float, default=0.999, help="学習率の減衰率")
@@ -51,7 +53,7 @@ if __name__ == '__main__':
     parser.add_argument("--val_rate", type=float, default=0.01)
     parser.add_argument('--n_display_valid', type=int, default=8, help="valid データの tensorboard への表示数")
     parser.add_argument('--data_augument', action='store_true')
-    parser.add_argument('--net_G_type', choices=['pix2pixhd', 'pix2pixhd_adain'], default="pix2pixhd", help="ネットワークの種類")
+    parser.add_argument('--net_G_type', choices=['pix2pixhd', 'pix2pixhd_adain', "pix2pixhd_spade"], default="pix2pixhd", help="ネットワークの種類")
     parser.add_argument('--lambda_l1', type=float, default=10.0, help="L1損失関数の係数値")
     parser.add_argument('--lambda_vgg', type=float, default=10.0, help="VGG perceptual loss_G の係数値")
     parser.add_argument('--lambda_adv', type=float, default=1.0, help="Adv loss_G の係数値")
@@ -118,7 +120,7 @@ if __name__ == '__main__':
     # データセットの読み込み
     #================================    
     # 学習用データセットとテスト用データセットの設定
-    ds_train = TempleteDataset( args, args.dataset_dir, datamode = "train", image_height = args.image_height, image_width = args.image_width, data_augument = args.data_augument, debug = args.debug )
+    ds_train = ZalandoDataset( args, args.dataset_dir, datamode = "train", image_height = args.image_height, image_width = args.image_width, n_classes = args.n_classes, data_augument = args.data_augument, debug = args.debug )
 
     # 学習用データセットとテスト用データセットの設定
     index = np.arange(len(ds_train))
@@ -136,13 +138,15 @@ if __name__ == '__main__':
     # モデルの構造を定義する。
     #================================
     if( args.net_G_type == "pix2pixhd" ):
-        model_G = Pix2PixHDGenerator(input_nc = 3, output_nc = 3).to(device)
+        model_G = Pix2PixHDGenerator(input_nc = args.n_classes, output_nc = 3).to(device)
     elif( args.net_G_type == "pix2pixhd_adain" ):
-        model_G = Pix2PixHDAdaINGenerator(input_nc = 3, output_nc = 3).to(device)
+        model_G = Pix2PixHDAdaINGenerator(input_nc = args.n_classes, output_nc = 3).to(device)
+    elif( args.net_G_type == "pix2pixhd_spade" ):
+        model_G = Pix2PixHDSPADEGenerator(input_nc = args.n_classes, output_nc = 3).to(device)
     else:
         NotImplementedError()
 
-    model_D = PatchGANDiscriminator( n_in_channels = 3+3, n_fmaps = 64 ).to( device )
+    model_D = PatchGANDiscriminator( n_in_channels = 3+args.n_classes, n_fmaps = 64 ).to( device )
     if( args.debug ):
         print( "model_G\n", model_G )
         print( "model_D\n", model_D )
@@ -178,22 +182,22 @@ if __name__ == '__main__':
             model_D.train()
 
             # 一番最後のミニバッチループで、バッチサイズに満たない場合は無視する（後の計算で、shape の不一致をおこすため）
-            if inputs["image"].shape[0] != args.batch_size:
+            if inputs["pose_parse_onehot"].shape[0] != args.batch_size:
                 break
 
             # ミニバッチデータを GPU へ転送
-            image = inputs["image"].to(device)
-            target = inputs["target"].to(device)
+            pose_parse_onehot = inputs["pose_parse_onehot"].to(device)
+            pose_parse_onehot_vis = decode_labels_tsr(pose_parse_onehot)
+            pose_gt = inputs["pose_gt"].to(device)
+
             if( args.debug and n_print > 0):
-                print( "image.shape : ", image.shape )
-                print( "target.shape : ", target.shape )
-                print( "target.dtype : ", target.dtype )
-                print( "torch.min(target)={}, torch.max(target)={} ".format(torch.min(target), torch.max(target) ) )
+                print( "[pose_parse_onehot] shape={}, dtype={}, min={}, max={} : ".format(pose_parse_onehot.shape, pose_parse_onehot.dtype, torch.min(pose_parse_onehot), torch.max(pose_parse_onehot) ) )
+                print( "[pose_gt] shape={}, dtype={}, min={}, max={} : ".format(pose_gt.shape, pose_gt.dtype, torch.min(pose_gt), torch.max(pose_gt) ) )
 
             #----------------------------------------------------
             # 生成器 の forword 処理
             #----------------------------------------------------
-            output = model_G( image )
+            output = model_G( pose_parse_onehot )
             if( args.debug and n_print > 0 ):
                 print( "output.shape : ", output.shape )
 
@@ -205,8 +209,8 @@ if __name__ == '__main__':
                 param.requires_grad = True
 
             # 学習用データをモデルに流し込む
-            d_real = model_D( torch.cat([image, target], dim=1) )
-            d_fake = model_D( torch.cat([image, output.detach()], dim=1) )
+            d_real = model_D( torch.cat([pose_parse_onehot, pose_gt], dim=1) )
+            d_fake = model_D( torch.cat([pose_parse_onehot, output.detach()], dim=1) )
             if( args.debug and n_print > 0 ):
                 print( "d_real.shape :", d_real.shape )
                 print( "d_fake.shape :", d_fake.shape )
@@ -227,8 +231,8 @@ if __name__ == '__main__':
             # 生成器の更新処理
             #----------------------------------------------------
             # 損失関数を計算する
-            loss_l1 = loss_l1_fn( target, output )
-            loss_vgg = loss_vgg_fn( target, output )
+            loss_l1 = loss_l1_fn( pose_gt, output )
+            loss_vgg = loss_vgg_fn( pose_gt, output )
             loss_adv = loss_adv_fn.forward_G( d_fake )
             loss_G =  args.lambda_l1 * loss_l1 + args.lambda_vgg * loss_vgg + args.lambda_adv * loss_adv
 
@@ -261,7 +265,7 @@ if __name__ == '__main__':
                 
                 # visual images
                 visuals = [
-                    [ image, target, output ],
+                    [ pose_parse_onehot_vis, pose_gt, output ],
                 ]
                 board_add_images(board_train, 'train', visuals, step+1)
 
@@ -277,24 +281,25 @@ if __name__ == '__main__':
                     model_D.eval()            
 
                     # 一番最後のミニバッチループで、バッチサイズに満たない場合は無視する（後の計算で、shape の不一致をおこすため）
-                    if inputs["image"].shape[0] != args.batch_size_valid:
+                    if inputs["pose_parse_onehot"].shape[0] != args.batch_size_valid:
                         break
 
                     # ミニバッチデータを GPU へ転送
-                    image = inputs["image"].to(device)
-                    target = inputs["target"].to(device)
+                    pose_parse_onehot = inputs["pose_parse_onehot"].to(device)
+                    pose_parse_onehot_vis = decode_labels_tsr(pose_parse_onehot)
+                    pose_gt = inputs["pose_gt"].to(device)
 
                     # 推論処理
                     with torch.no_grad():
-                        output = model_G( image )
+                        output = model_G( pose_parse_onehot )
 
                     with torch.no_grad():
-                        d_real = model_D( torch.cat([image, target], dim=1) )
-                        d_fake = model_D( torch.cat([image, output.detach()], dim=1) )
+                        d_real = model_D( torch.cat([pose_parse_onehot, pose_gt], dim=1) )
+                        d_fake = model_D( torch.cat([pose_parse_onehot, output.detach()], dim=1) )
 
                     # 損失関数を計算する
-                    loss_l1 = loss_l1_fn( target, output )
-                    loss_vgg = loss_vgg_fn( target, output )
+                    loss_l1 = loss_l1_fn( pose_gt, output )
+                    loss_vgg = loss_vgg_fn( pose_gt, output )
                     loss_adv = loss_adv_fn.forward_G( d_fake )
                     loss_G =  args.lambda_l1 * loss_l1 + args.lambda_vgg * loss_vgg + args.lambda_adv * loss_adv
 
@@ -312,7 +317,7 @@ if __name__ == '__main__':
                     if( iter <= args.n_display_valid ):
                         # visual images
                         visuals = [
-                            [ image, target, output ],
+                            [ pose_parse_onehot_vis, pose_gt, output ],
                         ]
                         board_add_images(board_valid, 'valid/{}'.format(iter), visuals, step+1)
 

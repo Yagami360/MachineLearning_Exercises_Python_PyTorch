@@ -24,6 +24,7 @@ _Old/
 
 templete_pytorch/results/*
 !templete_pytorch/dataset
+!AdaIN_SPADE_pix2pixHD/dataset
 
 GAN_RGAN_PyTorch/train_all.sh
 GAN_WGAN_PyTorch/train2.py
