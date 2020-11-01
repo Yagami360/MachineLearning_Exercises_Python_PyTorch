@@ -32,7 +32,7 @@ from utils.decode_labels import decode_labels_tsr
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--exper_name", default="adain_sample", help="実験名")
-    parser.add_argument("--dataset_dir", type=str, default="dataset/zalando_dataset")
+    parser.add_argument("--dataset_dir", type=str, default="dataset/zalando_dataset_n20")
     parser.add_argument("--results_dir", type=str, default="results")
     parser.add_argument('--save_checkpoints_dir', type=str, default="checkpoints", help="モデルの保存ディレクトリ")
     parser.add_argument('--load_checkpoints_G_path', type=str, default="", help="生成器モデルの読み込みファイルのパス")
@@ -272,7 +272,7 @@ if __name__ == '__main__':
             #====================================================
             # valid データでの処理
             #====================================================
-            if( step != 0 and ( step % args.n_display_valid_step == 0 ) ):
+            if( step % args.n_display_valid_step == 0 ):
                 loss_G_total, loss_l1_total, loss_vgg_total, loss_adv_total = 0, 0, 0, 0
                 loss_D_total, loss_D_real_total, loss_D_fake_total = 0, 0, 0
                 n_valid_loop = 0
