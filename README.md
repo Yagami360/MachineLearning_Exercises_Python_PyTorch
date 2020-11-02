@@ -57,11 +57,13 @@ nvidia-docker2 で動作します。
     1. [ProgressiveGAN](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_PGGAN_PyTorch)
     1. [Pix2Pix](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_Pix2Pix_PyTorch)
     1. [Pix2Pix-HD](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_Pix2PixHD_PyTorch)
-1. Graph Convolutional Networks
+1. Graph Convolutional Networks (GCN)
     1. [GCN_simple_classication](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GCN_simple_classication)
     1. [GCN_graphonomy](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GCN_graphonomy)
 1. 正則化層
     1. [AdaIN_SPADE_pix2pixHD](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/AdaIN_SPADE_pix2pixHD)
+1. Attention 機構
+    1. [Attention_pix2pixHD](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/Attention_pix2pixHD)
 1. 強化学習
     1. [【外部リンク】ReinforcementLearning](https://github.com/Yagami360/ReinforcementLearning_Exercises)
 1. 仮想試着モデル

@@ -16,7 +16,8 @@ import torch.utils.data as data
 import torchvision.transforms as transforms
 from torchvision.utils import save_image
 
-from utils import set_random_seed
+from data.transforms import RandomErasing
+from utils import set_random_seed, numerical_sort
 
 IMG_EXTENSIONS = (
     '.jpg', '.jpeg', '.png', '.ppm', '.bmp', '.pgm', '.tif',
@@ -35,8 +36,10 @@ class TempleteDataset(data.Dataset):
 
         self.image_dir = os.path.join( root_dir, "image" )
         self.target_dir = os.path.join( root_dir, "target" )
-        self.image_names = sorted( [f for f in os.listdir(self.image_dir) if f.endswith(IMG_EXTENSIONS)], key=lambda s: int(re.search(r'\d+', s).group()) )
-        self.target_names = sorted( [f for f in os.listdir(self.target_dir) if f.endswith(IMG_EXTENSIONS)], key=lambda s: int(re.search(r'\d+', s).group()) )
+        #self.image_names = sorted( [f for f in os.listdir(self.image_dir) if f.endswith(IMG_EXTENSIONS)], key=lambda s: int(re.search(r'\d+', s).group()) )
+        #self.target_names = sorted( [f for f in os.listdir(self.target_dir) if f.endswith(IMG_EXTENSIONS)], key=lambda s: int(re.search(r'\d+', s).group()) )
+        self.image_names = sorted( [f for f in os.listdir(self.image_dir) if f.endswith(IMG_EXTENSIONS)], key=numerical_sort )
+        self.target_names = sorted( [f for f in os.listdir(self.target_dir) if f.endswith(IMG_EXTENSIONS)], key=numerical_sort )
 
         # transform
         if( data_augument ):
@@ -46,9 +49,12 @@ class TempleteDataset(data.Dataset):
                     transforms.RandomHorizontalFlip(),
                     transforms.RandomVerticalFlip(),
                     transforms.RandomAffine( degrees = (-10,10),  translate=(0.0, 0.0), scale = (1.00,1.00), resample=Image.BICUBIC ),
+                    transforms.RandomPerspective(),
+                    transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5),
                     transforms.CenterCrop( size = (args.image_height, args.image_width) ),
                     transforms.ToTensor(),
                     transforms.Normalize( [0.5,0.5,0.5], [0.5,0.5,0.5] ),
+                    RandomErasing( probability = 0.5, sl = 0.02, sh = 0.2, r1 = 0.3, mean=[0.5, 0.5, 0.5] ),
                 ]
             )
 
@@ -58,9 +64,12 @@ class TempleteDataset(data.Dataset):
                     transforms.RandomHorizontalFlip(),
                     transforms.RandomVerticalFlip(),
                     transforms.RandomAffine( degrees = (-10,10),  translate=(0.0, 0.0), scale = (1.00,1.00), resample=Image.NEAREST ),
+                    transforms.RandomPerspective(),
+                    transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5),
                     transforms.CenterCrop( size = (args.image_height, args.image_width) ),
                     transforms.ToTensor(),
                     transforms.Normalize( [0.5], [0.5] ),
+                    RandomErasing( probability = 0.5, sl = 0.02, sh = 0.2, r1 = 0.3, mean=[0.5, 0.5, 0.5] ),
                 ]
             )
 
@@ -70,7 +79,10 @@ class TempleteDataset(data.Dataset):
                     transforms.RandomHorizontalFlip(),
                     transforms.RandomVerticalFlip(),
                     transforms.RandomAffine( degrees = (-10,10),  translate=(0.0, 0.0), scale = (1.00,1.00), resample=Image.NEAREST ),
+                    transforms.RandomPerspective(),
+                    transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5),
                     transforms.CenterCrop( size = (args.image_height, args.image_width) ),
+                    RandomErasing( probability = 0.5, sl = 0.02, sh = 0.2, r1 = 0.3, mean=[0.5, 0.5, 0.5] ),
                 ]
             )
         else:

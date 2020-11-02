@@ -16,28 +16,28 @@ import torch.utils.data as data
 import torchvision.transforms as transforms
 from torchvision.utils import save_image
 
-from utils import set_random_seed, onehot_encode_tsr
+from data.transforms import RandomErasing
+from utils import set_random_seed, numerical_sort
 
 IMG_EXTENSIONS = (
     '.jpg', '.jpeg', '.png', '.ppm', '.bmp', '.pgm', '.tif',
     '.JPG', '.JPEG', '.PNG', '.PPM', '.BMP', '.PGM', '.TIF',
 )
 
-class ZalandoDataset(data.Dataset):
-    def __init__(self, args, root_dir, datamode = "train", image_height = 128, image_width = 128, n_classes = 20, data_augument = False, debug = False ):
-        super(ZalandoDataset, self).__init__()
+class Neutral2HappinessDataset(data.Dataset):
+    def __init__(self, args, root_dir, datamode = "train", image_height = 128, image_width = 128, data_augument = False, debug = False ):
+        super(Neutral2HappinessDataset, self).__init__()
         self.args = args
         self.datamode = datamode
         self.data_augument = data_augument
         self.image_height = image_height
         self.image_width = image_width
-        self.n_classes = n_classes
         self.debug = debug
 
-        self.pose_dir = os.path.join( root_dir, "pose" )
-        self.pose_parsing_dir = os.path.join( root_dir, "pose_parsing" )
-        self.pose_names = sorted( [f for f in os.listdir(self.pose_dir) if f.endswith(IMG_EXTENSIONS)], key=lambda s: int(re.search(r'\d+', s).group()) )
-        self.pose_parsing_names = sorted( [f for f in os.listdir(self.pose_parsing_dir) if f.endswith(IMG_EXTENSIONS)], key=lambda s: int(re.search(r'\d+', s).group()) )
+        self.domainA_dir = os.path.join( root_dir, "domainA" )
+        self.domainB_dir = os.path.join( root_dir, "domainB" )
+        self.domainA_names = sorted( [f for f in os.listdir(self.domainA_dir) if f.endswith(IMG_EXTENSIONS)], key=numerical_sort )
+        self.domainB_names = sorted( [f for f in os.listdir(self.domainB_dir) if f.endswith(IMG_EXTENSIONS)], key=numerical_sort )
 
         # transform
         if( data_augument ):
@@ -46,10 +46,13 @@ class ZalandoDataset(data.Dataset):
                     transforms.Resize( (args.image_height, args.image_width), interpolation=Image.LANCZOS ),
                     transforms.RandomHorizontalFlip(),
                     transforms.RandomVerticalFlip(),
-                    transforms.RandomAffine( degrees = (-10,10),  translate=(0.25,0.25), scale = (0.80,1.25), resample=Image.BICUBIC ),
+                    transforms.RandomAffine( degrees = (-10,10),  translate=(0.25, 0.25), scale = (0.80,1.25), resample=Image.BICUBIC ),
+                    transforms.RandomPerspective(),
+                    transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5),
                     transforms.CenterCrop( size = (args.image_height, args.image_width) ),
                     transforms.ToTensor(),
                     transforms.Normalize( [0.5,0.5,0.5], [0.5,0.5,0.5] ),
+                    RandomErasing( probability = 0.5, sl = 0.02, sh = 0.2, r1 = 0.3, mean=[0.5, 0.5, 0.5] ),
                 ]
             )
 
@@ -58,10 +61,13 @@ class ZalandoDataset(data.Dataset):
                     transforms.Resize( (args.image_height, args.image_width), interpolation=Image.NEAREST ),
                     transforms.RandomHorizontalFlip(),
                     transforms.RandomVerticalFlip(),
-                    transforms.RandomAffine( degrees = (-10,10),  translate=(0.25,0.2), scale = (0.80,1.25), resample=Image.NEAREST ),
+                    transforms.RandomAffine( degrees = (-10,10),  translate=(0.25, 0.25), scale = (0.80,1.25), resample=Image.NEAREST ),
+                    transforms.RandomPerspective(),
+                    transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5),
                     transforms.CenterCrop( size = (args.image_height, args.image_width) ),
                     transforms.ToTensor(),
                     transforms.Normalize( [0.5], [0.5] ),
+                    RandomErasing( probability = 0.5, sl = 0.02, sh = 0.2, r1 = 0.3, mean=[0.5, 0.5, 0.5] ),
                 ]
             )
 
@@ -70,8 +76,11 @@ class ZalandoDataset(data.Dataset):
                     transforms.Resize( (args.image_height, args.image_width), interpolation=Image.NEAREST ),
                     transforms.RandomHorizontalFlip(),
                     transforms.RandomVerticalFlip(),
-                    transforms.RandomAffine( degrees = (-10,10),  translate=(0.25,0.2), scale = (0.80,1.25), resample=Image.NEAREST ),
+                    transforms.RandomAffine( degrees = (-10,10),  translate=(0.25, 0.25), scale = (0.80,1.25), resample=Image.NEAREST ),
+                    transforms.RandomPerspective(),
+                    transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5),
                     transforms.CenterCrop( size = (args.image_height, args.image_width) ),
+                    RandomErasing( probability = 0.5, sl = 0.02, sh = 0.2, r1 = 0.3, mean=[0.5, 0.5, 0.5] ),
                 ]
             )
         else:
@@ -99,54 +108,55 @@ class ZalandoDataset(data.Dataset):
             )
 
         if( self.debug ):
-            print( "len(self.pose_names) :", len(self.pose_names))
-            print( "self.pose_names[0:5] :", self.pose_names[0:5])
+            print( "len(self.domainA_names) :", len(self.domainA_names))
+            print( "self.domainA_names[0:5] :", self.domainA_names[0:5])
+            print( "self.domainB_names[0:5] :", self.domainB_names[0:5])
 
         return
 
     def __len__(self):
-        return len(self.pose_names)
+        return len(self.domainA_names)
 
     def __getitem__(self, index):
-        pose_name = self.pose_names[index]
+        domainA_name = self.domainA_names[index]
+        domainB_name = self.domainB_names[index]
 
-        # pose
-        if( self.datamode in ["train", "valid"] ):
-            pose_gt = Image.open( os.path.join(self.pose_dir,pose_name) ).convert('RGB')
-            self.seed_da = random.randint(0,10000)
-            if( self.data_augument ):
-                set_random_seed( self.seed_da )
-
-            pose_gt = self.transform(pose_gt)
-
-        # pose paring
-        pose_parsing_pillow = Image.open( os.path.join(self.pose_parsing_dir, pose_name) ).convert('L')
-
+        # domainA
+        domainA = Image.open( os.path.join(self.domainA_dir, domainA_name) ).convert('RGB')
         self.seed_da = random.randint(0,10000)
         if( self.data_augument ):
             set_random_seed( self.seed_da )
 
-        pose_parse_onehot = torch.from_numpy( np.asarray(self.transform_mask_woToTensor(pose_parsing_pillow)).astype("int64") ).unsqueeze(0)
-        pose_parse_onehot = onehot_encode_tsr( pose_parse_onehot, n_classes = self.n_classes ).float()
+        domainA = self.transform(domainA)
+
+        # domainB
+        if( self.datamode in ["train", "valid"] ):
+            domainB_gt = Image.open( os.path.join(self.domainB_dir, domainB_name) ).convert('RGB')
+            self.seed_da = random.randint(0,10000)
+            if( self.data_augument ):
+                set_random_seed( self.seed_da )
+
+            domainB_gt = self.transform(domainB_gt)
 
         if( self.datamode == "train" ):
             results_dict = {
-                "pose_name" : pose_name,
-                "pose_gt" : pose_gt,
-                "pose_parse_onehot" : pose_parse_onehot,
+                "domainA_name" : domainA_name,
+                "domainB_name" : domainB_name,
+                "domainA" : domainA,
+                "domainB_gt" : domainB_gt,
             }
         else:
             results_dict = {
-                "pose_name" : pose_name,
-                "pose_parse_onehot" : pose_parse_onehot,
+                "domainA_name" : domainA_name,
+                "domainA" : domainA,
             }
 
         return results_dict
 
 
-class ZalandoDataLoader(object):
+class Neutral2HappinessDataLoader(object):
     def __init__(self, dataset, batch_size = 1, shuffle = True, n_workers = 4, pin_memory = True):
-        super(ZalandoDataLoader, self).__init__()
+        super(Neutral2HappinessDataLoader, self).__init__()
         self.data_loader = torch.utils.data.DataLoader(
                 dataset, 
                 batch_size = batch_size, 
