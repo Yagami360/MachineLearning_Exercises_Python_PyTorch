@@ -25,20 +25,17 @@ IMG_EXTENSIONS = (
 )
 
 class Neutral2HappinessDataset(data.Dataset):
-    def __init__(self, args, root_dir, datamode = "train", image_height = 128, image_width = 128, data_augument = False, debug = False ):
+    def __init__(self, args, dataset_dir, pairs_file = "train_pairs.csv", datamode = "train", image_height = 128, image_width = 128, data_augument = False, debug = False ):
         super(Neutral2HappinessDataset, self).__init__()
         self.args = args
+        self.dataset_dir = dataset_dir
         self.datamode = datamode
         self.data_augument = data_augument
         self.image_height = image_height
         self.image_width = image_width
         self.debug = debug
-
-        self.domainA_dir = os.path.join( root_dir, "domainA" )
-        self.domainB_dir = os.path.join( root_dir, "domainB" )
-        self.domainA_names = sorted( [f for f in os.listdir(self.domainA_dir) if f.endswith(IMG_EXTENSIONS)], key=numerical_sort )
-        self.domainB_names = sorted( [f for f in os.listdir(self.domainB_dir) if f.endswith(IMG_EXTENSIONS)], key=numerical_sort )
-
+        self.df_pairs = pd.read_csv( os.path.join(self.dataset_dir, pairs_file) )
+        
         # transform
         if( data_augument ):
             self.transform = transforms.Compose(
@@ -108,21 +105,19 @@ class Neutral2HappinessDataset(data.Dataset):
             )
 
         if( self.debug ):
-            print( "len(self.domainA_names) :", len(self.domainA_names))
-            print( "self.domainA_names[0:5] :", self.domainA_names[0:5])
-            print( "self.domainB_names[0:5] :", self.domainB_names[0:5])
+            print( self.df_pairs.head() )
 
         return
 
     def __len__(self):
-        return len(self.domainA_names)
+        return len(self.df_pairs)
 
     def __getitem__(self, index):
-        domainA_name = self.domainA_names[index]
-        domainB_name = self.domainB_names[index]
+        domainA_name = self.df_pairs["domainA_name"].iloc[index]
+        domainB_name = self.df_pairs["domainB_name"].iloc[index]
 
         # domainA
-        domainA = Image.open( os.path.join(self.domainA_dir, domainA_name) ).convert('RGB')
+        domainA = Image.open( os.path.join(self.dataset_dir, "domainA", domainA_name) ).convert('RGB')
         self.seed_da = random.randint(0,10000)
         if( self.data_augument ):
             set_random_seed( self.seed_da )
@@ -131,14 +126,14 @@ class Neutral2HappinessDataset(data.Dataset):
 
         # domainB
         if( self.datamode in ["train", "valid"] ):
-            domainB_gt = Image.open( os.path.join(self.domainB_dir, domainB_name) ).convert('RGB')
+            domainB_gt = Image.open( os.path.join(self.dataset_dir, "domainB", domainB_name) ).convert('RGB')
             self.seed_da = random.randint(0,10000)
             if( self.data_augument ):
                 set_random_seed( self.seed_da )
 
             domainB_gt = self.transform(domainB_gt)
 
-        if( self.datamode == "train" ):
+        if( self.datamode in ["train", "valid"] ):
             results_dict = {
                 "domainA_name" : domainA_name,
                 "domainB_name" : domainB_name,
