@@ -115,10 +115,10 @@ class Neutral2HappinessDataset(data.Dataset):
     def __getitem__(self, index):
         domainA_name = self.df_pairs["domainA_name"].iloc[index]
         domainB_name = self.df_pairs["domainB_name"].iloc[index]
+        self.seed_da = random.randint(0,10000)
 
         # domainA
-        domainA = Image.open( os.path.join(self.dataset_dir, "domainA", domainA_name) ).convert('RGB')
-        self.seed_da = random.randint(0,10000)
+        domainA = Image.open( os.path.join(self.dataset_dir, "domainA", domainA_name) ).convert('RGB')        
         if( self.data_augument ):
             set_random_seed( self.seed_da )
 
@@ -127,7 +127,6 @@ class Neutral2HappinessDataset(data.Dataset):
         # domainB
         if( self.datamode in ["train", "valid"] ):
             domainB_gt = Image.open( os.path.join(self.dataset_dir, "domainB", domainB_name) ).convert('RGB')
-            self.seed_da = random.randint(0,10000)
             if( self.data_augument ):
                 set_random_seed( self.seed_da )
 

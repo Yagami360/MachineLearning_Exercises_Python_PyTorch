@@ -7,7 +7,7 @@ import itertools
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset_dir", type=str, default="../dataset/bu3dfe_neutral2happiness_n12")
-    parser.add_argument("--pairs_list_name", type=str, default="pairs.csv")
+    parser.add_argument("--pairs_list_name", type=str, default="pairs_combine.csv")
     parser.add_argument("--valid_rate", type=float, default=0.10)
     parser.add_argument('--debug', action='store_true')
     args = parser.parse_args()

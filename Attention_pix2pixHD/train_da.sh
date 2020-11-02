@@ -15,8 +15,8 @@ IMAGE_WIDTH=128
 #NET_G_TYPE=pix2pixhd
 NET_G_TYPE=pix2pixhd_attention
 
-EXPER_NAME=debug
-EXPER_NAME=${NET_G_TYPE}_b${BATCH_SIZE}_ep${N_EPOCHES}
+EXPER_NAME=debug_da
+EXPER_NAME=${NET_G_TYPE}_b${BATCH_SIZE}_ep${N_EPOCHES}_da
 rm -rf tensorboard/${EXPER_NAME}
 rm -rf tensorboard/${EXPER_NAME}_valid
 
@@ -30,6 +30,7 @@ python train.py \
     --image_height ${IMAGE_HIGHT} --image_width ${IMAGE_WIDTH} --batch_size ${BATCH_SIZE} \
     --n_diaplay_step ${N_DISPLAY_STEP} --n_display_valid_step ${N_DISPLAY_VALID_STEP} \
     --net_G_type ${NET_G_TYPE} \
+    --data_augument \
     --debug
 
 if [ $1 = "poweroff" ] ; then
