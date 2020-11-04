@@ -122,10 +122,10 @@ class TempleteDataset(data.Dataset):
     def __getitem__(self, index):
         image_name = self.image_names[index]
         target_name = self.target_names[index]
+        self.seed_da = random.randint(0,10000)
 
         # image
         image = Image.open( os.path.join(self.image_dir,image_name) ).convert('RGB')
-        self.seed_da = random.randint(0,10000)
         if( self.data_augument ):
             set_random_seed( self.seed_da )
 
@@ -134,7 +134,7 @@ class TempleteDataset(data.Dataset):
         # target
         if( self.datamode == "train" ):
             target = Image.open( os.path.join(self.target_dir, target_name) )
-            self.seed_da = random.randint(0,10000)
+            #self.seed_da = random.randint(0,10000)
             if( self.data_augument ):
                 set_random_seed( self.seed_da )
 

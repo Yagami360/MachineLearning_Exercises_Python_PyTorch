@@ -64,6 +64,8 @@ nvidia-docker2 で動作します。
     1. [AdaIN_SPADE_pix2pixHD](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/AdaIN_SPADE_pix2pixHD)
 1. Attention 機構
     1. [Attention_pix2pixHD](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/Attention_pix2pixHD)
+1. データオーギュメント
+    1. DA_DeepSIM
 1. 強化学習
     1. [【外部リンク】ReinforcementLearning](https://github.com/Yagami360/ReinforcementLearning_Exercises)
 1. 仮想試着モデル
