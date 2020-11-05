@@ -44,12 +44,12 @@ if __name__ == '__main__':
     parser.add_argument('--image_height', type=int, default=128, help="入力画像の高さ（pixel単位）")
     parser.add_argument('--image_width', type=int, default=128, help="入力画像の幅（pixel単位）")
     parser.add_argument('--n_classes', type=int, default=20, help="セグメンテーション画像のラベル数")
-    parser.add_argument('--lr', type=float, default=0.0001, help="学習率")
+    parser.add_argument('--lr', type=float, default=0.0002, help="学習率")
     parser.add_argument('--beta1', type=float, default=0.5, help="学習率の減衰率")
     parser.add_argument('--beta2', type=float, default=0.999, help="学習率の減衰率")
     parser.add_argument("--n_diaplay_step", type=int, default=100,)
     parser.add_argument('--n_display_valid_step', type=int, default=500, help="valid データの tensorboard への表示間隔")
-    parser.add_argument("--n_save_epoches", type=int, default=10,)
+    parser.add_argument("--n_save_epoches", type=int, default=100,)
     parser.add_argument("--val_rate", type=float, default=0.50)
     parser.add_argument('--n_display_valid', type=int, default=8, help="valid データの tensorboard への表示数")
     parser.add_argument('--data_augument_type', choices=['none', 'affine', 'affine_tps', 'full'], help="DAの種類")
@@ -121,19 +121,11 @@ if __name__ == '__main__':
     # データセットの読み込み
     #================================    
     # 学習用データセットとテスト用データセットの設定
-    ds_train = ZalandoDataset( args, args.dataset_dir, datamode = "train", image_height = args.image_height, image_width = args.image_width, n_classes = args.n_classes, data_augument_type = args.data_augument_type, debug = args.debug )
+    ds_train = ZalandoDataset( args, args.dataset_dir, pairs_file = "train_pairs.csv", datamode = "train", image_height = args.image_height, image_width = args.image_width, n_classes = args.n_classes, data_augument_type = args.data_augument_type, debug = args.debug )
+    ds_valid = ZalandoDataset( args, args.dataset_dir, pairs_file = "valid_pairs.csv", datamode = "valid", image_height = args.image_height, image_width = args.image_width, n_classes = args.n_classes, data_augument_type = "none", debug = args.debug )
 
-    # 学習用データセットとテスト用データセットの設定
-    index = np.arange(len(ds_train))
-    train_index, valid_index = train_test_split( index, test_size=args.val_rate, random_state=args.seed )
-    if( args.debug ):
-        print( "train_index.shape : ", train_index.shape )
-        print( "valid_index.shape : ", valid_index.shape )
-        print( "train_index[0:10] : ", train_index[0:10] )
-        print( "valid_index[0:10] : ", valid_index[0:10] )
-
-    dloader_train = torch.utils.data.DataLoader(Subset(ds_train, train_index), batch_size=args.batch_size, shuffle=True, num_workers = args.n_workers, pin_memory = True )
-    dloader_valid = torch.utils.data.DataLoader(Subset(ds_train, valid_index), batch_size=args.batch_size_valid, shuffle=False, num_workers = args.n_workers, pin_memory = True )
+    dloader_train = torch.utils.data.DataLoader(ds_train, batch_size=args.batch_size, shuffle=True, num_workers = args.n_workers, pin_memory = True )
+    dloader_valid = torch.utils.data.DataLoader(ds_valid, batch_size=args.batch_size_valid, shuffle=False, num_workers = args.n_workers, pin_memory = True )
 
     #================================
     # モデルの構造を定義する。

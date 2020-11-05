@@ -4,6 +4,7 @@ import numpy as np
 from PIL import Image
 import imageio
 import random
+import re
 
 import torch
 import torch.nn as nn
@@ -139,3 +140,12 @@ def set_random_seed(seed=72):
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     return
+
+def numerical_sort(value):
+    """
+    数字が含まれているファイル名も正しくソート
+    """
+    numbers = re.compile(r'(\d+)')
+    parts = numbers.split(value)
+    parts[1::2] = map(int, parts[1::2])
+    return parts

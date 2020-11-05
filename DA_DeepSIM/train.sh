@@ -41,7 +41,6 @@ python train.py \
     --n_workers ${N_WORKERS} \
     --debug
 
-
 if [ $1 = "poweroff" ] ; then
     sudo poweroff
     sudo shutdown -h now
