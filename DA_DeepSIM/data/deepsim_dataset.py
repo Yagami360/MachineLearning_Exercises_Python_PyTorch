@@ -181,7 +181,10 @@ class DeepSIMDataset(data.Dataset):
         return
 
     def __len__(self):
-        return len(self.img_A_train_names)
+        if( self.datamode in ["train", "valid"] ):
+            return len(self.img_A_train_names)
+        else:
+            return len(self.img_A_test_names)
 
     def __getitem__(self, index):
         if( self.datamode in ["train", "valid"] ):

@@ -24,7 +24,7 @@ from tensorboardX import SummaryWriter
 from data.zalando_dataset import ZalandoDataset, ZalandoDataLoader
 from data.deepsim_dataset import DeepSIMDataset, DeepSIMDataLoader
 from models.generators import Pix2PixHDGenerator
-from models.discriminators import PatchGANDiscriminator
+from models.discriminators import PatchGANDiscriminator, MultiscaleDiscriminator
 from models.losses import VGGLoss, LSGANLoss
 from utils.utils import save_checkpoint, load_checkpoint
 from utils.utils import board_add_image, board_add_images, save_image_w_norm
@@ -57,7 +57,8 @@ if __name__ == '__main__':
     parser.add_argument('--n_display_valid', type=int, default=8, help="valid データの tensorboard への表示数")
     parser.add_argument('--data_augument_type', choices=['none', 'affine', 'affine_tps', 'full'], help="DAの種類")
     parser.add_argument("--tps_points_per_dim", type=int, default=3,)
-    parser.add_argument('--net_G_type', choices=['pix2pixhd'], default="pix2pixhd", help="ネットワークの種類")
+    parser.add_argument('--net_G_type', choices=['pix2pixhd'], default="pix2pixhd", help="生成器ネットワークの種類")
+    parser.add_argument('--net_D_type', choices=['patch_gan', 'multi_scale'], default="patch_gan", help="識別器ネットワークの種類")
     parser.add_argument('--lambda_l1', type=float, default=10.0, help="L1損失関数の係数値")
     parser.add_argument('--lambda_vgg', type=float, default=10.0, help="VGG perceptual loss_G の係数値")
     parser.add_argument('--lambda_adv', type=float, default=1.0, help="Adv loss_G の係数値")
@@ -158,7 +159,13 @@ if __name__ == '__main__':
     else:
         NotImplementedError()
 
-    model_D = PatchGANDiscriminator( n_in_channels = 3+args.n_classes, n_fmaps = 64 ).to( device )
+    if( args.net_D_type == "patch_gan" ):
+        model_D = PatchGANDiscriminator( n_in_channels = 3+args.n_classes, n_fmaps = 64 ).to( device )
+    elif( args.net_D_type == "multi_scale" ):
+        model_D = MultiscaleDiscriminator( n_in_channels = 3+args.n_classes, n_fmaps = 64, n_dis = 2 ).to( device )
+    else:
+        NotImplementedError()
+
     if( args.debug ):
         print( "model_G\n", model_G )
         print( "model_D\n", model_D )
@@ -224,14 +231,39 @@ if __name__ == '__main__':
                 param.requires_grad = True
 
             # 学習用データをモデルに流し込む
-            d_real = model_D( torch.cat([image_s, image_t_gt], dim=1) )
-            d_fake = model_D( torch.cat([image_s, output.detach()], dim=1) )
-            if( args.debug and n_print > 0 ):
-                print( "d_real.shape :", d_real.shape )
-                print( "d_fake.shape :", d_fake.shape )
+            if( args.net_D_type == "patch_gan" ):
+                d_real = model_D( torch.cat([image_s, image_t_gt], dim=1) )
+                d_fake = model_D( torch.cat([image_s, output.detach()], dim=1) )
+                if( args.debug and n_print > 0 ):
+                    print( "d_real.shape :", d_real.shape )
+                    print( "d_fake.shape :", d_fake.shape )
+            elif( args.net_D_type == "multi_scale" ):
+                d_reals = model_D( torch.cat([image_s, image_t_gt], dim=1) )
+                d_fakes = model_D( torch.cat([image_s, output.detach()], dim=1) )
+                d_real_D1 = d_reals[0][-1]
+                d_real_D2 = d_reals[1][-1]
+                d_fake_D1 = d_fakes[0][-1]
+                d_fake_D2 = d_fakes[1][-1]
+                if( args.debug and n_print > 0 ):
+                    print( "len(d_reals) :", len(d_reals) )
+                    print( "len(d_fakes) :", len(d_fakes) )
+                    print( "len(d_reals) :", len(d_reals) )
+                    print( "d_real_D1.shape :", d_real_D1.shape )
+                    print( "d_fake_D1.shape :", d_fake_D1.shape )
+            else:
+                NotImplementedError()
 
             # 損失関数を計算する
-            loss_D, loss_D_real, loss_D_fake = loss_adv_fn.forward_D( d_real, d_fake )
+            if( args.net_D_type == "patch_gan" ):
+                loss_D, loss_D_real, loss_D_fake = loss_adv_fn.forward_D( d_real, d_fake )
+            elif( args.net_D_type == "multi_scale" ):
+                loss_D1, loss_D1_real, loss_D1_fake = loss_adv_fn.forward_D( d_real_D1, d_fake_D1 )
+                loss_D2, loss_D2_real, loss_D2_fake = loss_adv_fn.forward_D( d_real_D2, d_fake_D2 )
+                loss_D_real = loss_D1_real + loss_D2_real
+                loss_D_fake = loss_D1_fake + loss_D2_fake
+                loss_D = loss_D1 + loss_D2
+            else:
+                NotImplementedError()
 
             # ネットワークの更新処理
             optimizer_D.zero_grad()
@@ -248,7 +280,15 @@ if __name__ == '__main__':
             # 損失関数を計算する
             loss_l1 = loss_l1_fn( image_t_gt, output )
             loss_vgg = loss_vgg_fn( image_t_gt, output )
-            loss_adv = loss_adv_fn.forward_G( d_fake )
+            if( args.net_D_type == "patch_gan" ):
+                loss_adv = loss_adv_fn.forward_G( d_fake )
+            elif( args.net_D_type == "multi_scale" ):
+                loss_adv_D1 = loss_adv_fn.forward_G( d_fake_D1 )
+                loss_adv_D2 = loss_adv_fn.forward_G( d_fake_D2 )
+                loss_adv = loss_adv_D1 + loss_adv_D2
+            else:
+                NotImplementedError()
+
             loss_G =  args.lambda_l1 * loss_l1 + args.lambda_vgg * loss_vgg + args.lambda_adv * loss_adv
 
             # ネットワークの更新処理
@@ -312,13 +352,40 @@ if __name__ == '__main__':
                         output = model_G( image_s )
 
                     with torch.no_grad():
-                        d_real = model_D( torch.cat([image_s, image_t_gt], dim=1) )
-                        d_fake = model_D( torch.cat([image_s, output.detach()], dim=1) )
+                        if( args.net_D_type == "patch_gan" ):
+                            d_real = model_D( torch.cat([image_s, image_t_gt], dim=1) )
+                            d_fake = model_D( torch.cat([image_s, output.detach()], dim=1) )
+                            if( args.debug and n_print > 0 ):
+                                print( "d_real.shape :", d_real.shape )
+                                print( "d_fake.shape :", d_fake.shape )
+                        elif( args.net_D_type == "multi_scale" ):
+                            d_reals = model_D( torch.cat([image_s, image_t_gt], dim=1) )
+                            d_fakes = model_D( torch.cat([image_s, output.detach()], dim=1) )
+                            d_real_D1 = d_reals[0][-1]
+                            d_real_D2 = d_reals[1][-1]
+                            d_fake_D1 = d_fakes[0][-1]
+                            d_fake_D2 = d_fakes[1][-1]
+                            if( args.debug and n_print > 0 ):
+                                print( "len(d_reals) :", len(d_reals) )
+                                print( "len(d_fakes) :", len(d_fakes) )
+                                print( "len(d_reals) :", len(d_reals) )
+                                print( "d_real_D1.shape :", d_real_D1.shape )
+                                print( "d_fake_D1.shape :", d_fake_D1.shape )
+                        else:
+                            NotImplementedError()
 
-                    # 損失関数を計算する
+                    # 損失関数を計算する（生成器）
                     loss_l1 = loss_l1_fn( image_t_gt, output )
                     loss_vgg = loss_vgg_fn( image_t_gt, output )
-                    loss_adv = loss_adv_fn.forward_G( d_fake )
+                    if( args.net_D_type == "patch_gan" ):
+                        loss_adv = loss_adv_fn.forward_G( d_fake )
+                    elif( args.net_D_type == "multi_scale" ):
+                        loss_adv_D1 = loss_adv_fn.forward_G( d_fake_D1 )
+                        loss_adv_D2 = loss_adv_fn.forward_G( d_fake_D2 )
+                        loss_adv = loss_adv_D1 + loss_adv_D2
+                    else:
+                        NotImplementedError()
+
                     loss_G =  args.lambda_l1 * loss_l1 + args.lambda_vgg * loss_vgg + args.lambda_adv * loss_adv
 
                     loss_l1_total += loss_l1
@@ -326,7 +393,18 @@ if __name__ == '__main__':
                     loss_adv_total += loss_adv
                     loss_G_total += loss_G
 
-                    loss_D, loss_D_real, loss_D_fake = loss_adv_fn.forward_D( d_real, d_fake )
+                    # 損失関数を計算する（識別器）
+                    if( args.net_D_type == "patch_gan" ):
+                        loss_D, loss_D_real, loss_D_fake = loss_adv_fn.forward_D( d_real, d_fake )
+                    elif( args.net_D_type == "multi_scale" ):
+                        loss_D1, loss_D1_real, loss_D1_fake = loss_adv_fn.forward_D( d_real_D1, d_fake_D1 )
+                        loss_D2, loss_D2_real, loss_D2_fake = loss_adv_fn.forward_D( d_real_D2, d_fake_D2 )
+                        loss_D_real = loss_D1_real + loss_D2_real
+                        loss_D_fake = loss_D1_fake + loss_D2_fake
+                        loss_D = loss_D1 + loss_D2
+                    else:
+                        NotImplementedError()
+
                     loss_D_total += loss_D
                     loss_D_real_total += loss_D_real
                     loss_D_fake_total += loss_D_fake
@@ -364,6 +442,10 @@ if __name__ == '__main__':
 
                     # ミニバッチデータを GPU へ転送
                     image_s = inputs["image_s"].to(device)
+                    if( args.onehot ):
+                        image_s_vis = decode_labels_tsr(image_s)
+                    else:
+                        image_s_vis = image_s
 
                     # 推論処理
                     with torch.no_grad():

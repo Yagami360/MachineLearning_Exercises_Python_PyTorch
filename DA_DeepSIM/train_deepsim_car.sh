@@ -12,9 +12,14 @@ DATASET_DIR="dataset/deepsim_dataset"
 #----------------------
 N_EPOCHES=2000
 BATCH_SIZE=1
-IMAGE_HIGHT=512
-IMAGE_WIDTH=1025
+#IMAGE_HIGHT=512
+#IMAGE_WIDTH=1024
+IMAGE_HIGHT=320
+IMAGE_WIDTH=640
+
 NET_G_TYPE=pix2pixhd
+#NET_D_TYPE=patch_gan
+NET_D_TYPE=multi_scale
 
 #DATA_AUGUMENT_TYPE="none"
 #DATA_AUGUMENT_TYPE="affine"
@@ -22,7 +27,7 @@ DATA_AUGUMENT_TYPE="affine_tps"
 #DATA_AUGUMENT_TYPE="full"
 
 EXPER_NAME=debug
-#EXPER_NAME=${NET_G_TYPE}_da-${DATA_AUGUMENT_TYPE}_b${BATCH_SIZE}_ep${N_EPOCHES}
+#EXPER_NAME=deepsim_car_netG-${NET_G_TYPE}_netD-${NET_D_TYPE}_da-${DATA_AUGUMENT_TYPE}_b${BATCH_SIZE}_ep${N_EPOCHES}
 rm -rf tensorboard/${EXPER_NAME}
 rm -rf tensorboard/${EXPER_NAME}_valid
 
@@ -36,7 +41,7 @@ python train.py \
     --image_height ${IMAGE_HIGHT} --image_width ${IMAGE_WIDTH} \
     --batch_size ${BATCH_SIZE} \
     --n_diaplay_step ${N_DISPLAY_STEP} --n_display_valid_step ${N_DISPLAY_VALID_STEP} \
-    --net_G_type ${NET_G_TYPE} \
+    --net_G_type ${NET_G_TYPE} --net_D_type ${NET_D_TYPE} \
     --data_augument_type ${DATA_AUGUMENT_TYPE} \
     --n_workers ${N_WORKERS} \
     --debug

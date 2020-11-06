@@ -4,16 +4,16 @@ set -eu
 mkdir -p _logs
 N_WORKERS=4
 
-DATASET_TYPE="zalando"
-DATASET_DIR="dataset/zalando_dataset_n20"
+DATASET_TYPE="deepsim_face"
+DATASET_DIR="dataset/deepsim_dataset"
 
 #----------------------
 # model
 #----------------------
 N_EPOCHES=2000
-BATCH_SIZE=2
-IMAGE_HIGHT=256
-IMAGE_WIDTH=192
+BATCH_SIZE=1
+IMAGE_HIGHT=768
+IMAGE_WIDTH=768
 
 NET_G_TYPE=pix2pixhd
 NET_D_TYPE=patch_gan
@@ -25,7 +25,7 @@ DATA_AUGUMENT_TYPE="affine_tps"
 #DATA_AUGUMENT_TYPE="full"
 
 EXPER_NAME=debug
-#EXPER_NAME=zalando_netG-${NET_G_TYPE}_netD-${NET_D_TYPE}_da-${DATA_AUGUMENT_TYPE}_b${BATCH_SIZE}_ep${N_EPOCHES}
+#EXPER_NAME=deepsim_face_netG-${NET_G_TYPE}_netD-${NET_D_TYPE}_da-${DATA_AUGUMENT_TYPE}_b${BATCH_SIZE}_ep${N_EPOCHES}
 rm -rf tensorboard/${EXPER_NAME}
 rm -rf tensorboard/${EXPER_NAME}_valid
 
@@ -43,8 +43,6 @@ python train.py \
     --data_augument_type ${DATA_AUGUMENT_TYPE} \
     --n_workers ${N_WORKERS} \
     --debug
-
-#--onehot
 
 if [ $1 = "poweroff" ] ; then
     sudo poweroff
