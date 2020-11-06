@@ -22,6 +22,7 @@ from tensorboardX import SummaryWriter
 
 # 自作モジュール
 from data.zalando_dataset import ZalandoDataset, ZalandoDataLoader
+from data.deepsim_dataset import DeepSIMDataset, DeepSIMDataLoader
 from models.generators import Pix2PixHDGenerator
 from models.discriminators import PatchGANDiscriminator
 from models.losses import VGGLoss, LSGANLoss
@@ -33,6 +34,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--exper_name", default="adain_sample", help="実験名")
     parser.add_argument("--dataset_dir", type=str, default="dataset/zalando_dataset_n20")
+    parser.add_argument('--dataset_type', choices=['zalando', 'deepsim_car', 'deepsim_face'], help="DAの種類")
     parser.add_argument("--results_dir", type=str, default="results")
     parser.add_argument('--save_checkpoints_dir', type=str, default="checkpoints", help="モデルの保存ディレクトリ")
     parser.add_argument('--load_checkpoints_G_path', type=str, default="", help="生成器モデルの読み込みファイルのパス")
@@ -44,16 +46,17 @@ if __name__ == '__main__':
     parser.add_argument('--image_height', type=int, default=128, help="入力画像の高さ（pixel単位）")
     parser.add_argument('--image_width', type=int, default=128, help="入力画像の幅（pixel単位）")
     parser.add_argument('--n_classes', type=int, default=20, help="セグメンテーション画像のラベル数")
+    parser.add_argument('--onehot', action='store_true', help="入力パース画像の onehot encode 有無")
     parser.add_argument('--lr', type=float, default=0.0002, help="学習率")
     parser.add_argument('--beta1', type=float, default=0.5, help="学習率の減衰率")
     parser.add_argument('--beta2', type=float, default=0.999, help="学習率の減衰率")
     parser.add_argument("--n_diaplay_step", type=int, default=100,)
     parser.add_argument('--n_display_valid_step', type=int, default=500, help="valid データの tensorboard への表示間隔")
-    parser.add_argument("--n_save_epoches", type=int, default=100,)
+    parser.add_argument("--n_save_epoches", type=int, default=500,)
     parser.add_argument("--val_rate", type=float, default=0.50)
     parser.add_argument('--n_display_valid', type=int, default=8, help="valid データの tensorboard への表示数")
     parser.add_argument('--data_augument_type', choices=['none', 'affine', 'affine_tps', 'full'], help="DAの種類")
-    parser.add_argument("--tps_points_per_dim", type=int, default=5,)
+    parser.add_argument("--tps_points_per_dim", type=int, default=3,)
     parser.add_argument('--net_G_type', choices=['pix2pixhd'], default="pix2pixhd", help="ネットワークの種類")
     parser.add_argument('--lambda_l1', type=float, default=10.0, help="L1損失関数の係数値")
     parser.add_argument('--lambda_vgg', type=float, default=10.0, help="VGG perceptual loss_G の係数値")
@@ -65,8 +68,19 @@ if __name__ == '__main__':
     parser.add_argument('--use_cuda_deterministic', action='store_true', help="再現性確保のために cuDNN に決定論的振る舞い有効化")
     parser.add_argument('--detect_nan', action='store_true')
     parser.add_argument('--debug', action='store_true')
-
     args = parser.parse_args()
+
+    if( args.dataset_type == "zalando" ):
+        if( args.onehot ):
+            args.n_classes = 20
+        else:
+            args.n_classes = 1
+    if( args.dataset_type in ["deepsim_car", "deepsim_face"] ):
+        args.n_classes = 3
+        args.batch_size = 1
+    else:
+        NotImplementedError()
+
     if( args.debug ):
         for key, value in vars(args).items():
             print('%s: %s' % (str(key), str(value)))
@@ -121,17 +135,26 @@ if __name__ == '__main__':
     # データセットの読み込み
     #================================    
     # 学習用データセットとテスト用データセットの設定
-    ds_train = ZalandoDataset( args, args.dataset_dir, pairs_file = "train_pairs.csv", datamode = "train", image_height = args.image_height, image_width = args.image_width, n_classes = args.n_classes, data_augument_type = args.data_augument_type, debug = args.debug )
-    ds_valid = ZalandoDataset( args, args.dataset_dir, pairs_file = "valid_pairs.csv", datamode = "valid", image_height = args.image_height, image_width = args.image_width, n_classes = args.n_classes, data_augument_type = "none", debug = args.debug )
+    if( args.dataset_type == "zalando" ):
+        ds_train = ZalandoDataset( args, args.dataset_dir, pairs_file = "train_pairs.csv", datamode = "train", image_height = args.image_height, image_width = args.image_width, n_classes = args.n_classes, data_augument_type = args.data_augument_type, onehot = args.onehot, debug = args.debug )
+        ds_valid = ZalandoDataset( args, args.dataset_dir, pairs_file = "valid_pairs.csv", datamode = "valid", image_height = args.image_height, image_width = args.image_width, n_classes = args.n_classes, data_augument_type = "none", onehot = args.onehot, debug = args.debug )
+    elif( args.dataset_type == "deepsim_car" ):
+        ds_train = DeepSIMDataset( args, args.dataset_dir, datamode = "train", data_type = "car", image_height = args.image_height, image_width = args.image_width, n_classes = args.n_classes, data_augument_type = args.data_augument_type, onehot = args.onehot, debug = args.debug )
+        ds_valid = DeepSIMDataset( args, args.dataset_dir, datamode = "test", data_type = "car", image_height = args.image_height, image_width = args.image_width, n_classes = args.n_classes, data_augument_type = "none", onehot = args.onehot, debug = args.debug )
+    elif( args.dataset_type == "deepsim_face" ):
+        ds_train = DeepSIMDataset( args, args.dataset_dir, datamode = "train", data_type = "face", image_height = args.image_height, image_width = args.image_width, n_classes = args.n_classes, data_augument_type = args.data_augument_type, onehot = args.onehot, debug = args.debug )
+        ds_valid = DeepSIMDataset( args, args.dataset_dir, datamode = "test", data_type = "face", image_height = args.image_height, image_width = args.image_width, n_classes = args.n_classes, data_augument_type = "none", onehot = args.onehot, debug = args.debug )
+    else:
+        NotImplementedError()
 
     dloader_train = torch.utils.data.DataLoader(ds_train, batch_size=args.batch_size, shuffle=True, num_workers = args.n_workers, pin_memory = True )
-    dloader_valid = torch.utils.data.DataLoader(ds_valid, batch_size=args.batch_size_valid, shuffle=False, num_workers = args.n_workers, pin_memory = True )
+    dloader_valid = torch.utils.data.DataLoader(ds_valid, batch_size=args.batch_size_valid, shuffle=False, num_workers = 1, pin_memory = True )
 
     #================================
     # モデルの構造を定義する。
     #================================
     if( args.net_G_type == "pix2pixhd" ):
-        model_G = Pix2PixHDGenerator(input_nc = args.n_classes, output_nc = 3).to(device)
+        model_G = Pix2PixHDGenerator(input_nc = args.n_classes, output_nc = 3, n_downsampling = 4, norm_type = 'instance' ).to(device)
     else:
         NotImplementedError()
 
@@ -171,22 +194,25 @@ if __name__ == '__main__':
             model_D.train()
 
             # 一番最後のミニバッチループで、バッチサイズに満たない場合は無視する（後の計算で、shape の不一致をおこすため）
-            if inputs["pose_parse_onehot"].shape[0] != args.batch_size:
+            if inputs["image_s"].shape[0] != args.batch_size:
                 break
 
             # ミニバッチデータを GPU へ転送
-            pose_parse_onehot = inputs["pose_parse_onehot"].to(device)
-            pose_parse_onehot_vis = decode_labels_tsr(pose_parse_onehot)
-            pose_gt = inputs["pose_gt"].to(device)
+            image_s = inputs["image_s"].to(device)
+            image_t_gt = inputs["image_t_gt"].to(device)
+            if( args.onehot ):
+                image_s_vis = decode_labels_tsr(image_s)
+            else:
+                image_s_vis = image_s
 
             if( args.debug and n_print > 0):
-                print( "[pose_parse_onehot] shape={}, dtype={}, min={}, max={} : ".format(pose_parse_onehot.shape, pose_parse_onehot.dtype, torch.min(pose_parse_onehot), torch.max(pose_parse_onehot) ) )
-                print( "[pose_gt] shape={}, dtype={}, min={}, max={} : ".format(pose_gt.shape, pose_gt.dtype, torch.min(pose_gt), torch.max(pose_gt) ) )
+                print( "[image_s] shape={}, dtype={}, min={}, max={} : ".format(image_s.shape, image_s.dtype, torch.min(image_s), torch.max(image_s) ) )
+                print( "[image_t_gt] shape={}, dtype={}, min={}, max={} : ".format(image_t_gt.shape, image_t_gt.dtype, torch.min(image_t_gt), torch.max(image_t_gt) ) )
 
             #----------------------------------------------------
             # 生成器 の forword 処理
             #----------------------------------------------------
-            output = model_G( pose_parse_onehot )
+            output = model_G( image_s )
             if( args.debug and n_print > 0 ):
                 print( "output.shape : ", output.shape )
 
@@ -198,8 +224,8 @@ if __name__ == '__main__':
                 param.requires_grad = True
 
             # 学習用データをモデルに流し込む
-            d_real = model_D( torch.cat([pose_parse_onehot, pose_gt], dim=1) )
-            d_fake = model_D( torch.cat([pose_parse_onehot, output.detach()], dim=1) )
+            d_real = model_D( torch.cat([image_s, image_t_gt], dim=1) )
+            d_fake = model_D( torch.cat([image_s, output.detach()], dim=1) )
             if( args.debug and n_print > 0 ):
                 print( "d_real.shape :", d_real.shape )
                 print( "d_fake.shape :", d_fake.shape )
@@ -220,8 +246,8 @@ if __name__ == '__main__':
             # 生成器の更新処理
             #----------------------------------------------------
             # 損失関数を計算する
-            loss_l1 = loss_l1_fn( pose_gt, output )
-            loss_vgg = loss_vgg_fn( pose_gt, output )
+            loss_l1 = loss_l1_fn( image_t_gt, output )
+            loss_vgg = loss_vgg_fn( image_t_gt, output )
             loss_adv = loss_adv_fn.forward_G( d_fake )
             loss_G =  args.lambda_l1 * loss_l1 + args.lambda_vgg * loss_vgg + args.lambda_adv * loss_adv
 
@@ -254,14 +280,14 @@ if __name__ == '__main__':
                 
                 # visual images
                 visuals = [
-                    [ pose_parse_onehot_vis, pose_gt, output ],
+                    [ image_s_vis, image_t_gt, output ],
                 ]
                 board_add_images(board_train, 'train', visuals, step+1)
 
             #====================================================
             # valid データでの処理
             #====================================================
-            if( step % args.n_display_valid_step == 0 ):
+            if( args.dataset_type in ["zalando"] and step % args.n_display_valid_step == 0 ):
                 loss_G_total, loss_l1_total, loss_vgg_total, loss_adv_total = 0, 0, 0, 0
                 loss_D_total, loss_D_real_total, loss_D_fake_total = 0, 0, 0
                 n_valid_loop = 0
@@ -270,25 +296,28 @@ if __name__ == '__main__':
                     model_D.eval()            
 
                     # 一番最後のミニバッチループで、バッチサイズに満たない場合は無視する（後の計算で、shape の不一致をおこすため）
-                    if inputs["pose_parse_onehot"].shape[0] != args.batch_size_valid:
+                    if inputs["image_s"].shape[0] != args.batch_size_valid:
                         break
 
                     # ミニバッチデータを GPU へ転送
-                    pose_parse_onehot = inputs["pose_parse_onehot"].to(device)
-                    pose_parse_onehot_vis = decode_labels_tsr(pose_parse_onehot)
-                    pose_gt = inputs["pose_gt"].to(device)
+                    image_s = inputs["image_s"].to(device)
+                    image_t_gt = inputs["image_t_gt"].to(device)
+                    if( args.onehot ):
+                        image_s_vis = decode_labels_tsr(image_s)
+                    else:
+                        image_s_vis = image_s
 
                     # 推論処理
                     with torch.no_grad():
-                        output = model_G( pose_parse_onehot )
+                        output = model_G( image_s )
 
                     with torch.no_grad():
-                        d_real = model_D( torch.cat([pose_parse_onehot, pose_gt], dim=1) )
-                        d_fake = model_D( torch.cat([pose_parse_onehot, output.detach()], dim=1) )
+                        d_real = model_D( torch.cat([image_s, image_t_gt], dim=1) )
+                        d_fake = model_D( torch.cat([image_s, output.detach()], dim=1) )
 
                     # 損失関数を計算する
-                    loss_l1 = loss_l1_fn( pose_gt, output )
-                    loss_vgg = loss_vgg_fn( pose_gt, output )
+                    loss_l1 = loss_l1_fn( image_t_gt, output )
+                    loss_vgg = loss_vgg_fn( image_t_gt, output )
                     loss_adv = loss_adv_fn.forward_G( d_fake )
                     loss_G =  args.lambda_l1 * loss_l1 + args.lambda_vgg * loss_vgg + args.lambda_adv * loss_adv
 
@@ -306,7 +335,7 @@ if __name__ == '__main__':
                     if( iter <= args.n_display_valid ):
                         # visual images
                         visuals = [
-                            [ pose_parse_onehot_vis, pose_gt, output ],
+                            [ image_s_vis, image_t_gt, output ],
                         ]
                         board_add_images(board_valid, 'valid/{}'.format(iter), visuals, step+1)
 
@@ -320,6 +349,35 @@ if __name__ == '__main__':
                 board_valid.add_scalar('D/loss_D', loss_D_total.item()/n_valid_loop, step)
                 board_valid.add_scalar('D/loss_D_real', loss_D_real_total.item()/n_valid_loop, step)
                 board_valid.add_scalar('D/loss_D_fake', loss_D_fake_total.item()/n_valid_loop, step)
+
+            #====================================================
+            # test データでの処理
+            #====================================================
+            if( args.dataset_type in ["deepsim_car", "deepsim_face"] and step % args.n_display_valid_step == 0 ):
+                n_valid_loop = 0
+                for iter, inputs in enumerate( tqdm(dloader_valid, desc = "valid") ):
+                    model_G.eval()
+
+                    # 一番最後のミニバッチループで、バッチサイズに満たない場合は無視する（後の計算で、shape の不一致をおこすため）
+                    if inputs["image_s"].shape[0] != args.batch_size_valid:
+                        break
+
+                    # ミニバッチデータを GPU へ転送
+                    image_s = inputs["image_s"].to(device)
+
+                    # 推論処理
+                    with torch.no_grad():
+                        output = model_G( image_s )
+
+                    # 生成画像表示
+                    if( iter <= args.n_display_valid ):
+                        # visual images
+                        visuals = [
+                            [ image_s_vis, output ],
+                        ]
+                        board_add_images(board_valid, 'valid/{}'.format(iter), visuals, step+1)
+
+                    n_valid_loop += 1
 
             step += 1
             n_print -= 1

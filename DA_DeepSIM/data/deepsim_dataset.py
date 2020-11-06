@@ -18,27 +18,34 @@ from torchvision.utils import save_image
 
 from data.transforms.random_erasing import RandomErasing
 from data.transforms.tps_transform import TPSTransform
-from utils import set_random_seed, onehot_encode_tsr
+from utils import set_random_seed, onehot_encode_tsr, numerical_sort
 
 IMG_EXTENSIONS = (
     '.jpg', '.jpeg', '.png', '.ppm', '.bmp', '.pgm', '.tif',
     '.JPG', '.JPEG', '.PNG', '.PPM', '.BMP', '.PGM', '.TIF',
 )
 
-class ZalandoDataset(data.Dataset):
-    def __init__(self, args, dataset_dir, pairs_file = "train_pairs.csv", datamode = "train", image_height = 128, image_width = 128, n_classes = 20, data_augument_type = "none", onehot = False, debug = False ):
-        super(ZalandoDataset, self).__init__()
+class DeepSIMDataset(data.Dataset):
+    def __init__(self, args, dataset_dir, datamode = "train", data_type = "car", image_height = 128, image_width = 128, n_classes = 20, data_augument_type = "none", onehot = False, debug = False ):
+        super(DeepSIMDataset, self).__init__()
         self.args = args
         self.dataset_dir = dataset_dir
-        self.pairs_file = pairs_file
         self.datamode = datamode
+        self.data_type = data_type
         self.data_augument_type = data_augument_type
-        self.onehot = onehot
         self.image_height = image_height
         self.image_width = image_width
         self.n_classes = n_classes
+        self.onehot = onehot
         self.debug = debug
-        self.df_pairs = pd.read_csv( os.path.join(dataset_dir, pairs_file) )
+
+        self.img_A_train_dir = os.path.join( self.dataset_dir, self.data_type, "train_A" )
+        self.img_B_train_dir = os.path.join( self.dataset_dir, self.data_type, "train_B" )
+        self.img_A_test_dir = os.path.join( self.dataset_dir, self.data_type, "test_A" )
+
+        self.img_A_train_names = sorted( [f for f in os.listdir(self.img_A_train_dir) if f.endswith(IMG_EXTENSIONS)], key=numerical_sort )
+        self.img_B_train_names = sorted( [f for f in os.listdir(self.img_B_train_dir) if f.endswith(IMG_EXTENSIONS)], key=numerical_sort )
+        self.img_A_test_names = sorted( [f for f in os.listdir(self.img_A_test_dir) if f.endswith(IMG_EXTENSIONS)], key=numerical_sort )
 
         # transform
         if( data_augument_type == "none" ):
@@ -167,56 +174,67 @@ class ZalandoDataset(data.Dataset):
             NotImplementedError()
 
         if( self.debug ):
-            print( self.df_pairs.head() )
+            print( "self.img_A_train_names : ", self.img_A_train_names )
+            print( "self.img_B_train_names : ", self.img_B_train_names )
+            print( "self.img_A_test_names : ", self.img_A_test_names )
 
         return
 
     def __len__(self):
-        return len(self.df_pairs)
+        return len(self.img_A_train_names)
 
     def __getitem__(self, index):
-        pose_name = self.df_pairs["pose_name"].iloc[index]
-        pose_parsing_name = self.df_pairs["pose_parsing_name"].iloc[index]
+        if( self.datamode in ["train", "valid"] ):
+            img_A_name = self.img_A_train_names[index]
+            img_B_name = self.img_B_train_names[index]
+        else:
+            img_A_name = self.img_A_test_names[index]
+
         self.seed_da = random.randint(0,10000)
 
-        # pose
+        # img A
         if( self.datamode in ["train", "valid"] ):
-            pose_gt = Image.open( os.path.join(self.dataset_dir, "pose", pose_name) ).convert('RGB')
-            if( self.data_augument_type != "none" ):
-                set_random_seed( self.seed_da )
+            imgA_pillow = Image.open( os.path.join(self.img_A_train_dir, img_A_name) ).convert('RGB')
+        else:
+            imgA_pillow = Image.open( os.path.join(self.img_A_test_dir, img_A_name) ).convert('RGB')
 
-            pose_gt = self.transform(pose_gt)
-
-        # pose paring
-        pose_parsing_pillow = Image.open( os.path.join(self.dataset_dir, "pose_parsing", pose_parsing_name) ).convert('L')
         if( self.data_augument_type != "none" ):
             set_random_seed( self.seed_da )
 
         if( self.onehot ):
-            pose_parse = torch.from_numpy( np.asarray(self.transform_mask_woToTensor(pose_parsing_pillow)).astype("int64") ).unsqueeze(0)
-            pose_parse = onehot_encode_tsr( pose_parse, n_classes = self.n_classes ).float()
+            imgA = torch.from_numpy( np.asarray(self.transform_mask_woToTensor(imgA_pillow)).astype("int64") ).unsqueeze(0)
+            print( "imgA.shape : ", imgA.shape )
+            imgA = onehot_encode_tsr( imgA, n_classes = self.n_classes ).float()
         else:
-            pose_parse = self.transform_mask(pose_parsing_pillow)
+            imgA = self.transform(imgA_pillow)
+
+        # img B
+        if( self.datamode in ["train", "valid"] ):
+            imgB_gt = Image.open( os.path.join(self.img_B_train_dir, img_B_name) ).convert('RGB')
+            if( self.data_augument_type != "none" ):
+                set_random_seed( self.seed_da )
+
+            imgB_gt = self.transform(imgB_gt)
 
         if( self.datamode in ["train", "valid"] ):
             results_dict = {
-                "image_s_name" : pose_name,
-                "image_t_gt_name" : pose_parsing_name,
-                "image_s" : pose_parse,
-                "image_t_gt" : pose_gt,
+                "image_s_name" : img_B_name,
+                "image_t_gt_name" : img_A_name,
+                "image_s" : imgA,
+                "image_t_gt" : imgB_gt,
             }
         else:
             results_dict = {
-                "image_name" : pose_parsing_name,
-                "image_s" : pose_parse,
+                "image_s_name" : img_A_name,
+                "image_s" : imgA,
             }
 
         return results_dict
 
 
-class ZalandoDataLoader(object):
+class DeepSIMDataLoader(object):
     def __init__(self, dataset, batch_size = 1, shuffle = True, n_workers = 4, pin_memory = True):
-        super(ZalandoDataLoader, self).__init__()
+        super(DeepSIMDataLoader, self).__init__()
         self.data_loader = torch.utils.data.DataLoader(
                 dataset, 
                 batch_size = batch_size, 

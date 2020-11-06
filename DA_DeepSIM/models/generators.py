@@ -1,6 +1,7 @@
 # -*- coding:utf-8 -*-
 import os
 import numpy as np
+import functools
 
 import torch
 import torch.nn as nn
@@ -59,10 +60,17 @@ class ResnetBlock(nn.Module):
 
 
 class Pix2PixHDGenerator( nn.Module ):
-    def __init__( self, input_nc = 3, output_nc = 3, ngf=64, n_downsampling=3, n_blocks=9, norm_layer=nn.BatchNorm2d, padding_type='reflect'):
+    def __init__( self, input_nc = 3, output_nc = 3, ngf=64, n_downsampling=3, n_blocks=9, norm_type = 'batch', padding_type='reflect'):
         assert(n_blocks >= 0)
         super(Pix2PixHDGenerator, self).__init__()        
         activation = nn.ReLU(True)        
+
+        if norm_type == 'batch':
+            norm_layer = functools.partial(nn.BatchNorm2d, affine=True)
+        elif norm_type == 'instance':
+            norm_layer = functools.partial(nn.InstanceNorm2d, affine=False)
+        else:
+            raise NotImplementedError()
 
         model = [nn.ReflectionPad2d(3), nn.Conv2d(input_nc, ngf, kernel_size=7, padding=0), norm_layer(ngf), activation]
         ### downsample
