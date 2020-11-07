@@ -25,7 +25,7 @@ from data.zalando_dataset import ZalandoDataset, ZalandoDataLoader
 from data.deepsim_dataset import DeepSIMDataset, DeepSIMDataLoader
 from models.generators import Pix2PixHDGenerator
 from models.discriminators import PatchGANDiscriminator, MultiscaleDiscriminator
-from models.losses import VGGLoss, LSGANLoss
+from models.losses import VGGLoss, LSGANLoss, FeatureMatchingLoss
 from utils.utils import save_checkpoint, load_checkpoint
 from utils.utils import board_add_image, board_add_images, save_image_w_norm
 from utils.decode_labels import decode_labels_tsr
@@ -60,7 +60,8 @@ if __name__ == '__main__':
     parser.add_argument('--net_G_type', choices=['pix2pixhd'], default="pix2pixhd", help="生成器ネットワークの種類")
     parser.add_argument('--net_D_type', choices=['patch_gan', 'multi_scale'], default="patch_gan", help="識別器ネットワークの種類")
     parser.add_argument('--lambda_l1', type=float, default=10.0, help="L1損失関数の係数値")
-    parser.add_argument('--lambda_vgg', type=float, default=10.0, help="VGG perceptual loss_G の係数値")
+    parser.add_argument('--lambda_vgg', type=float, default=10.0, help="VGG perceptual loss の係数値")
+    parser.add_argument('--lambda_feat', type=float, default=10.0, help="Feature Matching Loss の係数値")
     parser.add_argument('--lambda_adv', type=float, default=1.0, help="Adv loss_G の係数値")
     parser.add_argument("--seed", type=int, default=71)
     parser.add_argument('--device', choices=['cpu', 'gpu'], default="gpu", help="使用デバイス (CPU or GPU)")
@@ -187,8 +188,9 @@ if __name__ == '__main__':
     #================================
     loss_l1_fn = nn.L1Loss()
     loss_vgg_fn = VGGLoss(device, n_channels=3)
+    loss_feat_fn = FeatureMatchingLoss( device, n_dis = 2, n_layers_D = 3 )
     loss_adv_fn = LSGANLoss(device)
-
+    
     #================================
     # モデルの学習
     #================================    
@@ -280,6 +282,12 @@ if __name__ == '__main__':
             # 損失関数を計算する
             loss_l1 = loss_l1_fn( image_t_gt, output )
             loss_vgg = loss_vgg_fn( image_t_gt, output )
+
+            if( args.net_D_type == "multi_scale" ):
+                loss_feat = loss_feat_fn( d_reals, d_fakes )
+            else:
+                loss_feat = torch.zeros(1, requires_grad=False).float().to(device)
+
             if( args.net_D_type == "patch_gan" ):
                 loss_adv = loss_adv_fn.forward_G( d_fake )
             elif( args.net_D_type == "multi_scale" ):
@@ -289,7 +297,12 @@ if __name__ == '__main__':
             else:
                 NotImplementedError()
 
-            loss_G =  args.lambda_l1 * loss_l1 + args.lambda_vgg * loss_vgg + args.lambda_adv * loss_adv
+            if( args.net_D_type == "patch_gan" ):
+                loss_G =  args.lambda_l1 * loss_l1 + args.lambda_vgg * loss_vgg + args.lambda_adv * loss_adv
+            elif( args.net_D_type == "multi_scale" ):
+                loss_G =  args.lambda_l1 * loss_l1 + args.lambda_vgg * loss_vgg + args.lambda_feat * loss_feat + args.lambda_adv * loss_adv
+            else:
+                NotImplementedError()
 
             # ネットワークの更新処理
             optimizer_G.zero_grad()
@@ -309,13 +322,14 @@ if __name__ == '__main__':
                 # loss
                 board_train.add_scalar('G/loss_l1', loss_l1.item(), step)
                 board_train.add_scalar('G/loss_vgg', loss_vgg.item(), step)
+                board_train.add_scalar('G/loss_feat', loss_feat.item(), step)
                 board_train.add_scalar('G/loss_adv', loss_adv.item(), step)
                 board_train.add_scalar('G/loss_G', loss_G.item(), step)
                 board_train.add_scalar('D/loss_D_real', loss_D_real.item(), step)
                 board_train.add_scalar('D/loss_D_fake', loss_D_fake.item(), step)
                 board_train.add_scalar('D/loss_D', loss_D.item(), step)
 
-                print( "step={}, loss_G={:.5f}, loss_l1={:.5f}, loss_vgg={:.5f}".format(step, loss_G.item(), loss_l1.item(), loss_vgg.item(), loss_adv.item()) )
+                print( "step={}, loss_G={:.5f}, loss_l1={:.5f}, loss_vgg={:.5f}, loss_feat={:.5f}, loss_adv={:.5f}".format(step, loss_G.item(), loss_l1.item(), loss_vgg.item(), loss_feat.item(), loss_adv.item()) )
                 print( "step={}, loss_D={:.5f}, loss_D_real={:.5f}, loss_D_fake={:.5f}".format(step, loss_D.item(), loss_D_real.item(), loss_D_fake.item()) )
                 
                 # visual images
@@ -328,7 +342,7 @@ if __name__ == '__main__':
             # valid データでの処理
             #====================================================
             if( args.dataset_type in ["zalando"] and step % args.n_display_valid_step == 0 ):
-                loss_G_total, loss_l1_total, loss_vgg_total, loss_adv_total = 0, 0, 0, 0
+                loss_G_total, loss_l1_total, loss_vgg_total, loss_feat_total, loss_adv_total = 0, 0, 0, 0, 0
                 loss_D_total, loss_D_real_total, loss_D_fake_total = 0, 0, 0
                 n_valid_loop = 0
                 for iter, inputs in enumerate( tqdm(dloader_valid, desc = "valid") ):
@@ -377,6 +391,12 @@ if __name__ == '__main__':
                     # 損失関数を計算する（生成器）
                     loss_l1 = loss_l1_fn( image_t_gt, output )
                     loss_vgg = loss_vgg_fn( image_t_gt, output )
+
+                    if( args.net_D_type == "multi_scale" ):
+                        loss_feat = loss_feat_fn( d_reals, d_fakes )
+                    else:
+                        loss_feat = torch.zeros(1, requires_grad=True).float().to(device)
+
                     if( args.net_D_type == "patch_gan" ):
                         loss_adv = loss_adv_fn.forward_G( d_fake )
                     elif( args.net_D_type == "multi_scale" ):
@@ -386,10 +406,16 @@ if __name__ == '__main__':
                     else:
                         NotImplementedError()
 
-                    loss_G =  args.lambda_l1 * loss_l1 + args.lambda_vgg * loss_vgg + args.lambda_adv * loss_adv
+                    if( args.net_D_type == "patch_gan" ):
+                        loss_G =  args.lambda_l1 * loss_l1 + args.lambda_vgg * loss_vgg + args.lambda_adv * loss_adv
+                    elif( args.net_D_type == "multi_scale" ):
+                        loss_G =  args.lambda_l1 * loss_l1 + args.lambda_vgg * loss_vgg + args.lambda_feat * loss_feat + args.lambda_adv * loss_adv
+                    else:
+                        NotImplementedError()
 
                     loss_l1_total += loss_l1
                     loss_vgg_total += loss_vgg
+                    loss_feat_total += loss_feat
                     loss_adv_total += loss_adv
                     loss_G_total += loss_G
 
@@ -422,6 +448,7 @@ if __name__ == '__main__':
                 # loss 値表示
                 board_valid.add_scalar('G/loss_l1', loss_l1_total.item()/n_valid_loop, step)
                 board_valid.add_scalar('G/loss_vgg', loss_vgg_total.item()/n_valid_loop, step)
+                board_valid.add_scalar('G/loss_feat', loss_feat_total.item()/n_valid_loop, step)
                 board_valid.add_scalar('G/loss_adv', loss_adv_total.item()/n_valid_loop, step)
                 board_valid.add_scalar('G/loss_G', loss_G_total.item()/n_valid_loop, step)
                 board_valid.add_scalar('D/loss_D', loss_D_total.item()/n_valid_loop, step)

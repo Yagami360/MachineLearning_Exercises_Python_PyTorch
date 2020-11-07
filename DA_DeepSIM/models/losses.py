@@ -210,3 +210,29 @@ class HingeGANLoss(nn.Module):
             loss = self.forward_G( d_fake )
 
         return loss
+
+
+#============================================
+# Pix2Pix-HD Feature Matching Loss
+#============================================
+class FeatureMatchingLoss(nn.Module):
+    """
+    Pix2Pix-HD の Feature Matching Loss
+    """
+    def __init__(self, device, n_dis = 3, n_layers_D = 3):
+        super(FeatureMatchingLoss, self).__init__()
+        self.device = device
+        self.n_dis = n_dis
+        self.n_layers_D = n_layers_D
+        self.loss_fn = torch.nn.L1Loss()
+        return
+
+    def forward(self, d_reals, d_fakes ):
+        loss = 0
+        weights_feat = 4.0 / (self.n_layers_D + 1)
+        weights_D = 1.0 / self.n_dis
+        for i in range(self.n_dis):
+            for j in range(len(d_fakes[i])-1):
+                loss += weights_D * weights_feat * self.loss_fn(d_fakes[i][j], d_reals[i][j].detach())
+
+        return loss

@@ -10,7 +10,7 @@ DATASET_DIR="dataset/deepsim_dataset"
 #----------------------
 # model
 #----------------------
-N_EPOCHES=2000
+N_EPOCHES=8000
 BATCH_SIZE=1
 IMAGE_HIGHT=768
 IMAGE_WIDTH=768

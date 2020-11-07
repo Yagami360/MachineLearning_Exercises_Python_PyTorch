@@ -10,7 +10,7 @@ DATASET_DIR="dataset/deepsim_dataset"
 #----------------------
 # model
 #----------------------
-N_EPOCHES=2000
+N_EPOCHES=8000
 BATCH_SIZE=1
 #IMAGE_HIGHT=512
 #IMAGE_WIDTH=1024
@@ -18,8 +18,8 @@ IMAGE_HIGHT=320
 IMAGE_WIDTH=640
 
 NET_G_TYPE=pix2pixhd
-#NET_D_TYPE=patch_gan
-NET_D_TYPE=multi_scale
+NET_D_TYPE=patch_gan
+#NET_D_TYPE=multi_scale
 
 #DATA_AUGUMENT_TYPE="none"
 #DATA_AUGUMENT_TYPE="affine"
