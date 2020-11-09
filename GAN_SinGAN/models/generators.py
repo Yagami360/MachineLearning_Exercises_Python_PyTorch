@@ -142,6 +142,9 @@ class PatchGANGenerator(nn.Module):
 
     def forward(self, noize_image_z):
         output = self.head_layer(noize_image_z)
+        #print( "[head_layer] output.shape : ", output.shape )
         output = self.body_layer(output)
+        #print( "[body_layer] output.shape : ", output.shape )
         output = self.output_layer(output)
+        #print( "[output_layer] output.shape : ", output.shape )
         return output
