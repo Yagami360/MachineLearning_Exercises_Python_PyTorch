@@ -22,7 +22,7 @@ from tensorboardX import SummaryWriter
 
 # 自作モジュール
 from data.singan_dataset import SinGANDataset, SinGANDataLoader
-from models.generators import Pix2PixHDGenerator, PatchGANGenerator
+from models.generators import SinGANGANGenerator
 from models.discriminators import PatchGANDiscriminator, MultiscaleDiscriminator
 from models.losses import VGGLoss, LSGANLoss
 from utils.utils import save_checkpoint, load_checkpoint
@@ -43,7 +43,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size_valid', type=int, default=1, help="バッチサイズ")
     parser.add_argument('--image_height', type=int, default=128, help="入力画像の高さ（pixel単位）")
     parser.add_argument('--image_width', type=int, default=128, help="入力画像の幅（pixel単位）")
-    parser.add_argument('--net_G_type', choices=['pix2pix_hd', 'patch_gan'], default="patch_gan", help="生成器ネットワークの種類")
+    parser.add_argument('--net_G_type', choices=['patch_gan'], default="patch_gan", help="生成器ネットワークの種類")
     parser.add_argument('--net_D_type', choices=['patch_gan'], default="patch_gan", help="識別器ネットワークの種類")
 
     parser.add_argument("--n_layers", type=int, default=5,)
@@ -52,7 +52,7 @@ if __name__ == '__main__':
     parser.add_argument("--stride", type=int, default=1,)
     parser.add_argument("--padding", type=int, default=0,)
 
-    parser.add_argument('--lr', type=float, default=0.0002, help="学習率")
+    parser.add_argument('--lr', type=float, default=0.0005, help="学習率")
     parser.add_argument('--beta1', type=float, default=0.5, help="学習率の減衰率")
     parser.add_argument('--beta2', type=float, default=0.999, help="学習率の減衰率")
     parser.add_argument('--lambda_l1', type=float, default=10.0, help="L1損失関数の係数値")
@@ -126,7 +126,13 @@ if __name__ == '__main__':
     # データセットの読み込み
     #================================    
     # 学習用データセットとテスト用データセットの設定
-    ds_train = SinGANDataset( args, args.dataset_dir, datamode = "train", image_height = args.image_height, image_width = args.image_width, train_progress_max = args.train_progress_max, scale_factor = args.scale_factor, data_augument = args.data_augument, debug = args.debug )
+    ds_train = SinGANDataset( 
+        args, args.dataset_dir, datamode = "train", 
+        image_height = args.image_height, image_width = args.image_width, 
+        n_layers=args.n_layers, kernel_size=args.kernel_size,
+        train_progress_max = args.train_progress_max, scale_factor = args.scale_factor, 
+        data_augument = args.data_augument, debug = args.debug
+    )
     dloader_train = torch.utils.data.DataLoader(ds_train, batch_size=args.batch_size, shuffle=True, num_workers = args.n_workers, pin_memory = True )
 
     # 学習用データセットとテスト用データセットの設定
@@ -146,10 +152,8 @@ if __name__ == '__main__':
     #================================
     # モデルの構造を定義する。
     #================================
-    if( args.net_G_type == "pix2pix_hd" ):
-        model_G = Pix2PixHDGenerator( input_nc=3, output_nc=3 ).to(device)
-    elif( args.net_G_type == "patch_gan" ):
-        model_G = PatchGANGenerator( input_nc=3, output_nc=3, n_fmaps=args.n_fmaps, n_layers=args.n_layers, kernel_size=args.kernel_size, stride=args.stride, padding=args.padding, ).to(device)
+    if( args.net_G_type == "patch_gan" ):
+        model_G = SinGANGANGenerator( input_nc=3, output_nc=3, n_fmaps=args.n_fmaps, n_layers=args.n_layers, kernel_size=args.kernel_size, stride=args.stride, padding=args.padding, train_progress_max = args.train_progress_max ).to(device)
     else:
         NotImplementedError()
 
@@ -184,18 +188,35 @@ if __name__ == '__main__':
     step = 0
 
     for train_progress in range(args.train_progress_max):
-        for epoch in tqdm( range(args.n_epoches), desc = "epoches" ):
-            for iter, inputs in enumerate( tqdm( dloader_train, desc = "epoch={}".format(epoch) ) ):
+        for epoch in tqdm( range(args.n_epoches), desc = "train_progress={}".format(train_progress) ):
+            for iter, inputs in enumerate( tqdm( dloader_train, desc = "train_progress={}, epoch={}".format(train_progress, epoch) ) ):
                 model_G.train()
                 model_D.train()
 
                 # 一番最後のミニバッチループで、バッチサイズに満たない場合は無視する（後の計算で、shape の不一致をおこすため）
-                if inputs["image_gt"].shape[0] != args.batch_size:
+                if inputs["image_gt_list"][train_progress].shape[0] != args.batch_size:
                     break
+
+                # ミニバッチデータの取得
+                noize_image_z_list = inputs["noize_image_z_list"]
+                for noize_image_z in noize_image_z_list:
+                    noize_image_z.to(device)
+
+                image_gt_list = inputs["image_gt_list"]          
+                image_gt = image_gt_list[train_progress].to(device)
+
+                if( args.debug and n_print > 0 ):
+                    for i in range(len(noize_image_z_list)):
+                        print( "noize_image_z_list[{}].shape : {}".format(i, noize_image_z_list[i].shape) )
+                    for i in range(len(image_gt_list)):
+                        print( "image_gt_list[{}].shape : {}".format(i, image_gt_list[i].shape) )
 
                 #----------------------------------------------------
                 # 生成器 の forword 処理
-                #----------------------------------------------------
+                #----------------------------------------------------                    
+                output, output_list = model_G( noize_image_z_list, train_progress )
+
+                """
                 if( train_progress == 0 ):
                     ds_train.update_train_progress(train_progress)
 
@@ -228,6 +249,7 @@ if __name__ == '__main__':
                     #print( "concat.shape: ", concat.shape )
                     model_G.train()
                     output = model_G( concat )
+                """
 
                 if( args.debug and n_print > 0 ):
                     print( "output.shape : ", output.shape )
@@ -303,6 +325,12 @@ if __name__ == '__main__':
                         [ image_gt, output ],
                     ]
                     board_add_images(board_train, 'train', visuals, step+1)
+
+                    for i in range(len(output_list)):
+                        visuals = [
+                            [ image_gt_list[i], output_list[i] ],
+                        ]
+                        board_add_images(board_train, 'train_progress_{}'.format(i), visuals, step+1)
 
             #====================================================
             # valid データでの処理

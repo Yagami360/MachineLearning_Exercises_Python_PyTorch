@@ -148,3 +148,71 @@ class PatchGANGenerator(nn.Module):
         output = self.output_layer(output)
         #print( "[output_layer] output.shape : ", output.shape )
         return output
+
+
+class SinGANGANGenerator(nn.Module):
+    def __init__( 
+        self, 
+        input_nc=3, output_nc=3,
+        n_fmaps=32, n_layers=5, kernel_size=3, stride=1, padding=0,
+        norm_type='batch',
+        train_progress_init = 0, train_progress_max = 8, 
+    ):
+        super(SinGANGANGenerator, self).__init__()
+        self.train_progress_init = train_progress_init
+        self.train_progress_max = train_progress_max
+
+        self.generators = nn.ModuleDict(
+            { "generator_{}".format(i) : 
+                PatchGANGenerator( input_nc, output_nc, n_fmaps=n_fmaps, n_layers=n_layers, kernel_size=kernel_size, stride=stride, padding=padding, )
+                for i in range(train_progress_max)
+            }
+        )
+        return
+
+    def freeze_grads( self, train_progress ):
+        for param in self.generators["generator_{}".format(train_progress)].parameters():
+            param.requires_grad_(False)
+        return
+
+    def forward(self, noize_image_z_list, train_progress = 0):
+        if( train_progress == 0 ):
+            output = self.generators["generator_{}".format(train_progress)](noize_image_z_list[train_progress])
+            output_list = [output]
+        else:
+            output_list = []
+
+            # １段目
+            self.freeze_grads(self.train_progress_init)
+            self.generators["generator_{}".format(self.train_progress_init)].eval()
+            with torch.no_grad():
+                output = self.generators["generator_{}".format(self.train_progress_init)](noize_image_z_list[self.train_progress_init])
+                output_list.append(output)
+
+            # ２段目以降
+            for i in range(self.train_progress_init+1, train_progress+1):
+                #print( "\ni : ", i )
+                if( i >= train_progress ):
+                    # 学習した低解像度での出力をアップサンプリングして、高解像度での入力に add
+                    output_upsampling = F.interpolate(output_list[-1], size=(noize_image_z_list[i].shape[2],noize_image_z_list[i].shape[3]), mode='bilinear', align_corners=True)
+                    noize_image_z = noize_image_z_list[i] + output_upsampling
+
+                    # 今回の解像度での出力
+                    self.generators["generator_{}".format(i)].train()
+                    output = self.generators["generator_{}".format(i)](noize_image_z)
+                    output_list.append(output)
+                    break
+                else:
+                    # 前回の train_progress に対しての低解像度での出力して、
+                    self.freeze_grads(i)
+                    self.generators["generator_{}".format(i)].eval()
+                    output_upsampling = F.interpolate(output_list[-1], size=(noize_image_z_list[i].shape[2],noize_image_z_list[i].shape[3]), mode='bilinear', align_corners=True)
+                    noize_image_z = noize_image_z_list[i] + output_upsampling
+
+                    with torch.no_grad():
+                        output = self.generators["generator_{}".format(i-1)](noize_image_z)
+                        output_list.append(output)
+                    continue
+
+        return output, output_list
+

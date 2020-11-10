@@ -32,23 +32,20 @@ class SinGANDataset(data.Dataset):
         self, 
         args, dataset_dir, datamode = "train", image_height = 128, image_width = 128, 
         train_progress_init = 0, train_progress_max = 8, scale_factor = 0.77823, 
-        n_fmaps=32, n_layers=5, kernel_size=3, stride=1, padding=0,        
+        n_layers=5, kernel_size=3,     
         data_augument = False, debug = False,
     ):
         super(SinGANDataset, self).__init__()
         self.args = args
         self.dataset_dir = dataset_dir
         self.datamode = datamode
-        self.train_progress = train_progress_init
+        self.train_progress_max = train_progress_max
         self.data_augument = data_augument
         self.image_height = image_height
         self.image_width = image_width
 
-        self.n_fmaps = n_fmaps
         self.n_layers = n_layers
         self.kernel_size = kernel_size
-        self.stride = stride
-        self.padding = padding
 
         self.debug = debug
 
@@ -76,10 +73,6 @@ class SinGANDataset(data.Dataset):
     def __len__(self):
         return len(self.image_names)
 
-    def update_train_progress(self, train_progress):
-        self.train_progress = train_progress
-        return
-
     def get_gan_noize_image_z(self, c, h, w, padding, noize_type = "uniform" ):
         if( noize_type == "uniform" ):
             noize_z = torch.randn( size = (1,h,w) )
@@ -101,42 +94,51 @@ class SinGANDataset(data.Dataset):
         #--------------------------------
         # 入力ノイズ画像
         #--------------------------------
-        noize_h = self.noize_sizes_h[self.train_progress]
-        noize_w = self.noize_sizes_w[self.train_progress]
-        noise_padding = int(((self.kernel_size - 1) * self.n_layers) / 2)
-        #print( "noise_padding : ", noise_padding )
+        noize_image_z_list = []
+        for train_progress in range(self.train_progress_max):
+            noize_h = self.noize_sizes_h[train_progress]
+            noize_w = self.noize_sizes_w[train_progress]
+            noise_padding = int(((self.kernel_size - 1) * self.n_layers) / 2)
+            #print( "noise_padding : ", noise_padding )
 
-        # input noize
-        noize_image_z = self.get_gan_noize_image_z( c=3, h=noize_h, w=noize_w, padding=noise_padding, noize_type="uniform" )
-        #print( "noize_image_z.shape : ", noize_image_z.shape )
+            # input noize
+            noize_image_z = self.get_gan_noize_image_z( c=3, h=noize_h, w=noize_w, padding=noise_padding, noize_type="uniform" )
+            #print( "noize_image_z.shape : ", noize_image_z.shape )
+            noize_image_z_list.append(noize_image_z)
 
         #--------------------------------
         # 正解画像
         #--------------------------------
         if( self.datamode in ["train", "valid"] ):
-            # transform
-            self.transform = transforms.Compose(
-                [
-                    transforms.Resize( (noize_h, noize_w), interpolation=Image.LANCZOS ),
-                    transforms.CenterCrop( size = (noize_h, noize_w) ),
-                    transforms.ToTensor(),
-                    transforms.Normalize( [0.5,0.5,0.5], [0.5,0.5,0.5] ),
-                ]
-            )
+            image_gt_list = []
+            for train_progress in range(self.train_progress_max):
+                noize_h = self.noize_sizes_h[train_progress]
+                noize_w = self.noize_sizes_w[train_progress]
 
-            # image
-            image_gt = Image.open( os.path.join(self.image_dir,image_name) ).convert('RGB')
-            image_gt = self.transform(image_gt)
+                # transform
+                self.transform = transforms.Compose(
+                    [
+                        transforms.Resize( (noize_h, noize_w), interpolation=Image.LANCZOS ),
+                        transforms.CenterCrop( size = (noize_h, noize_w) ),
+                        transforms.ToTensor(),
+                        transforms.Normalize( [0.5,0.5,0.5], [0.5,0.5,0.5] ),
+                    ]
+                )
+
+                # image
+                image_gt = Image.open( os.path.join(self.image_dir,image_name) ).convert('RGB')
+                image_gt = self.transform(image_gt)
+                image_gt_list.append(image_gt)
 
         if( self.datamode in ["train", "valid"] ):
             results_dict = {
-                "noize_image_z" : noize_image_z,
+                "noize_image_z_list" : noize_image_z_list,
                 "image_name" : image_name,
-                "image_gt" : image_gt,
+                "image_gt_list" : image_gt_list,
             }
         else:
             results_dict = {
-                "noize_image_z" : noize_image_z,
+                "noize_image_z_list" : noize_image_z_list,
             }
 
         return results_dict
