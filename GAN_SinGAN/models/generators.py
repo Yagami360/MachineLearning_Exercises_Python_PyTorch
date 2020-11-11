@@ -156,6 +156,7 @@ class PatchGANGenerator(nn.Module):
         output = self.output_layer(output)
         #print( "[output_layer] output.shape : ", output.shape )
         if output_upsampling is not None:
+            output_upsampling = F.interpolate(output_upsampling, size=(output.shape[2],output.shape[3]), mode='bilinear', align_corners=True)
             output = output + output_upsampling
 
         return output

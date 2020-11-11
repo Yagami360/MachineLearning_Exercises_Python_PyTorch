@@ -23,8 +23,8 @@ from tensorboardX import SummaryWriter
 # 自作モジュール
 from data.singan_dataset import SinGANDataset, SinGANDataLoader
 from models.generators import SinGANGANGenerator
-from models.discriminators import PatchGANDiscriminator, MultiscaleDiscriminator, SinGANPatchGANDiscriminator
-from models.losses import VGGLoss, LSGANLoss
+from models.discriminators import SinGANDiscriminator
+from models.losses import VGGLoss, LSGANLoss, SinGANRecLoss
 from utils.utils import save_checkpoint, load_checkpoint
 from utils.utils import board_add_image, board_add_images, save_image_w_norm
 
@@ -38,13 +38,13 @@ if __name__ == '__main__':
     parser.add_argument('--tensorboard_dir', type=str, default="tensorboard", help="TensorBoard のディレクトリ")
     parser.add_argument("--train_progress_max", type=int, default=8, help="")
     parser.add_argument("--scale_factor", type=float, default=0.77823, help="各解像度の倍率")    
-    parser.add_argument("--n_epoches", type=int, default=100, help="エポック数")    
+    parser.add_argument("--n_epoches", type=int, default=2000, help="エポック数")    
     parser.add_argument('--batch_size', type=int, default=4, help="バッチサイズ")
     parser.add_argument('--batch_size_valid', type=int, default=1, help="バッチサイズ")
     parser.add_argument('--image_height', type=int, default=128, help="入力画像の高さ（pixel単位）")
     parser.add_argument('--image_width', type=int, default=128, help="入力画像の幅（pixel単位）")
     parser.add_argument('--net_G_type', choices=['patch_gan'], default="patch_gan", help="生成器ネットワークの種類")
-    parser.add_argument('--net_D_type', choices=['patch_gan', 'singan_patch_gan'], default="singan_patch_gan", help="識別器ネットワークの種類")
+    parser.add_argument('--net_D_type', choices=["singan_patch_gan"], default="singan_patch_gan", help="識別器ネットワークの種類")
 
     parser.add_argument("--n_layers", type=int, default=5,)
     parser.add_argument("--n_fmaps", type=int, default=32)
@@ -55,9 +55,10 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=0.0005, help="学習率")
     parser.add_argument('--beta1', type=float, default=0.5, help="学習率の減衰率")
     parser.add_argument('--beta2', type=float, default=0.999, help="学習率の減衰率")
-    parser.add_argument('--lambda_l1', type=float, default=10.0, help="L1損失関数の係数値")
-    parser.add_argument('--lambda_vgg', type=float, default=10.0, help="VGG perceptual loss の係数値")
-    parser.add_argument('--lambda_adv', type=float, default=1.0, help="Adv loss_G の係数値")
+    parser.add_argument('--lambda_l1', type=float, default=0.0, help="L1損失関数の係数値")
+    parser.add_argument('--lambda_vgg', type=float, default=0.0, help="VGG perceptual loss の係数値")
+    parser.add_argument('--lambda_adv', type=float, default=1.0, help="Adv loss の係数値")
+    parser.add_argument('--lambda_rec', type=float, default=10.0, help="reconstruction loss の係数値")
     parser.add_argument("--n_diaplay_step", type=int, default=100,)
     parser.add_argument('--n_display_valid_step', type=int, default=500, help="valid データの tensorboard への表示間隔")
     parser.add_argument("--n_save_epoches", type=int, default=10,)
@@ -157,10 +158,8 @@ if __name__ == '__main__':
     else:
         NotImplementedError()
 
-    if( args.net_D_type == "patch_gan" ):
-        model_D = PatchGANDiscriminator( n_in_channels = 3, n_fmaps = 64 ).to( device )
-    elif( args.net_D_type == "singan_patch_gan" ):
-        model_D = SinGANPatchGANDiscriminator( input_nc=3, output_nc=3, n_fmaps=args.n_fmaps, n_layers=args.n_layers, kernel_size=args.kernel_size, stride=args.stride, padding=args.padding ).to(device)
+    if( args.net_D_type == "singan_patch_gan" ):
+        model_D = SinGANDiscriminator( input_nc=3, output_nc=3, n_fmaps=args.n_fmaps, n_layers=args.n_layers, kernel_size=args.kernel_size, stride=args.stride, padding=args.padding, train_progress_max = args.train_progress_max ).to(device)
     else:
         NotImplementedError()
 
@@ -184,6 +183,12 @@ if __name__ == '__main__':
     loss_l1_fn = nn.L1Loss()
     loss_vgg_fn = VGGLoss(device, n_channels=3)
     loss_adv_fn = LSGANLoss(device)
+    loss_rec_fn = SinGANRecLoss(
+        device, 
+        batch_size=args.batch_size, image_height = args.image_height, image_width = args.image_width, 
+        n_layers=args.n_layers, kernel_size=args.kernel_size,
+        train_progress_max = args.train_progress_max, scale_factor = args.scale_factor
+    )
 
     #================================
     # モデルの学習
@@ -231,8 +236,8 @@ if __name__ == '__main__':
                     param.requires_grad = True
 
                 # 学習用データをモデルに流し込む
-                d_real = model_D( image_gt )
-                d_fake = model_D( output.detach() )
+                d_real = model_D( image_gt, train_progress )
+                d_fake = model_D( output.detach(), train_progress )
                 if( args.debug and n_print > 0 ):
                     print( "d_real.shape :", d_real.shape )
                     print( "d_fake.shape :", d_fake.shape )
@@ -256,7 +261,8 @@ if __name__ == '__main__':
                 loss_l1 = loss_l1_fn( image_gt, output )
                 loss_vgg = loss_vgg_fn( image_gt, output )
                 loss_adv = loss_adv_fn.forward_G( d_fake )
-                loss_G =  args.lambda_l1 * loss_l1 + args.lambda_vgg * loss_vgg + args.lambda_adv * loss_adv
+                loss_rec = loss_rec_fn( model_G, image_gt, train_progress )
+                loss_G =  args.lambda_l1 * loss_l1 + args.lambda_vgg * loss_vgg + args.lambda_adv * loss_adv + args.lambda_rec * loss_rec
 
                 # ネットワークの更新処理
                 optimizer_G.zero_grad()
@@ -277,11 +283,12 @@ if __name__ == '__main__':
                     board_train.add_scalar('G/loss_l1', loss_l1.item(), step)
                     board_train.add_scalar('G/loss_vgg', loss_vgg.item(), step)
                     board_train.add_scalar('G/loss_adv', loss_adv.item(), step)
+                    board_train.add_scalar('G/loss_rec', loss_rec.item(), step)
                     board_train.add_scalar('G/loss_G', loss_G.item(), step)
                     board_train.add_scalar('D/loss_D_real', loss_D_real.item(), step)
                     board_train.add_scalar('D/loss_D_fake', loss_D_fake.item(), step)
                     board_train.add_scalar('D/loss_D', loss_D.item(), step)
-                    print( "step={}, loss_G={:.5f}, loss_l1={:.5f}, loss_vgg={:.5f}".format(step, loss_G.item(), loss_l1.item(), loss_vgg.item(), loss_adv.item()) )
+                    print( "step={}, loss_G={:.5f}, loss_l1={:.5f}, loss_vgg={:.5f}, loss_adv={:.5f}, loss_rec={:.5f}".format(step, loss_G.item(), loss_l1.item(), loss_vgg.item(), loss_adv.item(), loss_rec.item()) )
                     print( "step={}, loss_D={:.5f}, loss_D_real={:.5f}, loss_D_fake={:.5f}".format(step, loss_D.item(), loss_D_real.item(), loss_D_fake.item()) )
 
                     # visual images

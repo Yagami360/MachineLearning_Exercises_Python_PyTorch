@@ -200,11 +200,40 @@ class SinGANPatchGANDiscriminator(nn.Module):
         )
         return        
 
-    def forward(self, noize_image_z):
-        output = self.head_layer(noize_image_z)
+    def forward(self, image_gen ):
+        output = self.head_layer(image_gen)
         #print( "[head_layer] output.shape : ", output.shape )
         output = self.body_layer(output)
         #print( "[body_layer] output.shape : ", output.shape )
         output = self.output_layer(output)
         #print( "[output_layer] output.shape : ", output.shape )
+        return output
+
+
+class SinGANDiscriminator(nn.Module):
+    def __init__( 
+        self, 
+        input_nc=3, output_nc=3,
+        n_fmaps=32, n_layers=5, kernel_size=3, stride=1, padding=0,
+        norm_type='batch',
+        train_progress_init = 0, train_progress_max = 8, 
+    ):
+        super(SinGANDiscriminator, self).__init__()
+        self.train_progress_init = train_progress_init
+        self.train_progress_max = train_progress_max
+
+        self.discriminators = nn.ModuleDict(
+            { "discriminator_{}".format(i) : 
+                SinGANPatchGANDiscriminator( input_nc, output_nc, n_fmaps=n_fmaps, n_layers=n_layers, kernel_size=kernel_size, stride=stride, padding=padding, )
+                for i in range(train_progress_max)
+            }
+        )
+
+    def freeze_grads( self, train_progress ):
+        for param in self.discriminators["discriminator_{}".format(train_progress)].parameters():
+            param.requires_grad_(False)
+        return
+
+    def forward(self, image_gen, train_progress = 0):
+        output = self.discriminators["discriminator_{}".format(train_progress)](image_gen)
         return output

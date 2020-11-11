@@ -236,3 +236,100 @@ class FeatureMatchingLoss(nn.Module):
                 loss += weights_D * weights_feat * self.loss_fn(d_fakes[i][j], d_reals[i][j].detach())
 
         return loss
+
+#============================================
+# SinGAN reconstruction loss
+#============================================
+class SinGANRecLoss(nn.Module):
+    """
+    SinGAN の reconstruction loss
+    """
+    def __init__(
+        self, device,
+        batch_size = 1,
+        image_height = 128, image_width = 128, 
+        train_progress_init = 0, train_progress_max = 8, scale_factor = 0.77823,
+        n_layers=5, kernel_size=3,
+    ):
+        super(SinGANRecLoss, self).__init__()
+        self.image_height = image_height
+        self.image_width = image_width
+        self.train_progress_init = train_progress_init
+        self.train_progress_max = train_progress_max
+        self.n_layers = n_layers
+        self.kernel_size = kernel_size
+        self.loss_fn = nn.MSELoss()
+
+        self.noize_sizes_h = [self.image_height]
+        self.noize_sizes_w = [self.image_width]
+        for i in range(train_progress_max):
+            self.noize_sizes_h.insert(0, int(self.noize_sizes_h[0] * scale_factor) )
+            self.noize_sizes_w.insert(0, int(self.noize_sizes_w[0] * scale_factor) )
+
+        #--------------------------------
+        # 固定入力ノイズ画像
+        #--------------------------------
+        self.fix_noize_image_z_list = []
+        for train_progress in range(self.train_progress_max):
+            noize_h = self.noize_sizes_h[train_progress]
+            noize_w = self.noize_sizes_w[train_progress]
+            noise_padding = int(((self.kernel_size - 1) * self.n_layers) / 2)
+
+            # input noize
+            if( train_progress == train_progress_init ):
+                fix_noize_image_z = self.get_gan_noize_image_z( b=1, c=3, h=noize_h, w=noize_w, padding=noise_padding, noize_type="uniform" ).to(device)
+            else:
+                fix_noize_image_z = self.get_gan_noize_image_z( b=1, c=3, h=noize_h, w=noize_w, padding=noise_padding, noize_type="zeros" ).to(device)
+
+            print( "fix_noize_image_z.shape : ", fix_noize_image_z.shape )
+            self.fix_noize_image_z_list.append(fix_noize_image_z)
+
+        return
+
+    def get_gan_noize_image_z(self, b, c, h, w, padding, noize_type = "uniform" ):
+        if( noize_type == "uniform" ):
+            noize_z = torch.randn( size = (b,1,h,w) )
+        elif( noize_type == "zeros" ):
+            noize_z = torch.zeros( size = (b,1,h,w) )
+        else:
+            NotImplementedError()
+
+        # チャネル次元は同じ値にする
+        noize_z = noize_z.expand(b,c,h,w)
+
+        # zero padding で境界をゼロ埋め
+        zero_pad = nn.ZeroPad2d(padding)
+        noize_z = zero_pad(noize_z)
+        return noize_z
+
+    def forward(self, model_G, image_gt, train_progress = 0):
+        if( train_progress == 0 ):
+            output = model_G.generators["generator_{}".format(train_progress)](self.fix_noize_image_z_list[train_progress], output_upsampling=None)
+            loss = self.loss_fn( output, image_gt )
+        else:
+            output_list = []
+            model_G.generators["generator_{}".format(self.train_progress_init)].eval()
+            with torch.no_grad():
+                output = model_G.generators["generator_{}".format(self.train_progress_init)](self.fix_noize_image_z_list[self.train_progress_init], output_upsampling=None)
+                output_list.append(output)
+
+            for i in range(self.train_progress_init+1, train_progress+1):
+                if( i >= train_progress ):
+                    output_upsampling = F.interpolate(output_list[-1], size=(self.fix_noize_image_z_list[i].shape[2],self.fix_noize_image_z_list[i].shape[3]), mode='bilinear', align_corners=True)
+                    model_G.generators["generator_{}".format(i)].train()
+                    output = model_G.generators["generator_{}".format(i)](self.fix_noize_image_z_list[i], output_upsampling)
+                    output_list.append(output)
+                    break
+                else:
+                    model_G.generators["generator_{}".format(i)].eval()
+                    output_upsampling = F.interpolate(output_list[-1], size=(self.fix_noize_image_z_list[i].shape[2],self.fix_noize_image_z_list[i].shape[3]), mode='bilinear', align_corners=True)
+                    with torch.no_grad():
+                        output = model_G.generators["generator_{}".format(i-1)](self.fix_noize_image_z_list[i], output_upsampling)
+                        output_list.append(output)
+                    continue
+
+            #print( "output_list[-1].shape : ", output_list[-1].shape )            
+            #print( "image_gt.shape : ", image_gt.shape )
+            loss = self.loss_fn( output_list[-1], image_gt )
+
+        return loss
