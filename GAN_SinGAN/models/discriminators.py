@@ -1,6 +1,7 @@
 # -*- coding:utf-8 -*-
 import os
 import numpy as np
+import functools
 
 import torch
 import torch.nn as nn
@@ -153,3 +154,57 @@ class MultiscaleDiscriminator(nn.Module):
             outputs_allD.append( outputs_oneD )
 
         return outputs_allD
+
+
+class SinGANPatchGANDiscriminator(nn.Module):
+    def __init__( 
+        self, 
+        input_nc=3, output_nc=3,
+        n_fmaps=32, n_layers=5, kernel_size=3, stride=1, padding=0,
+        norm_type='batch',
+    ):
+        super(SinGANPatchGANDiscriminator, self).__init__()
+
+        def define_conv_block( in_dim, out_dim, norm_layer, kernel_size=4, stride=2, padding=1 ):
+            model = nn.Sequential(
+                nn.Conv2d( in_dim, out_dim, kernel_size, stride=stride, padding=padding ),
+                norm_layer( out_dim ),
+                nn.LeakyReLU( 0.2, inplace=True )
+            )
+            return model
+
+        if norm_type == 'batch':
+            norm_layer = functools.partial(nn.BatchNorm2d, affine=True)
+        elif norm_type == 'instance':
+            norm_layer = functools.partial(nn.InstanceNorm2d, affine=False)
+        else:
+            raise NotImplementedError()
+
+        # １段目の層
+        self.head_layer = define_conv_block( in_dim = input_nc, out_dim = n_fmaps, norm_layer = norm_layer, kernel_size=kernel_size, stride=stride, padding=padding )
+
+        # 中間層
+        self.body_layer = nn.Sequential()
+        for i in range(n_layers-2):
+            n_fmaps_mult = int(n_fmaps/pow(2,(i+1)))
+            #print( "n_fmaps_mult : ", n_fmaps_mult )
+            conv_block = define_conv_block(
+                in_dim = max(n_fmaps_mult * 2, n_fmaps), out_dim = max(n_fmaps_mult, n_fmaps),
+                norm_layer = norm_layer, kernel_size=kernel_size, stride=stride, padding=padding 
+            )
+            self.body_layer.add_module( "conv_block_{}".format(i+1), conv_block )
+
+        # 出力層        
+        self.output_layer = nn.Sequential(
+            nn.Conv2d(max(n_fmaps_mult, n_fmaps), output_nc, kernel_size=kernel_size, stride=stride, padding=padding),
+        )
+        return        
+
+    def forward(self, noize_image_z):
+        output = self.head_layer(noize_image_z)
+        #print( "[head_layer] output.shape : ", output.shape )
+        output = self.body_layer(output)
+        #print( "[body_layer] output.shape : ", output.shape )
+        output = self.output_layer(output)
+        #print( "[output_layer] output.shape : ", output.shape )
+        return output

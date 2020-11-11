@@ -23,7 +23,7 @@ from tensorboardX import SummaryWriter
 # 自作モジュール
 from data.singan_dataset import SinGANDataset, SinGANDataLoader
 from models.generators import SinGANGANGenerator
-from models.discriminators import PatchGANDiscriminator, MultiscaleDiscriminator
+from models.discriminators import PatchGANDiscriminator, MultiscaleDiscriminator, SinGANPatchGANDiscriminator
 from models.losses import VGGLoss, LSGANLoss
 from utils.utils import save_checkpoint, load_checkpoint
 from utils.utils import board_add_image, board_add_images, save_image_w_norm
@@ -44,7 +44,7 @@ if __name__ == '__main__':
     parser.add_argument('--image_height', type=int, default=128, help="入力画像の高さ（pixel単位）")
     parser.add_argument('--image_width', type=int, default=128, help="入力画像の幅（pixel単位）")
     parser.add_argument('--net_G_type', choices=['patch_gan'], default="patch_gan", help="生成器ネットワークの種類")
-    parser.add_argument('--net_D_type', choices=['patch_gan'], default="patch_gan", help="識別器ネットワークの種類")
+    parser.add_argument('--net_D_type', choices=['patch_gan', 'singan_patch_gan'], default="singan_patch_gan", help="識別器ネットワークの種類")
 
     parser.add_argument("--n_layers", type=int, default=5,)
     parser.add_argument("--n_fmaps", type=int, default=32)
@@ -157,7 +157,12 @@ if __name__ == '__main__':
     else:
         NotImplementedError()
 
-    model_D = PatchGANDiscriminator( n_in_channels = 3, n_fmaps = 64 ).to( device )
+    if( args.net_D_type == "patch_gan" ):
+        model_D = PatchGANDiscriminator( n_in_channels = 3, n_fmaps = 64 ).to( device )
+    elif( args.net_D_type == "singan_patch_gan" ):
+        model_D = SinGANPatchGANDiscriminator( input_nc=3, output_nc=3, n_fmaps=args.n_fmaps, n_layers=args.n_layers, kernel_size=args.kernel_size, stride=args.stride, padding=args.padding ).to(device)
+    else:
+        NotImplementedError()
 
     # モデルを読み込む
     if not args.load_checkpoints_path == '' and os.path.exists(args.load_checkpoints_path):
@@ -199,58 +204,22 @@ if __name__ == '__main__':
 
                 # ミニバッチデータの取得
                 noize_image_z_list = inputs["noize_image_z_list"]
-                for noize_image_z in noize_image_z_list:
-                    noize_image_z.to(device)
+                for i in range(len(noize_image_z_list)):
+                    noize_image_z_list[i] = noize_image_z_list[i].to(device)
 
                 image_gt_list = inputs["image_gt_list"]          
                 image_gt = image_gt_list[train_progress].to(device)
 
                 if( args.debug and n_print > 0 ):
                     for i in range(len(noize_image_z_list)):
-                        print( "noize_image_z_list[{}].shape : {}".format(i, noize_image_z_list[i].shape) )
+                        print( "noize_image_z_list[{}] shape={}, device={}, dtype={}, min={}, max={}".format(i, noize_image_z_list[i].shape, noize_image_z_list[i].device, noize_image_z_list[i].dtype, torch.min(noize_image_z_list[i]), torch.max(noize_image_z_list[i])) )
                     for i in range(len(image_gt_list)):
-                        print( "image_gt_list[{}].shape : {}".format(i, image_gt_list[i].shape) )
+                        print( "image_gt_list[{}] shape={}, device={}, dtype={}, min={}, max={}".format(i, image_gt_list[i].shape, image_gt_list[i].device, image_gt_list[i].dtype, torch.min(image_gt_list[i]), torch.max(image_gt_list[i])) )
 
                 #----------------------------------------------------
                 # 生成器 の forword 処理
                 #----------------------------------------------------                    
                 output, output_list = model_G( noize_image_z_list, train_progress )
-
-                """
-                if( train_progress == 0 ):
-                    ds_train.update_train_progress(train_progress)
-
-                    # ミニバッチデータを GPU へ転送
-                    noize_image_z = inputs["noize_image_z"].to(device)
-                    image_gt = inputs["image_gt"].to(device)
-                    if( args.debug and n_print > 0):
-                        print( "[noize_image_z] shape={}, dtype={}, min={}, max={}".format(noize_image_z.shape, noize_image_z.dtype, torch.min(noize_image_z), torch.max(noize_image_z)) )
-                        print( "[image_gt] shape={}, dtype={}, min={}, max={}".format(image_gt.shape, image_gt.dtype, torch.min(image_gt), torch.max(image_gt)) )
-
-                    output = model_G( noize_image_z )
-                else:
-                    # 学習した低解像度での出力
-                    ds_train.update_train_progress(train_progress-1)
-                    noize_image_z = inputs["noize_image_z"].to(device)
-                    image_gt = inputs["image_gt"].to(device)
-
-                    model_G.eval()
-                    with torch.no_grad():
-                        output = model_G( noize_image_z )
-
-                    # 学習した低解像度での出力をアップサンプリングして、高解像度での入力に concat
-                    ds_train.update_train_progress(train_progress)
-                    noize_image_z = inputs["noize_image_z"].to(device)
-                    image_gt = inputs["image_gt"].to(device)
-                    output = F.interpolate(output, size=(noize_image_z.shape[2],noize_image_z.shape[3]), mode='bilinear', align_corners=True)
-
-                    #concat = torch.cat( [noize_image_z, output] , dim = 1 )
-                    concat = noize_image_z + output
-                    #print( "concat.shape: ", concat.shape )
-                    model_G.train()
-                    output = model_G( concat )
-                """
-
                 if( args.debug and n_print > 0 ):
                     print( "output.shape : ", output.shape )
 

@@ -6,16 +6,17 @@ mkdir -p _logs
 #----------------------
 # model
 #----------------------
-N_EPOCHES=100
+N_EPOCHES=2000
 BATCH_SIZE=1
 IMAGE_HIGHT=186
 IMAGE_WIDTH=248
 
-#NET_G_TYPE="pix2pix_hd"
 NET_G_TYPE="patch_gan"
-NET_D_TYPE="patch_gan"
+#NET_D_TYPE="patch_gan"
+NET_D_TYPE="singan_patch_gan"
 
 EXPER_NAME=debug
+#EXPER_NAME=netG-${NET_G_TYPE}_netD-${NET_D_TYPE}_h${IMAGE_HIGHT}_w${IMAGE_WIDTH}_ep${N_EPOCHES}_201110
 rm -rf tensorboard/${EXPER_NAME}
 rm -rf tensorboard/${EXPER_NAME}_valid
 if [ ${EXPER_NAME} = "debug" ] ; then
