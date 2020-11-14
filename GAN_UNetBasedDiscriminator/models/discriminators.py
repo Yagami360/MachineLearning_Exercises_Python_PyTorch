@@ -1,6 +1,7 @@
 # -*- coding:utf-8 -*-
 import os
 import numpy as np
+import functools
 
 import torch
 import torch.nn as nn
@@ -21,6 +22,7 @@ class PatchGANDiscriminator( nn.Module ):
         n_fmaps = 32
     ):
         super( PatchGANDiscriminator, self ).__init__()
+
         def discriminator_block1( in_dim, out_dim ):
             model = nn.Sequential(
                 nn.Conv2d( in_dim, out_dim, 4, stride=2, padding=1 ),
@@ -147,3 +149,89 @@ class MultiscaleDiscriminator(nn.Module):
             outputs_allD.append( outputs_oneD )
 
         return outputs_allD
+
+
+#------------------------------------
+# A U-Net Based Discriminator
+#------------------------------------
+class UNetDiscriminator(nn.Module):
+    """
+    U-Net Based Discriminator
+    """
+    def __init__(self, n_in_channels=3, n_out_channels=1, n_fmaps=64, n_downsampling=4, norm_type='batch'):
+        super( UNetDiscriminator, self ).__init__()
+        self.n_downsampling = n_downsampling
+        if norm_type == 'batch':
+            self.norm_layer = functools.partial(nn.BatchNorm2d, affine=True)
+        elif norm_type == 'instance':
+            self.norm_layer = functools.partial(nn.InstanceNorm2d, affine=False)
+        else:
+            raise NotImplementedError()
+
+        def conv_block( in_dim, out_dim ):
+            model = nn.Sequential(
+                nn.Conv2d( in_dim, out_dim, kernel_size=3, stride=1, padding=1 ),
+                self.norm_layer( out_dim ),
+                nn.LeakyReLU( 0.2, inplace=True ),
+                nn.Conv2d( out_dim, out_dim, kernel_size=3, stride=1, padding=1 ),
+                self.norm_layer( out_dim ),
+            )
+            return model
+
+        def dconv_block( in_dim, out_dim ):
+            model = nn.Sequential(
+                nn.ConvTranspose2d( in_dim, out_dim, kernel_size=3, stride=2, padding=1,output_padding=1 ),
+                self.norm_layer(out_dim),
+                nn.LeakyReLU( 0.2, inplace=True ),
+            )
+            return model
+
+        # encoder
+        in_dim = n_in_channels
+        out_dim = n_fmaps
+        self.encoder = nn.ModuleDict()
+        for i in range(n_downsampling):
+            self.encoder["conv_{}".format(i+1)] = conv_block( in_dim, out_dim )
+            self.encoder["pool_{}".format(i+1)] = nn.MaxPool2d( kernel_size=2, stride=2, padding=0 )
+            in_dim = n_fmaps * (2**(i))
+            out_dim = n_fmaps * (2**(i+1))
+
+        # bottle neck
+        self.bridge = conv_block( n_fmaps * (2**(n_downsampling-1)), n_fmaps*(2**(n_downsampling-1))*2 )
+
+        # decoder
+        self.decoder = nn.ModuleDict()
+        for i in range(n_downsampling):
+            in_dim = n_fmaps * (2**(n_downsampling-i))
+            out_dim = int( in_dim / 2 )
+            self.decoder["deconv_{}".format(i+1)] = dconv_block( in_dim, out_dim )
+            self.decoder["conv_{}".format(i+1)] = conv_block( in_dim, out_dim )
+
+        # 出力層
+        self.out_layer = nn.Sequential( nn.Conv2d( n_fmaps, n_out_channels, 3, 1, 1 ),)
+        return
+
+    def forward(self, input):
+        #print("[UNetDiscriminator] input.shape : ", input.shape )
+        encode = input
+
+        skip_connections = []
+        for i in range(self.n_downsampling):
+            encode = self.encoder["conv_{}".format(i+1)](encode)
+            skip_connections.append( encode.clone() )
+            encode = self.encoder["pool_{}".format(i+1)](encode)
+            #print("[UNetDiscriminator] encoder_{} / output.shape={}".format(i+1, output.shape) )
+
+        encode = self.bridge(encode)
+        #print("[UNetDiscriminator] bridge / output.shape={}".format(i+1, output.shape) )
+
+        decode = encode.clone()
+        for i in range(self.n_downsampling):
+            decode = self.decoder["deconv_{}".format(i+1)](decode)
+            decode = self.decoder["conv_{}".format(i+1)]( torch.cat( [decode, skip_connections[-1 - i]], dim=1 ) )
+            #print("[UNetDiscriminator] decoder_{} / output.shape={}".format(i+1, output.shape) )
+
+        decode = self.out_layer(decode)
+        #print("[UNetDiscriminator] out_layer / output.shape : ", output.shape )
+        return encode, decode
+

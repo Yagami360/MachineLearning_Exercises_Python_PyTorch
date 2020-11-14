@@ -18,7 +18,7 @@ from torchvision.utils import save_image
 from tensorboardX import SummaryWriter
 
 # 自作クラス
-from networks import UNet
+from networks import UNet4Generator, UNetGenerator
 from map2aerial_dataset import Map2AerialDataset, Map2AerialDataLoader
 from utils import save_checkpoint, load_checkpoint
 from utils import board_add_image, board_add_images
@@ -113,7 +113,7 @@ if __name__ == '__main__':
     #======================================================================
     # モデルの構造を定義する。
     #======================================================================
-    model = UNet( 
+    model = UNet4Generator( 
         n_in_channels = 3, n_out_channels = 3,
         n_fmaps = args.n_fmaps,
     ).to( device )

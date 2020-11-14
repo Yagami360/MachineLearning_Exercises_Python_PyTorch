@@ -22,8 +22,8 @@ from tensorboardX import SummaryWriter
 
 # 自作モジュール
 from data.dataset import TempleteDataset, TempleteDataLoader
-from models.generators import Pix2PixHDGenerator
-from models.discriminators import PatchGANDiscriminator, MultiscaleDiscriminator
+from models.generators import Pix2PixHDGenerator, UNetGenerator
+from models.discriminators import PatchGANDiscriminator, UNetDiscriminator
 from models.losses import VGGLoss, LSGANLoss
 from utils.utils import save_checkpoint, load_checkpoint
 from utils.utils import board_add_image, board_add_images, save_image_w_norm
@@ -41,6 +41,8 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size_valid', type=int, default=1, help="バッチサイズ")
     parser.add_argument('--image_height', type=int, default=128, help="入力画像の高さ（pixel単位）")
     parser.add_argument('--image_width', type=int, default=128, help="入力画像の幅（pixel単位）")
+    parser.add_argument('--net_G_type', choices=['pix2pixhd', 'unet'], default="pix2pixhd", help="生成器ネットワークの種類")
+    parser.add_argument('--net_D_type', choices=['patchgan', 'unet'], default="patchgan", help="識別器ネットワークの種類")
     parser.add_argument('--lr', type=float, default=0.0002, help="学習率")
     parser.add_argument('--beta1', type=float, default=0.5, help="学習率の減衰率")
     parser.add_argument('--beta2', type=float, default=0.999, help="学習率の減衰率")
@@ -133,8 +135,19 @@ if __name__ == '__main__':
     #================================
     # モデルの構造を定義する。
     #================================
-    model_G = Pix2PixHDGenerator().to(device)
-    model_D = PatchGANDiscriminator( n_in_channels = 3+3, n_fmaps = 64 ).to( device )
+    if( args.net_G_type == "pix2pixhd" ):
+        model_G = Pix2PixHDGenerator().to(device)
+    elif( args.net_G_type == "unet" ):
+        model_G = UNetGenerator( n_in_channels=3, n_out_channels=3, n_downsampling=4, norm_type='batch' ).to(device)
+    else:
+        NotImplementedError()
+
+    if( args.net_D_type == "patchgan" ):
+        model_D = PatchGANDiscriminator( n_in_channels = 3+3, n_fmaps = 64 ).to( device )
+    elif( args.net_D_type == "unet" ):
+        model_D = UNetDiscriminator( n_in_channels = 3+3, n_fmaps = 64 ).to( device )
+    else:
+        NotImplementedError()
 
     # モデルを読み込む
     if not args.load_checkpoints_path == '' and os.path.exists(args.load_checkpoints_path):
@@ -194,14 +207,18 @@ if __name__ == '__main__':
                 param.requires_grad = True
 
             # 学習用データをモデルに流し込む
-            d_real = model_D( torch.cat([image, target], dim=1) )
-            d_fake = model_D( torch.cat([image, output.detach()], dim=1) )
+            d_real_encode, d_real_decode = model_D( torch.cat([image, target], dim=1) )
+            d_fake_encode, d_fake_decode = model_D( torch.cat([image, output.detach()], dim=1) )
             if( args.debug and n_print > 0 ):
-                print( "d_real.shape :", d_real.shape )
-                print( "d_fake.shape :", d_fake.shape )
+                print( "d_real_encode.shape :", d_real_encode.shape )
+                print( "d_real_decode.shape :", d_real_decode.shape )
+                print( "d_fake_encode.shape :", d_fake_encode.shape )
+                print( "d_fake_decode.shape :", d_fake_decode.shape )
 
             # 損失関数を計算する
-            loss_D, loss_D_real, loss_D_fake = loss_adv_fn.forward_D( d_real, d_fake )
+            loss_D_encode, loss_D_real_encode, loss_D_fake_encode = loss_adv_fn.forward_D( d_real_encode, d_fake_encode )
+            loss_D_decode, loss_D_real_decode, loss_D_fake_decode = loss_adv_fn.forward_D( d_fake_encode, d_fake_decode )
+            loss_D = loss_D_encode + loss_D_decode
 
             # ネットワークの更新処理
             optimizer_D.zero_grad()
@@ -218,8 +235,9 @@ if __name__ == '__main__':
             # 損失関数を計算する
             loss_l1 = loss_l1_fn( target, output )
             loss_vgg = loss_vgg_fn( target, output )
-            loss_adv = loss_adv_fn.forward_G( d_fake )
-            loss_G =  args.lambda_l1 * loss_l1 + args.lambda_vgg * loss_vgg + args.lambda_adv * loss_adv
+            loss_adv_encode = loss_adv_fn.forward_G( d_fake_encode )
+            loss_adv_decode = loss_adv_fn.forward_G( d_fake_decode )
+            loss_G =  args.lambda_l1 * loss_l1 + args.lambda_vgg * loss_vgg + args.lambda_adv * ( loss_adv_encode + loss_adv_decode )
 
             # ネットワークの更新処理
             optimizer_G.zero_grad()
@@ -237,19 +255,26 @@ if __name__ == '__main__':
                 board_train.add_scalar('lr/learning rate', lr, step )
 
                 # loss
+                board_train.add_scalar('G/loss_G', loss_G.item(), step)
                 board_train.add_scalar('G/loss_l1', loss_l1.item(), step)
                 board_train.add_scalar('G/loss_vgg', loss_vgg.item(), step)
-                board_train.add_scalar('G/loss_adv', loss_adv.item(), step)
-                board_train.add_scalar('G/loss_G', loss_G.item(), step)
-                board_train.add_scalar('D/loss_D_real', loss_D_real.item(), step)
-                board_train.add_scalar('D/loss_D_fake', loss_D_fake.item(), step)
+                board_train.add_scalar('G/loss_adv_encode', loss_adv_encode.item(), step)
+                board_train.add_scalar('G/loss_adv_decode', loss_adv_decode.item(), step)
+
                 board_train.add_scalar('D/loss_D', loss_D.item(), step)
-                print( "step={}, loss_G={:.5f}, loss_l1={:.5f}, loss_vgg={:.5f}, loss_adv={:.5f}".format(step, loss_G.item(), loss_l1.item(), loss_vgg.item(), loss_adv.item()) )
-                print( "step={}, loss_D={:.5f}, loss_D_real={:.5f}, loss_D_fake={:.5f}".format(step, loss_D.item(), loss_D_real.item(), loss_D_fake.item()) )
+                board_train.add_scalar('D/loss_D_encode', loss_D_encode.item(), step)
+                board_train.add_scalar('D/loss_D_real_encode', loss_D_real_encode.item(), step)
+                board_train.add_scalar('D/loss_D_fake_encode', loss_D_fake_encode.item(), step)
+                board_train.add_scalar('D/loss_D_decode', loss_D_decode.item(), step)
+                board_train.add_scalar('D/loss_D_real_decode', loss_D_real_decode.item(), step)
+                board_train.add_scalar('D/loss_D_fake_decode', loss_D_fake_decode.item(), step)
+
+                print( "step={}, loss_G={:.5f}, loss_l1={:.5f}, loss_vgg={:.5f}, loss_adv_encode={:.5f}, loss_adv_decode={:.5f}".format(step, loss_G.item(), loss_l1.item(), loss_vgg.item(), loss_adv_encode.item(), loss_adv_decode.item()) )
+                print( "step={}, loss_D={:.5f}, loss_D_encode={:.5f}, loss_D_real_encode={:.5f}, loss_D_fake_encode={:.5f}".format(step, loss_D.item(), loss_D_encode.item(), loss_D_real_encode.item(), loss_D_fake_encode.item(), loss_D_decode.item(), loss_D_real_decode.item(), loss_D_fake_decode.item()) )
 
                 # visual images
                 visuals = [
-                    [ image.detach(), target.detach(), output.detach() ],
+                    [ image.detach(), target.detach(), output.detach(), d_real_decode.detach(), d_fake_decode.detach() ],
                 ]
                 board_add_images(board_train, 'train', visuals, step+1)
 
@@ -257,8 +282,8 @@ if __name__ == '__main__':
             # valid データでの処理
             #====================================================
             if( step != 0 and ( step % args.n_display_valid_step == 0 ) ):
-                loss_G_total, loss_l1_total, loss_vgg_total, loss_adv_total = 0, 0, 0, 0
-                loss_D_total, loss_D_real_total, loss_D_fake_total = 0, 0, 0
+                loss_G_total, loss_l1_total, loss_vgg_total, loss_adv_encode_total, loss_adv_decode_total = 0, 0, 0, 0, 0
+                loss_D_total, loss_D_encode_total, loss_D_real_encode_total, loss_D_fake_encode_total, loss_D_decode_total, loss_D_real_decode_total, loss_D_fake_decode_total = 0, 0, 0, 0, 0, 0, 0
                 n_valid_loop = 0
                 for iter, inputs in enumerate( tqdm(dloader_valid, desc = "valid") ):
                     model_G.eval()            
@@ -277,44 +302,58 @@ if __name__ == '__main__':
                         output = model_G( image )
 
                     with torch.no_grad():
-                        d_real = model_D( torch.cat([image, target], dim=1) )
-                        d_fake = model_D( torch.cat([image, output.detach()], dim=1) )
+                        d_real_encode, d_real_decode = model_D( torch.cat([image, target], dim=1) )
+                        d_fake_encode, d_fake_decode = model_D( torch.cat([image, output.detach()], dim=1) )
 
                     # 損失関数を計算する
                     loss_l1 = loss_l1_fn( target, output )
                     loss_vgg = loss_vgg_fn( target, output )
-                    loss_adv = loss_adv_fn.forward_G( d_fake )
-                    loss_G =  args.lambda_l1 * loss_l1 + args.lambda_vgg * loss_vgg + args.lambda_adv * loss_adv
+                    loss_adv_encode = loss_adv_fn.forward_G( d_fake_encode )
+                    loss_adv_decode = loss_adv_fn.forward_G( d_fake_decode )
+                    loss_G =  args.lambda_l1 * loss_l1 + args.lambda_vgg * loss_vgg + args.lambda_adv * (loss_adv_encode + loss_adv_decode)
 
                     loss_l1_total += loss_l1
                     loss_vgg_total += loss_vgg
-                    loss_adv_total += loss_adv
+                    loss_adv_encode_total += loss_adv_encode
+                    loss_adv_decode_total += loss_adv_decode
                     loss_G_total += loss_G
 
-                    loss_D, loss_D_real, loss_D_fake = loss_adv_fn.forward_D( d_real, d_fake )
+                    loss_D_encode, loss_D_real_encode, loss_D_fake_encode = loss_adv_fn.forward_D( d_real_encode, d_fake_encode )
+                    loss_D_decode, loss_D_real_decode, loss_D_fake_decode = loss_adv_fn.forward_D( d_fake_encode, d_fake_decode )
+                    loss_D = loss_D_encode + loss_D_decode
+
                     loss_D_total += loss_D
-                    loss_D_real_total += loss_D_real
-                    loss_D_fake_total += loss_D_fake
+                    loss_D_encode_total += loss_D_encode
+                    loss_D_real_encode_total += loss_D_real_encode
+                    loss_D_fake_encode_total += loss_D_fake_encode
+                    loss_D_decode_total += loss_D_decode
+                    loss_D_real_decode_total += loss_D_real_decode
+                    loss_D_fake_decode_total += loss_D_fake_decode
 
                     # 生成画像表示
                     if( iter <= args.n_display_valid ):
                         # visual images
                         visuals = [
-                            [ image.detach(), target.detach(), output.detach() ],
+                            [ image.detach(), target.detach(), output.detach(), d_real_decode.detach(), d_fake_decode.detach() ],
                         ]
                         board_add_images(board_valid, 'valid/{}'.format(iter), visuals, step+1)
 
                     n_valid_loop += 1
 
                 # loss 値表示
+                board_valid.add_scalar('G/loss_G', loss_G_total.item()/n_valid_loop, step)
                 board_valid.add_scalar('G/loss_l1', loss_l1_total.item()/n_valid_loop, step)
                 board_valid.add_scalar('G/loss_vgg', loss_vgg_total.item()/n_valid_loop, step)
-                board_valid.add_scalar('G/loss_adv', loss_adv_total.item()/n_valid_loop, step)
-                board_valid.add_scalar('G/loss_G', loss_G_total.item()/n_valid_loop, step)
+                board_valid.add_scalar('G/loss_adv_encode', loss_adv_encode_total.item()/n_valid_loop, step)
+                board_valid.add_scalar('G/loss_adv_decode', loss_adv_decode_total.item()/n_valid_loop, step)
                 board_valid.add_scalar('D/loss_D', loss_D_total.item()/n_valid_loop, step)
-                board_valid.add_scalar('D/loss_D_real', loss_D_real_total.item()/n_valid_loop, step)
-                board_valid.add_scalar('D/loss_D_fake', loss_D_fake_total.item()/n_valid_loop, step)
-                
+                board_valid.add_scalar('D/loss_D_encode', loss_D_encode_total.item()/n_valid_loop, step)
+                board_valid.add_scalar('D/loss_D_real_encode', loss_D_real_encode_total.item()/n_valid_loop, step)
+                board_valid.add_scalar('D/loss_D_fake_encode', loss_D_fake_encode_total.item()/n_valid_loop, step)
+                board_valid.add_scalar('D/loss_D_decode', loss_D_decode_total.item()/n_valid_loop, step)
+                board_valid.add_scalar('D/loss_D_real_decode', loss_D_real_decode_total.item()/n_valid_loop, step)
+                board_valid.add_scalar('D/loss_D_fake_decode', loss_D_fake_decode_total.item()/n_valid_loop, step)
+
             step += 1
             n_print -= 1
 

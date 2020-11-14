@@ -202,7 +202,7 @@ if __name__ == '__main__':
 
                 # visual images
                 visuals = [
-                    [ image, target, output ],
+                    [ image.detach(), target.detach(), output.detach() ],
                 ]
                 board_add_images(board_train, 'train', visuals, step+1)
 
@@ -236,7 +236,7 @@ if __name__ == '__main__':
                     if( iter <= args.n_display_valid ):
                         # visual images
                         visuals = [
-                            [ image, target, output ],
+                            [ image.detach(), target.detach(), output.detach() ],
                         ]
                         board_add_images(board_valid, 'valid/{}'.format(iter), visuals, step+1)
 
