@@ -119,6 +119,18 @@ def board_add_images(board, tag_name, img_tensors_list, step_count, n_max_images
     return
 
 #====================================================
+# Tensor 操作関連
+#====================================================
+def onehot_encode_tsr( image_tensor, n_classes ):
+    """
+    image_tensor : shape = [C=1,H,W]
+    """
+    c, h, w = image_tensor.shape
+    onehot = torch.LongTensor(n_classes, h, w).zero_()
+    onehot = onehot.scatter_(0, image_tensor, 1)
+    return onehot
+
+#====================================================
 # その他
 #====================================================
 def set_random_seed(seed=72):

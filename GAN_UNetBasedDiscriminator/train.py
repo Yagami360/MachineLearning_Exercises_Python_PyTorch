@@ -21,7 +21,7 @@ from torchvision.utils import save_image
 from tensorboardX import SummaryWriter
 
 # 自作モジュール
-from data.dataset import TempleteDataset, TempleteDataLoader
+from data.zalando_dataset import ZalandoDataset
 from models.generators import Pix2PixHDGenerator, UNetGenerator
 from models.discriminators import PatchGANDiscriminator, UNetDiscriminator
 from models.losses import VGGLoss, LSGANLoss
@@ -31,7 +31,7 @@ from utils.utils import board_add_image, board_add_images, save_image_w_norm
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--exper_name", default="debug", help="実験名")
-    parser.add_argument("--dataset_dir", type=str, default="dataset/templete_dataset")
+    parser.add_argument("--dataset_dir", type=str, default="dataset/zalando_dataset_n100")
     parser.add_argument("--results_dir", type=str, default="results")
     parser.add_argument('--save_checkpoints_dir', type=str, default="checkpoints", help="モデルの保存ディレクトリ")
     parser.add_argument('--load_checkpoints_path', type=str, default="", help="モデルの読み込みファイルのパス")
@@ -39,7 +39,7 @@ if __name__ == '__main__':
     parser.add_argument("--n_epoches", type=int, default=100, help="エポック数")    
     parser.add_argument('--batch_size', type=int, default=4, help="バッチサイズ")
     parser.add_argument('--batch_size_valid', type=int, default=1, help="バッチサイズ")
-    parser.add_argument('--image_height', type=int, default=128, help="入力画像の高さ（pixel単位）")
+    parser.add_argument('--image_height', type=int, default=256, help="入力画像の高さ（pixel単位）")
     parser.add_argument('--image_width', type=int, default=128, help="入力画像の幅（pixel単位）")
     parser.add_argument('--net_G_type', choices=['pix2pixhd', 'unet'], default="pix2pixhd", help="生成器ネットワークの種類")
     parser.add_argument('--net_D_type', choices=['patchgan', 'unet'], default="patchgan", help="識別器ネットワークの種類")
@@ -118,19 +118,10 @@ if __name__ == '__main__':
     # データセットの読み込み
     #================================    
     # 学習用データセットとテスト用データセットの設定
-    ds_train = TempleteDataset( args, args.dataset_dir, datamode = "train", image_height = args.image_height, image_width = args.image_width, data_augument = args.data_augument, debug = args.debug )
-
-    # 学習用データセットとテスト用データセットの設定
-    index = np.arange(len(ds_train))
-    train_index, valid_index = train_test_split( index, test_size=args.val_rate, random_state=args.seed )
-    if( args.debug ):
-        print( "train_index.shape : ", train_index.shape )
-        print( "valid_index.shape : ", valid_index.shape )
-        print( "train_index[0:10] : ", train_index[0:10] )
-        print( "valid_index[0:10] : ", valid_index[0:10] )
-
-    dloader_train = torch.utils.data.DataLoader(Subset(ds_train, train_index), batch_size=args.batch_size, shuffle=True, num_workers = args.n_workers, pin_memory = True )
-    dloader_valid = torch.utils.data.DataLoader(Subset(ds_train, valid_index), batch_size=args.batch_size_valid, shuffle=False, num_workers = args.n_workers, pin_memory = True )
+    ds_train = ZalandoDataset( args, args.dataset_dir, pairs_file = "train_pairs.csv", datamode = "train", image_height = args.image_height, image_width = args.image_width, data_augument = args.data_augument, debug = args.debug )
+    ds_valid = ZalandoDataset( args, args.dataset_dir, pairs_file = "valid_pairs.csv", datamode = "valid", image_height = args.image_height, image_width = args.image_width, data_augument = args.data_augument, debug = args.debug )
+    dloader_train = torch.utils.data.DataLoader(ds_train, batch_size=args.batch_size, shuffle=True, num_workers = args.n_workers, pin_memory = True )
+    dloader_valid = torch.utils.data.DataLoader(ds_valid, batch_size=args.batch_size_valid, shuffle=False, num_workers = args.n_workers, pin_memory = True )
 
     #================================
     # モデルの構造を定義する。
@@ -182,20 +173,20 @@ if __name__ == '__main__':
             model_D.train()
 
             # 一番最後のミニバッチループで、バッチサイズに満たない場合は無視する（後の計算で、shape の不一致をおこすため）
-            if inputs["image"].shape[0] != args.batch_size:
+            if inputs["image_s"].shape[0] != args.batch_size:
                 break
 
             # ミニバッチデータを GPU へ転送
-            image = inputs["image"].to(device)
-            target = inputs["target"].to(device)
+            image_s = inputs["image_s"].to(device)
+            image_t_gt = inputs["image_t_gt"].to(device)
             if( args.debug and n_print > 0):
-                print( "[image] shape={}, dtype={}, min={}, max={}".format(image.shape, image.dtype, torch.min(image), torch.max(image)) )
-                print( "[target] shape={}, dtype={}, min={}, max={}".format(target.shape, target.dtype, torch.min(target), torch.max(target)) )
+                print( "[image_s] shape={}, dtype={}, min={}, max={}".format(image_s.shape, image_s.dtype, torch.min(image_s), torch.max(image_s)) )
+                print( "[image_t_gt] shape={}, dtype={}, min={}, max={}".format(image_t_gt.shape, image_t_gt.dtype, torch.min(image_t_gt), torch.max(image_t_gt)) )
 
             #----------------------------------------------------
             # 生成器 の forword 処理
             #----------------------------------------------------
-            output = model_G( image )
+            output = model_G( image_s )
             if( args.debug and n_print > 0 ):
                 print( "output.shape : ", output.shape )
 
@@ -207,18 +198,32 @@ if __name__ == '__main__':
                 param.requires_grad = True
 
             # 学習用データをモデルに流し込む
-            d_real_encode, d_real_decode = model_D( torch.cat([image, target], dim=1) )
-            d_fake_encode, d_fake_decode = model_D( torch.cat([image, output.detach()], dim=1) )
-            if( args.debug and n_print > 0 ):
-                print( "d_real_encode.shape :", d_real_encode.shape )
-                print( "d_real_decode.shape :", d_real_decode.shape )
-                print( "d_fake_encode.shape :", d_fake_encode.shape )
-                print( "d_fake_decode.shape :", d_fake_decode.shape )
+            if( args.net_D_type == "patchgan" ):
+                d_real = model_D( torch.cat([image_s, image_t_gt], dim=1) )
+                d_fake = model_D( torch.cat([image_s, output.detach()], dim=1) )
+                if( args.debug and n_print > 0 ):
+                    print( "d_real.shape :", d_real.shape )
+                    print( "d_real.shape :", d_real.shape )
+            elif( args.net_D_type == "unet" ):
+                d_real_encode, d_real_decode = model_D( torch.cat([image_s, image_t_gt], dim=1) )
+                d_fake_encode, d_fake_decode = model_D( torch.cat([image_s, output.detach()], dim=1) )
+                if( args.debug and n_print > 0 ):
+                    print( "d_real_encode.shape :", d_real_encode.shape )
+                    print( "d_real_decode.shape :", d_real_decode.shape )
+                    print( "d_fake_encode.shape :", d_fake_encode.shape )
+                    print( "d_fake_decode.shape :", d_fake_decode.shape )
+            else:
+                NotImplementedError()
 
             # 損失関数を計算する
-            loss_D_encode, loss_D_real_encode, loss_D_fake_encode = loss_adv_fn.forward_D( d_real_encode, d_fake_encode )
-            loss_D_decode, loss_D_real_decode, loss_D_fake_decode = loss_adv_fn.forward_D( d_fake_encode, d_fake_decode )
-            loss_D = loss_D_encode + loss_D_decode
+            if( args.net_D_type == "patchgan" ):
+                loss_D, loss_D_real, loss_D_fake = loss_adv_fn.forward_D( d_real, d_fake )
+            elif( args.net_D_type == "unet" ):
+                loss_D_encode, loss_D_real_encode, loss_D_fake_encode = loss_adv_fn.forward_D( d_real_encode, d_fake_encode )
+                loss_D_decode, loss_D_real_decode, loss_D_fake_decode = loss_adv_fn.forward_D( d_fake_encode, d_fake_decode )
+                loss_D = loss_D_encode + loss_D_decode
+            else:
+                NotImplementedError()
 
             # ネットワークの更新処理
             optimizer_D.zero_grad()
@@ -233,11 +238,22 @@ if __name__ == '__main__':
             # 生成器の更新処理
             #----------------------------------------------------
             # 損失関数を計算する
-            loss_l1 = loss_l1_fn( target, output )
-            loss_vgg = loss_vgg_fn( target, output )
-            loss_adv_encode = loss_adv_fn.forward_G( d_fake_encode )
-            loss_adv_decode = loss_adv_fn.forward_G( d_fake_decode )
-            loss_G =  args.lambda_l1 * loss_l1 + args.lambda_vgg * loss_vgg + args.lambda_adv * ( loss_adv_encode + loss_adv_decode )
+            loss_l1 = loss_l1_fn( image_t_gt, output )
+            loss_vgg = loss_vgg_fn( image_t_gt, output )
+            if( args.net_D_type == "patchgan" ):
+                loss_adv = loss_adv_fn.forward_G( d_fake )
+            elif( args.net_D_type == "unet" ):
+                loss_adv_encode = loss_adv_fn.forward_G( d_fake_encode )
+                loss_adv_decode = loss_adv_fn.forward_G( d_fake_decode )
+            else:
+                NotImplementedError()
+
+            if( args.net_D_type == "patchgan" ):
+                loss_G =  args.lambda_l1 * loss_l1 + args.lambda_vgg * loss_vgg + args.lambda_adv * loss_adv
+            elif( args.net_D_type == "unet" ):
+                loss_G =  args.lambda_l1 * loss_l1 + args.lambda_vgg * loss_vgg + args.lambda_adv * ( loss_adv_encode + loss_adv_decode )
+            else:
+                NotImplementedError()
 
             # ネットワークの更新処理
             optimizer_G.zero_grad()
@@ -258,84 +274,133 @@ if __name__ == '__main__':
                 board_train.add_scalar('G/loss_G', loss_G.item(), step)
                 board_train.add_scalar('G/loss_l1', loss_l1.item(), step)
                 board_train.add_scalar('G/loss_vgg', loss_vgg.item(), step)
-                board_train.add_scalar('G/loss_adv_encode', loss_adv_encode.item(), step)
-                board_train.add_scalar('G/loss_adv_decode', loss_adv_decode.item(), step)
+                if( args.net_D_type == "patchgan" ):
+                    board_train.add_scalar('G/loss_adv', loss_adv.item(), step)
+                elif( args.net_D_type == "unet" ):
+                    board_train.add_scalar('G/loss_adv_encode', loss_adv_encode.item(), step)
+                    board_train.add_scalar('G/loss_adv_decode', loss_adv_decode.item(), step)
 
-                board_train.add_scalar('D/loss_D', loss_D.item(), step)
-                board_train.add_scalar('D/loss_D_encode', loss_D_encode.item(), step)
-                board_train.add_scalar('D/loss_D_real_encode', loss_D_real_encode.item(), step)
-                board_train.add_scalar('D/loss_D_fake_encode', loss_D_fake_encode.item(), step)
-                board_train.add_scalar('D/loss_D_decode', loss_D_decode.item(), step)
-                board_train.add_scalar('D/loss_D_real_decode', loss_D_real_decode.item(), step)
-                board_train.add_scalar('D/loss_D_fake_decode', loss_D_fake_decode.item(), step)
+                if( args.net_D_type == "patchgan" ):
+                    board_train.add_scalar('D/loss_D', loss_D.item(), step)
+                    board_train.add_scalar('D/loss_D_real', loss_D_real.item(), step)
+                    board_train.add_scalar('D/loss_D_fake', loss_D_fake.item(), step)
+                elif( args.net_D_type == "unet" ):
+                    board_train.add_scalar('D/loss_D', loss_D.item(), step)
+                    board_train.add_scalar('D/loss_D_encode', loss_D_encode.item(), step)
+                    board_train.add_scalar('D/loss_D_real_encode', loss_D_real_encode.item(), step)
+                    board_train.add_scalar('D/loss_D_fake_encode', loss_D_fake_encode.item(), step)
+                    board_train.add_scalar('D/loss_D_decode', loss_D_decode.item(), step)
+                    board_train.add_scalar('D/loss_D_real_decode', loss_D_real_decode.item(), step)
+                    board_train.add_scalar('D/loss_D_fake_decode', loss_D_fake_decode.item(), step)
 
-                print( "step={}, loss_G={:.5f}, loss_l1={:.5f}, loss_vgg={:.5f}, loss_adv_encode={:.5f}, loss_adv_decode={:.5f}".format(step, loss_G.item(), loss_l1.item(), loss_vgg.item(), loss_adv_encode.item(), loss_adv_decode.item()) )
-                print( "step={}, loss_D={:.5f}, loss_D_encode={:.5f}, loss_D_real_encode={:.5f}, loss_D_fake_encode={:.5f}".format(step, loss_D.item(), loss_D_encode.item(), loss_D_real_encode.item(), loss_D_fake_encode.item(), loss_D_decode.item(), loss_D_real_decode.item(), loss_D_fake_decode.item()) )
+                if( args.net_D_type == "patchgan" ):
+                    print( "step={}, loss_G={:.5f}, loss_l1={:.5f}, loss_vgg={:.5f}, loss_adv={:.5f}".format(step, loss_G.item(), loss_l1.item(), loss_vgg.item(), loss_adv.item()) )
+                    print( "step={}, loss_D={:.5f}, loss_D_real={:.5f}, loss_D_fake={:.5f}".format(step, loss_D.item(), loss_D_real.item(), loss_D_fake.item(),) )
+                elif( args.net_D_type == "unet" ):
+                    print( "step={}, loss_G={:.5f}, loss_l1={:.5f}, loss_vgg={:.5f}, loss_adv_encode={:.5f}, loss_adv_decode={:.5f}".format(step, loss_G.item(), loss_l1.item(), loss_vgg.item(), loss_adv_encode.item(), loss_adv_decode.item()) )
+                    print( "step={}, loss_D={:.5f}, loss_D_encode={:.5f}, loss_D_real_encode={:.5f}, loss_D_fake_encode={:.5f}".format(step, loss_D.item(), loss_D_encode.item(), loss_D_real_encode.item(), loss_D_fake_encode.item(), loss_D_decode.item(), loss_D_real_decode.item(), loss_D_fake_decode.item()) )
 
                 # visual images
-                visuals = [
-                    [ image.detach(), target.detach(), output.detach(), d_real_decode.detach(), d_fake_decode.detach() ],
-                ]
+                if( args.net_D_type == "patchgan" ):
+                    visuals = [
+                        [ image_s.detach(), image_t_gt.detach(), output.detach() ],
+                    ]
+                elif( args.net_D_type == "unet" ):
+                    visuals = [
+                        [ image_s.detach(), image_t_gt.detach(), output.detach(), d_real_decode.detach(), d_fake_decode.detach() ],
+                    ]
+
                 board_add_images(board_train, 'train', visuals, step+1)
 
             #====================================================
             # valid データでの処理
             #====================================================
             if( step != 0 and ( step % args.n_display_valid_step == 0 ) ):
-                loss_G_total, loss_l1_total, loss_vgg_total, loss_adv_encode_total, loss_adv_decode_total = 0, 0, 0, 0, 0
-                loss_D_total, loss_D_encode_total, loss_D_real_encode_total, loss_D_fake_encode_total, loss_D_decode_total, loss_D_real_decode_total, loss_D_fake_decode_total = 0, 0, 0, 0, 0, 0, 0
+                loss_G_total, loss_l1_total, loss_vgg_total, loss_adv_total, loss_adv_encode_total, loss_adv_decode_total = 0, 0, 0, 0, 0, 0
+                loss_D_total, 
+                loss_D_encode_total, loss_D_real_encode_total, loss_D_fake_encode_total, loss_D_decode_total, loss_D_real_decode_total, loss_D_fake_decode_total = 0, 0, 0, 0, 0, 0
                 n_valid_loop = 0
                 for iter, inputs in enumerate( tqdm(dloader_valid, desc = "valid") ):
                     model_G.eval()            
                     model_D.eval()
 
                     # 一番最後のミニバッチループで、バッチサイズに満たない場合は無視する（後の計算で、shape の不一致をおこすため）
-                    if inputs["image"].shape[0] != args.batch_size_valid:
+                    if inputs["image_s"].shape[0] != args.batch_size_valid:
                         break
 
                     # ミニバッチデータを GPU へ転送
-                    image = inputs["image"].to(device)
-                    target = inputs["target"].to(device)
+                    image_s = inputs["image_s"].to(device)
+                    image_t_gt = inputs["image_t_gt"].to(device)
 
                     # 推論処理
                     with torch.no_grad():
-                        output = model_G( image )
+                        output = model_G( image_s )
 
                     with torch.no_grad():
-                        d_real_encode, d_real_decode = model_D( torch.cat([image, target], dim=1) )
-                        d_fake_encode, d_fake_decode = model_D( torch.cat([image, output.detach()], dim=1) )
+                        if( args.net_D_type == "patchgan" ):
+                            loss_D, loss_D_real, loss_D_fake = loss_adv_fn.forward_D( d_real, d_fake )
+                        elif( args.net_D_type == "unet" ):
+                            loss_D_encode, loss_D_real_encode, loss_D_fake_encode = loss_adv_fn.forward_D( d_real_encode, d_fake_encode )
+                            loss_D_decode, loss_D_real_decode, loss_D_fake_decode = loss_adv_fn.forward_D( d_fake_encode, d_fake_decode )
+                            loss_D = loss_D_encode + loss_D_decode
+                        else:
+                            NotImplementedError()
 
                     # 損失関数を計算する
-                    loss_l1 = loss_l1_fn( target, output )
-                    loss_vgg = loss_vgg_fn( target, output )
-                    loss_adv_encode = loss_adv_fn.forward_G( d_fake_encode )
-                    loss_adv_decode = loss_adv_fn.forward_G( d_fake_decode )
-                    loss_G =  args.lambda_l1 * loss_l1 + args.lambda_vgg * loss_vgg + args.lambda_adv * (loss_adv_encode + loss_adv_decode)
+                    loss_l1 = loss_l1_fn( image_t_gt, output )
+                    loss_vgg = loss_vgg_fn( image_t_gt, output )
+                    if( args.net_D_type == "patchgan" ):
+                        loss_adv = loss_adv_fn.forward_G( d_fake )
+                    elif( args.net_D_type == "unet" ):
+                        loss_adv_encode = loss_adv_fn.forward_G( d_fake_encode )
+                        loss_adv_decode = loss_adv_fn.forward_G( d_fake_decode )
+
+                    if( args.net_D_type == "patchgan" ):
+                        loss_G =  args.lambda_l1 * loss_l1 + args.lambda_vgg * loss_vgg + args.lambda_adv * loss_adv
+                    elif( args.net_D_type == "unet" ):
+                        loss_G =  args.lambda_l1 * loss_l1 + args.lambda_vgg * loss_vgg + args.lambda_adv * (loss_adv_encode + loss_adv_decode)
 
                     loss_l1_total += loss_l1
                     loss_vgg_total += loss_vgg
-                    loss_adv_encode_total += loss_adv_encode
-                    loss_adv_decode_total += loss_adv_decode
+                    if( args.net_D_type == "patchgan" ):
+                        loss_adv_total += loss_adv
+                    elif( args.net_D_type == "unet" ):
+                        loss_adv_encode_total += loss_adv_encode
+                        loss_adv_decode_total += loss_adv_decode
                     loss_G_total += loss_G
 
-                    loss_D_encode, loss_D_real_encode, loss_D_fake_encode = loss_adv_fn.forward_D( d_real_encode, d_fake_encode )
-                    loss_D_decode, loss_D_real_decode, loss_D_fake_decode = loss_adv_fn.forward_D( d_fake_encode, d_fake_decode )
-                    loss_D = loss_D_encode + loss_D_decode
+                    if( args.net_D_type == "patchgan" ):
+                        loss_D, loss_D_real, loss_D_fake = loss_adv_fn.forward_D( d_real, d_fake )
+                    elif( args.net_D_type == "unet" ):
+                        loss_D_encode, loss_D_real_encode, loss_D_fake_encode = loss_adv_fn.forward_D( d_real_encode, d_fake_encode )
+                        loss_D_decode, loss_D_real_decode, loss_D_fake_decode = loss_adv_fn.forward_D( d_fake_encode, d_fake_decode )
+                        loss_D = loss_D_encode + loss_D_decode
 
-                    loss_D_total += loss_D
-                    loss_D_encode_total += loss_D_encode
-                    loss_D_real_encode_total += loss_D_real_encode
-                    loss_D_fake_encode_total += loss_D_fake_encode
-                    loss_D_decode_total += loss_D_decode
-                    loss_D_real_decode_total += loss_D_real_decode
-                    loss_D_fake_decode_total += loss_D_fake_decode
+                    if( args.net_D_type == "patchgan" ):
+                        loss_D_total += loss_D
+                        loss_D_real_total += loss_D_real
+                        loss_D_fake_total += loss_D_fake
+                    elif( args.net_D_type == "unet" ):
+                        loss_D_total += loss_D
+                        loss_D_encode_total += loss_D_encode
+                        loss_D_real_encode_total += loss_D_real_encode
+                        loss_D_fake_encode_total += loss_D_fake_encode
+                        loss_D_decode_total += loss_D_decode
+                        loss_D_real_decode_total += loss_D_real_decode
+                        loss_D_fake_decode_total += loss_D_fake_decode
 
                     # 生成画像表示
                     if( iter <= args.n_display_valid ):
                         # visual images
-                        visuals = [
-                            [ image.detach(), target.detach(), output.detach(), d_real_decode.detach(), d_fake_decode.detach() ],
-                        ]
+                        if( args.net_D_type == "patchgan" ):
+                            visuals = [
+                                [ image_s.detach(), image_t_gt.detach(), output.detach() ],
+                            ]
+                        elif( args.net_D_type == "unet" ):
+                            visuals = [
+                                [ image_s.detach(), image_t_gt.detach(), output.detach(), d_real_decode.detach(), d_fake_decode.detach() ],
+                            ]
+
                         board_add_images(board_valid, 'valid/{}'.format(iter), visuals, step+1)
 
                     n_valid_loop += 1
@@ -344,15 +409,24 @@ if __name__ == '__main__':
                 board_valid.add_scalar('G/loss_G', loss_G_total.item()/n_valid_loop, step)
                 board_valid.add_scalar('G/loss_l1', loss_l1_total.item()/n_valid_loop, step)
                 board_valid.add_scalar('G/loss_vgg', loss_vgg_total.item()/n_valid_loop, step)
-                board_valid.add_scalar('G/loss_adv_encode', loss_adv_encode_total.item()/n_valid_loop, step)
-                board_valid.add_scalar('G/loss_adv_decode', loss_adv_decode_total.item()/n_valid_loop, step)
-                board_valid.add_scalar('D/loss_D', loss_D_total.item()/n_valid_loop, step)
-                board_valid.add_scalar('D/loss_D_encode', loss_D_encode_total.item()/n_valid_loop, step)
-                board_valid.add_scalar('D/loss_D_real_encode', loss_D_real_encode_total.item()/n_valid_loop, step)
-                board_valid.add_scalar('D/loss_D_fake_encode', loss_D_fake_encode_total.item()/n_valid_loop, step)
-                board_valid.add_scalar('D/loss_D_decode', loss_D_decode_total.item()/n_valid_loop, step)
-                board_valid.add_scalar('D/loss_D_real_decode', loss_D_real_decode_total.item()/n_valid_loop, step)
-                board_valid.add_scalar('D/loss_D_fake_decode', loss_D_fake_decode_total.item()/n_valid_loop, step)
+                if( args.net_D_type == "patchgan" ):
+                    board_valid.add_scalar('G/loss_adv', loss_adv_total.item()/n_valid_loop, step)
+                elif( args.net_D_type == "unet" ):
+                    board_valid.add_scalar('G/loss_adv_encode', loss_adv_encode_total.item()/n_valid_loop, step)
+                    board_valid.add_scalar('G/loss_adv_decode', loss_adv_decode_total.item()/n_valid_loop, step)
+
+                if( args.net_D_type == "patchgan" ):
+                    board_valid.add_scalar('D/loss_D', loss_D_total.item()/n_valid_loop, step)
+                    board_valid.add_scalar('D/loss_D_real', loss_D_real_total.item()/n_valid_loop, step)
+                    board_valid.add_scalar('D/loss_D_fake', loss_D_fake_total.item()/n_valid_loop, step)
+                elif( args.net_D_type == "unet" ):
+                    board_valid.add_scalar('D/loss_D', loss_D_total.item()/n_valid_loop, step)
+                    board_valid.add_scalar('D/loss_D_encode', loss_D_encode_total.item()/n_valid_loop, step)
+                    board_valid.add_scalar('D/loss_D_real_encode', loss_D_real_encode_total.item()/n_valid_loop, step)
+                    board_valid.add_scalar('D/loss_D_fake_encode', loss_D_fake_encode_total.item()/n_valid_loop, step)
+                    board_valid.add_scalar('D/loss_D_decode', loss_D_decode_total.item()/n_valid_loop, step)
+                    board_valid.add_scalar('D/loss_D_real_decode', loss_D_real_decode_total.item()/n_valid_loop, step)
+                    board_valid.add_scalar('D/loss_D_fake_decode', loss_D_fake_decode_total.item()/n_valid_loop, step)
 
             step += 1
             n_print -= 1

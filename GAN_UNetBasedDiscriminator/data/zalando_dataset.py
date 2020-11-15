@@ -18,29 +18,27 @@ from torchvision.utils import save_image
 
 from data.transforms.random_erasing import RandomErasing
 from data.transforms.tps_transform import TPSTransform
-from utils import set_random_seed, numerical_sort
+from utils import set_random_seed, onehot_encode_tsr
 
 IMG_EXTENSIONS = (
     '.jpg', '.jpeg', '.png', '.ppm', '.bmp', '.pgm', '.tif',
     '.JPG', '.JPEG', '.PNG', '.PPM', '.BMP', '.PGM', '.TIF',
 )
 
-class TempleteDataset(data.Dataset):
-    def __init__(self, args, root_dir, datamode = "train", image_height = 128, image_width = 128, data_augument = False, debug = False ):
-        super(TempleteDataset, self).__init__()
+class ZalandoDataset(data.Dataset):
+    def __init__(self, args, dataset_dir, pairs_file = "train_pairs.csv", datamode = "train", image_height = 128, image_width = 128, n_classes = 20, data_augument = False, onehot = False, debug = False ):
+        super(ZalandoDataset, self).__init__()
         self.args = args
+        self.dataset_dir = dataset_dir
+        self.pairs_file = pairs_file
         self.datamode = datamode
-        self.data_augument = data_augument
+        self.data_augument= data_augument
+        self.onehot = onehot
         self.image_height = image_height
         self.image_width = image_width
+        self.n_classes = n_classes
         self.debug = debug
-
-        self.image_dir = os.path.join( root_dir, "image" )
-        self.target_dir = os.path.join( root_dir, "target" )
-        #self.image_names = sorted( [f for f in os.listdir(self.image_dir) if f.endswith(IMG_EXTENSIONS)], key=lambda s: int(re.search(r'\d+', s).group()) )
-        #self.target_names = sorted( [f for f in os.listdir(self.target_dir) if f.endswith(IMG_EXTENSIONS)], key=lambda s: int(re.search(r'\d+', s).group()) )
-        self.image_names = sorted( [f for f in os.listdir(self.image_dir) if f.endswith(IMG_EXTENSIONS)], key=numerical_sort )
-        self.target_names = sorted( [f for f in os.listdir(self.target_dir) if f.endswith(IMG_EXTENSIONS)], key=numerical_sort )
+        self.df_pairs = pd.read_csv( os.path.join(dataset_dir, pairs_file) )
 
         # transform
         if( data_augument ):
@@ -49,13 +47,12 @@ class TempleteDataset(data.Dataset):
                     transforms.Resize( (args.image_height, args.image_width), interpolation=Image.LANCZOS ),
                     transforms.RandomHorizontalFlip(),
                     transforms.RandomVerticalFlip(),
-                    transforms.RandomAffine( degrees = (-10,10),  translate=(0.0, 0.0), scale = (1.00,1.00), resample=Image.BICUBIC ),
-                    transforms.RandomPerspective(),
-                    transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5),
+                    transforms.RandomAffine( degrees = (-10,10),  translate=(0.25,0.25), scale = (0.80,1.25), resample=Image.BICUBIC ),
                     transforms.CenterCrop( size = (args.image_height, args.image_width) ),
+                    TPSTransform( tps_points_per_dim = self.args.tps_points_per_dim ),
                     transforms.ToTensor(),
                     transforms.Normalize( [0.5,0.5,0.5], [0.5,0.5,0.5] ),
-                    RandomErasing( probability = 0.5, sl = 0.02, sh = 0.2, r1 = 0.3, mean=[0.5, 0.5, 0.5] ),
+                    #RandomErasing( probability = 0.5, sl = 0.02, sh = 0.2, r1 = 0.3, mean=[0.5, 0.5, 0.5] ),
                 ]
             )
 
@@ -64,13 +61,26 @@ class TempleteDataset(data.Dataset):
                     transforms.Resize( (args.image_height, args.image_width), interpolation=Image.NEAREST ),
                     transforms.RandomHorizontalFlip(),
                     transforms.RandomVerticalFlip(),
-                    transforms.RandomAffine( degrees = (-10,10),  translate=(0.0, 0.0), scale = (1.00,1.00), resample=Image.NEAREST ),
-                    transforms.RandomPerspective(),
-                    transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5),
+                    transforms.RandomAffine( degrees = (-10,10),  translate=(0.25,0.25), scale = (0.80,1.25), resample=Image.NEAREST ),
                     transforms.CenterCrop( size = (args.image_height, args.image_width) ),
+                    TPSTransform( tps_points_per_dim = self.args.tps_points_per_dim ),
                     transforms.ToTensor(),
                     transforms.Normalize( [0.5], [0.5] ),
-                    RandomErasing( probability = 0.5, sl = 0.02, sh = 0.2, r1 = 0.3, mean=[0.5, 0.5, 0.5] ),
+                    #RandomErasing( probability = 0.5, sl = 0.02, sh = 0.2, r1 = 0.3, mean=[0.5, 0.5, 0.5] ),
+                ]
+            )
+
+            self.transform_mask_rgb = transforms.Compose(
+                [
+                    transforms.Resize( (args.image_height, args.image_width), interpolation=Image.NEAREST ),
+                    transforms.RandomHorizontalFlip(),
+                    transforms.RandomVerticalFlip(),
+                    transforms.RandomAffine( degrees = (-10,10),  translate=(0.25,0.25), scale = (0.80,1.25), resample=Image.NEAREST ),
+                    transforms.CenterCrop( size = (args.image_height, args.image_width) ),
+                    TPSTransform( tps_points_per_dim = self.args.tps_points_per_dim ),
+                    transforms.ToTensor(),
+                    transforms.Normalize( [0.5,0.5,0.5], [0.5,0.5,0.5] ),
+                    #RandomErasing( probability = 0.5, sl = 0.02, sh = 0.2, r1 = 0.3, mean=[0.5, 0.5, 0.5] ),
                 ]
             )
 
@@ -79,11 +89,10 @@ class TempleteDataset(data.Dataset):
                     transforms.Resize( (args.image_height, args.image_width), interpolation=Image.NEAREST ),
                     transforms.RandomHorizontalFlip(),
                     transforms.RandomVerticalFlip(),
-                    transforms.RandomAffine( degrees = (-10,10),  translate=(0.0, 0.0), scale = (1.00,1.00), resample=Image.NEAREST ),
-                    transforms.RandomPerspective(),
-                    transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5),
+                    transforms.RandomAffine( degrees = (-10,10),  translate=(0.25,0.25), scale = (0.80,1.25), resample=Image.NEAREST ),
                     transforms.CenterCrop( size = (args.image_height, args.image_width) ),
-                    RandomErasing( probability = 0.5, sl = 0.02, sh = 0.2, r1 = 0.3, mean=[0.5, 0.5, 0.5] ),
+                    TPSTransform( tps_points_per_dim = self.args.tps_points_per_dim ),
+                    #RandomErasing( probability = 0.5, sl = 0.02, sh = 0.2, r1 = 0.3, mean=[0.5, 0.5, 0.5] ),
                 ]
             )
         else:
@@ -100,7 +109,14 @@ class TempleteDataset(data.Dataset):
                     transforms.Resize( (args.image_height, args.image_width), interpolation=Image.NEAREST ),
                     transforms.CenterCrop( size = (args.image_height, args.image_width) ),
                     transforms.ToTensor(),
-#                    transforms.Normalize( [0.5], [0.5] ),
+                    transforms.Normalize( [0.5], [0.5] ),
+                ]
+            )
+            self.transform_mask_rgb = transforms.Compose(
+                [
+                    transforms.Resize( (args.image_height, args.image_width), interpolation=Image.NEAREST ),
+                    transforms.CenterCrop( size = (args.image_height, args.image_width) ),
+                    transforms.ToTensor(),
                     transforms.Normalize( [0.5,0.5,0.5], [0.5,0.5,0.5] ),
                 ]
             )
@@ -112,56 +128,60 @@ class TempleteDataset(data.Dataset):
             )
 
         if( self.debug ):
-            print( "self.image_dir :", self.image_dir)
-            print( "len(self.image_names) :", len(self.image_names))
-            print( "self.image_names[0:5] :", self.image_names[0:5])
+            print( self.df_pairs.head() )
 
         return
 
     def __len__(self):
-        return len(self.image_names)
+        return len(self.df_pairs)
 
     def __getitem__(self, index):
-        image_name = self.image_names[index]
-        target_name = self.target_names[index]
+        pose_name = self.df_pairs["pose_name"].iloc[index]
+        pose_parsing_name = self.df_pairs["pose_parsing_name"].iloc[index]
         self.seed_da = random.randint(0,10000)
 
-        # image
-        image = Image.open( os.path.join(self.image_dir,image_name) ).convert('RGB')
-        if( self.data_augument ):
-            set_random_seed( self.seed_da )
-
-        image = self.transform(image)
-
-        # target
-        if( self.datamode == "train" ):
-            #target = Image.open( os.path.join(self.target_dir, target_name) )
-            target = Image.open( os.path.join(self.target_dir, target_name) ).convert('RGB')
-            #self.seed_da = random.randint(0,10000)
+        # pose
+        if( self.datamode in ["train", "valid"] ):
+            pose_gt = Image.open( os.path.join(self.dataset_dir, "pose", pose_name) ).convert('RGB')
             if( self.data_augument ):
                 set_random_seed( self.seed_da )
 
-            target = self.transform_mask(target)
-            #target = torch.from_numpy( np.asarray(self.transform_mask_woToTensor(target)).astype("float32") ).unsqueeze(0)
+            pose_gt = self.transform(pose_gt)
 
-        if( self.datamode == "train" ):
+        # pose paring
+        #pose_parsing_pillow = Image.open( os.path.join(self.dataset_dir, "pose_parsing", pose_parsing_name) ).convert('L')
+        pose_parsing_pillow = Image.open( os.path.join(self.dataset_dir, "pose_parsing_rgb", pose_parsing_name) ).convert('RGB')
+        if( self.data_augument ):
+            set_random_seed( self.seed_da )
+
+        pose_parse = self.transform_mask_rgb(pose_parsing_pillow)
+        """
+        if( self.onehot ):
+            pose_parse = torch.from_numpy( np.asarray(self.transform_mask_woToTensor(pose_parsing_pillow)).astype("int64") ).unsqueeze(0)
+            pose_parse = onehot_encode_tsr( pose_parse, n_classes = self.n_classes ).float()
+        else:
+            pose_parse = self.transform_mask(pose_parsing_pillow)
+        """
+
+        if( self.datamode in ["train", "valid"] ):
             results_dict = {
-                "image_name" : image_name,
-                "image" : image,
-                "target" : target,
+                "image_s_name" : pose_name,
+                "image_t_gt_name" : pose_parsing_name,
+                "image_s" : pose_parse,
+                "image_t_gt" : pose_gt,
             }
         else:
             results_dict = {
-                "image_name" : image_name,
-                "image" : image,
+                "image_name" : pose_parsing_name,
+                "image_s" : pose_parse,
             }
 
         return results_dict
 
 
-class TempleteDataLoader(object):
+class ZalandoDataLoader(object):
     def __init__(self, dataset, batch_size = 1, shuffle = True, n_workers = 4, pin_memory = True):
-        super(TempleteDataLoader, self).__init__()
+        super(ZalandoDataLoader, self).__init__()
         self.data_loader = torch.utils.data.DataLoader(
                 dataset, 
                 batch_size = batch_size, 

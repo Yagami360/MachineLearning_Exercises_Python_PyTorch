@@ -3,18 +3,21 @@
 set -eu
 mkdir -p _logs
 
+DATASET_DIR="dataset/templete_dataset"
+DATASET_DIR="dataset/zalando_dataset_n100"
+
 #----------------------
 # model
 #----------------------
 N_EPOCHES=5
 BATCH_SIZE=4
-IMAGE_HIGHT=128
+IMAGE_HIGHT=256
 IMAGE_WIDTH=128
 
 #NET_G_TYPE="pix2pixhd"
 NET_G_TYPE="unet"
-#NET_D_TYPE="patchgan"
-NET_D_TYPE="unet"
+NET_D_TYPE="patchgan"
+#NET_D_TYPE="unet"
 
 EXPER_NAME=debug
 #EXPER_NAME=netG-${NET_G_TYPE}_netD-${NET_D_TYPE}_b${BATCH_SIZE}_ep${N_EPOCHES}
