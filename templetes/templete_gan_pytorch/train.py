@@ -46,7 +46,7 @@ if __name__ == '__main__':
     parser.add_argument('--beta2', type=float, default=0.999, help="学習率の減衰率")
     parser.add_argument('--lambda_l1', type=float, default=10.0, help="L1損失関数の係数値")
     parser.add_argument('--lambda_vgg', type=float, default=10.0, help="VGG perceptual loss の係数値")
-    parser.add_argument('--lambda_adv', type=float, default=1.0, help="Adv loss_G の係数値")
+    parser.add_argument('--lambda_adv', type=float, default=1.0, help="Adv loss の係数値")
     parser.add_argument("--n_diaplay_step", type=int, default=100,)
     parser.add_argument('--n_display_valid_step', type=int, default=500, help="valid データの tensorboard への表示間隔")
     parser.add_argument("--n_save_epoches", type=int, default=10,)
@@ -256,7 +256,7 @@ if __name__ == '__main__':
             #====================================================
             # valid データでの処理
             #====================================================
-            if( step != 0 and ( step % args.n_display_valid_step == 0 ) ):
+            if( step % args.n_display_valid_step == 0 ):
                 loss_G_total, loss_l1_total, loss_vgg_total, loss_adv_total = 0, 0, 0, 0
                 loss_D_total, loss_D_real_total, loss_D_fake_total = 0, 0, 0
                 n_valid_loop = 0

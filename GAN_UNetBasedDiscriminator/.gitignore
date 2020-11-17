@@ -18,3 +18,4 @@
 tensorboard
 checkpoints
 results
+!*.png

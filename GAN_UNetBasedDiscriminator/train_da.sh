@@ -1,9 +1,10 @@
 #!/bin/sh
 #conda activate pytorch11_py36
+#nohup sh train_da.sh > _logs/netG-pix2pixhd_netD-patchgan_da_b4_ep500_201116.out &
+#nohup sh train_da.sh poweroff > _logs/netG-pix2pixhd_netD-unet_da_b4_ep500_201116.out &
 set -eu
 mkdir -p _logs
 
-#DATASET_DIR="dataset/templete_dataset"
 DATASET_DIR="dataset/zalando_dataset_n100"
 
 #----------------------
@@ -16,11 +17,11 @@ IMAGE_WIDTH=192
 
 #NET_G_TYPE="pix2pixhd"
 NET_G_TYPE="unet"
-#NET_D_TYPE="patchgan"
-NET_D_TYPE="unet"
+NET_D_TYPE="patchgan"
+#NET_D_TYPE="unet"
 
 EXPER_NAME=debug
-#EXPER_NAME=netG-${NET_G_TYPE}_netD-${NET_D_TYPE}_b${BATCH_SIZE}_ep${N_EPOCHES}
+EXPER_NAME=netG-${NET_G_TYPE}_netD-${NET_D_TYPE}_da_b${BATCH_SIZE}_ep${N_EPOCHES}_201116
 
 rm -rf tensorboard/${EXPER_NAME}
 rm -rf tensorboard/${EXPER_NAME}_valid
@@ -29,7 +30,7 @@ if [ ${EXPER_NAME} = "debug" ] ; then
     N_DISPLAY_VALID_STEP=50
 else
     N_DISPLAY_STEP=100
-    N_DISPLAY_VALID_STEP=500
+    N_DISPLAY_VALID_STEP=100
 fi
 
 python train.py \
@@ -38,6 +39,7 @@ python train.py \
     --image_height ${IMAGE_HIGHT} --image_width ${IMAGE_WIDTH} --batch_size ${BATCH_SIZE} \
     --net_G_type ${NET_G_TYPE} --net_D_type ${NET_D_TYPE} \
     --n_diaplay_step ${N_DISPLAY_STEP} --n_display_valid_step ${N_DISPLAY_VALID_STEP} \
+    --data_augument \
     --debug
 
 if [ $1 = "poweroff" ] ; then

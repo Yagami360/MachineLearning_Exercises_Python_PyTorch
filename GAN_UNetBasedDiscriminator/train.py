@@ -22,6 +22,7 @@ from tensorboardX import SummaryWriter
 
 # 自作モジュール
 from data.zalando_dataset import ZalandoDataset
+from data.transforms.cutmix import CutMix
 from models.generators import Pix2PixHDGenerator, UNetGenerator
 from models.discriminators import PatchGANDiscriminator, UNetDiscriminator
 from models.losses import VGGLoss, LSGANLoss
@@ -40,7 +41,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=4, help="バッチサイズ")
     parser.add_argument('--batch_size_valid', type=int, default=1, help="バッチサイズ")
     parser.add_argument('--image_height', type=int, default=256, help="入力画像の高さ（pixel単位）")
-    parser.add_argument('--image_width', type=int, default=128, help="入力画像の幅（pixel単位）")
+    parser.add_argument('--image_width', type=int, default=192, help="入力画像の幅（pixel単位）")
     parser.add_argument('--net_G_type', choices=['pix2pixhd', 'unet'], default="pix2pixhd", help="生成器ネットワークの種類")
     parser.add_argument('--net_D_type', choices=['patchgan', 'unet'], default="patchgan", help="識別器ネットワークの種類")
     parser.add_argument('--lr', type=float, default=0.0002, help="学習率")
@@ -48,10 +49,10 @@ if __name__ == '__main__':
     parser.add_argument('--beta2', type=float, default=0.999, help="学習率の減衰率")
     parser.add_argument('--lambda_l1', type=float, default=10.0, help="L1損失関数の係数値")
     parser.add_argument('--lambda_vgg', type=float, default=10.0, help="VGG perceptual loss の係数値")
-    parser.add_argument('--lambda_adv', type=float, default=1.0, help="Adv loss_G の係数値")
+    parser.add_argument('--lambda_adv', type=float, default=1.0, help="Adv loss の係数値")
     parser.add_argument("--n_diaplay_step", type=int, default=100,)
     parser.add_argument('--n_display_valid_step', type=int, default=500, help="valid データの tensorboard への表示間隔")
-    parser.add_argument("--n_save_epoches", type=int, default=10,)
+    parser.add_argument("--n_save_epoches", type=int, default=1000,)
     parser.add_argument("--val_rate", type=float, default=0.01)
     parser.add_argument('--n_display_valid', type=int, default=8, help="valid データの tensorboard への表示数")
     parser.add_argument('--data_augument', action='store_true')
@@ -119,7 +120,7 @@ if __name__ == '__main__':
     #================================    
     # 学習用データセットとテスト用データセットの設定
     ds_train = ZalandoDataset( args, args.dataset_dir, pairs_file = "train_pairs.csv", datamode = "train", image_height = args.image_height, image_width = args.image_width, data_augument = args.data_augument, debug = args.debug )
-    ds_valid = ZalandoDataset( args, args.dataset_dir, pairs_file = "valid_pairs.csv", datamode = "valid", image_height = args.image_height, image_width = args.image_width, data_augument = args.data_augument, debug = args.debug )
+    ds_valid = ZalandoDataset( args, args.dataset_dir, pairs_file = "valid_pairs.csv", datamode = "valid", image_height = args.image_height, image_width = args.image_width, data_augument = False, debug = args.debug )
     dloader_train = torch.utils.data.DataLoader(ds_train, batch_size=args.batch_size, shuffle=True, num_workers = args.n_workers, pin_memory = True )
     dloader_valid = torch.utils.data.DataLoader(ds_valid, batch_size=args.batch_size_valid, shuffle=False, num_workers = args.n_workers, pin_memory = True )
 
@@ -160,6 +161,7 @@ if __name__ == '__main__':
     loss_l1_fn = nn.L1Loss()
     loss_vgg_fn = VGGLoss(device, n_channels=3)
     loss_adv_fn = LSGANLoss(device)
+    loss_const_fn = nn.MSELoss()
 
     #================================
     # モデルの学習
@@ -190,6 +192,11 @@ if __name__ == '__main__':
             if( args.debug and n_print > 0 ):
                 print( "output.shape : ", output.shape )
 
+            # cutmix
+            cutmix_fn = CutMix()
+            cutmix_fn.set_seed(random.randint(0,10000))
+            output_mix, _ = cutmix_fn(output, image_s)
+
             #----------------------------------------------------
             # 識別器の更新処理
             #----------------------------------------------------
@@ -207,21 +214,29 @@ if __name__ == '__main__':
             elif( args.net_D_type == "unet" ):
                 d_real_encode, d_real_decode = model_D( torch.cat([image_s, image_t_gt], dim=1) )
                 d_fake_encode, d_fake_decode = model_D( torch.cat([image_s, output.detach()], dim=1) )
+                d_mix_encode, d_mix_decode = model_D( torch.cat([image_s, output_mix.detach()], dim=1) )
+
+                # cutmix
+                cutmix_fn.set_seed(random.randint(0,10000))
+                d_fake_decode_mix, _ = cutmix_fn(d_fake_decode, d_real_decode)
                 if( args.debug and n_print > 0 ):
                     print( "d_real_encode.shape :", d_real_encode.shape )
                     print( "d_real_decode.shape :", d_real_decode.shape )
                     print( "d_fake_encode.shape :", d_fake_encode.shape )
                     print( "d_fake_decode.shape :", d_fake_decode.shape )
+                    print( "d_mix_encode.shape :", d_mix_encode.shape )
+                    print( "d_mix_decode.shape :", d_mix_decode.shape )
             else:
                 NotImplementedError()
-
+            
             # 損失関数を計算する
             if( args.net_D_type == "patchgan" ):
                 loss_D, loss_D_real, loss_D_fake = loss_adv_fn.forward_D( d_real, d_fake )
             elif( args.net_D_type == "unet" ):
                 loss_D_encode, loss_D_real_encode, loss_D_fake_encode = loss_adv_fn.forward_D( d_real_encode, d_fake_encode )
                 loss_D_decode, loss_D_real_decode, loss_D_fake_decode = loss_adv_fn.forward_D( d_fake_encode, d_fake_decode )
-                loss_D = loss_D_encode + loss_D_decode
+                loss_D_const = loss_const_fn( d_mix_decode, d_fake_decode_mix )
+                loss_D = loss_D_encode + loss_D_decode + loss_D_const
             else:
                 NotImplementedError()
 
@@ -292,13 +307,14 @@ if __name__ == '__main__':
                     board_train.add_scalar('D/loss_D_decode', loss_D_decode.item(), step)
                     board_train.add_scalar('D/loss_D_real_decode', loss_D_real_decode.item(), step)
                     board_train.add_scalar('D/loss_D_fake_decode', loss_D_fake_decode.item(), step)
+                    board_train.add_scalar('G/loss_D_const', loss_D_const.item(), step)
 
                 if( args.net_D_type == "patchgan" ):
                     print( "step={}, loss_G={:.5f}, loss_l1={:.5f}, loss_vgg={:.5f}, loss_adv={:.5f}".format(step, loss_G.item(), loss_l1.item(), loss_vgg.item(), loss_adv.item()) )
                     print( "step={}, loss_D={:.5f}, loss_D_real={:.5f}, loss_D_fake={:.5f}".format(step, loss_D.item(), loss_D_real.item(), loss_D_fake.item(),) )
                 elif( args.net_D_type == "unet" ):
                     print( "step={}, loss_G={:.5f}, loss_l1={:.5f}, loss_vgg={:.5f}, loss_adv_encode={:.5f}, loss_adv_decode={:.5f}".format(step, loss_G.item(), loss_l1.item(), loss_vgg.item(), loss_adv_encode.item(), loss_adv_decode.item()) )
-                    print( "step={}, loss_D={:.5f}, loss_D_encode={:.5f}, loss_D_real_encode={:.5f}, loss_D_fake_encode={:.5f}".format(step, loss_D.item(), loss_D_encode.item(), loss_D_real_encode.item(), loss_D_fake_encode.item(), loss_D_decode.item(), loss_D_real_decode.item(), loss_D_fake_decode.item()) )
+                    print( "step={}, loss_D={:.5f}, loss_D_encode={:.5f}, loss_D_real_encode={:.5f}, loss_D_fake_encode={:.5f}, loss_D_const={:.5f}".format(step, loss_D.item(), loss_D_encode.item(), loss_D_real_encode.item(), loss_D_fake_encode.item(), loss_D_decode.item(), loss_D_real_decode.item(), loss_D_fake_decode.item(), loss_D_const.item()) )
 
                 # visual images
                 if( args.net_D_type == "patchgan" ):
@@ -306,8 +322,10 @@ if __name__ == '__main__':
                         [ image_s.detach(), image_t_gt.detach(), output.detach() ],
                     ]
                 elif( args.net_D_type == "unet" ):
+                    zeros_tsr = torch.zeros( (1, 1, args.image_height, args.image_width) ).to(device)
                     visuals = [
-                        [ image_s.detach(), image_t_gt.detach(), output.detach(), d_real_decode.detach(), d_fake_decode.detach() ],
+                        [ image_s.detach(), image_t_gt.detach(), output.detach(),       d_real_decode.detach(), d_fake_decode.detach()      ],
+                        [ zeros_tsr,        zeros_tsr,           output_mix.detach(),   d_mix_decode.detach(),  d_fake_decode_mix.detach()  ]
                     ]
 
                 board_add_images(board_train, 'train', visuals, step+1)
@@ -315,10 +333,10 @@ if __name__ == '__main__':
             #====================================================
             # valid データでの処理
             #====================================================
-            if( step != 0 and ( step % args.n_display_valid_step == 0 ) ):
+            if( step % args.n_display_valid_step == 0 ):
                 loss_G_total, loss_l1_total, loss_vgg_total, loss_adv_total, loss_adv_encode_total, loss_adv_decode_total = 0, 0, 0, 0, 0, 0
-                loss_D_total, 
-                loss_D_encode_total, loss_D_real_encode_total, loss_D_fake_encode_total, loss_D_decode_total, loss_D_real_decode_total, loss_D_fake_decode_total = 0, 0, 0, 0, 0, 0
+                loss_D_total, loss_D_real_total, loss_D_fake_total = 0, 0, 0
+                loss_D_encode_total, loss_D_real_encode_total, loss_D_fake_encode_total, loss_D_decode_total, loss_D_real_decode_total, loss_D_fake_decode_total, loss_D_const_total = 0, 0, 0, 0, 0, 0, 0
                 n_valid_loop = 0
                 for iter, inputs in enumerate( tqdm(dloader_valid, desc = "valid") ):
                     model_G.eval()            
@@ -336,13 +354,23 @@ if __name__ == '__main__':
                     with torch.no_grad():
                         output = model_G( image_s )
 
+                        # cutmix
+                        cutmix_fn = CutMix()
+                        cutmix_fn.set_seed(random.randint(0,10000))
+                        output_mix, _ = cutmix_fn(output, image_s)
+
                     with torch.no_grad():
                         if( args.net_D_type == "patchgan" ):
-                            loss_D, loss_D_real, loss_D_fake = loss_adv_fn.forward_D( d_real, d_fake )
+                            d_real = model_D( torch.cat([image_s, image_t_gt], dim=1) )
+                            d_fake = model_D( torch.cat([image_s, output.detach()], dim=1) )
                         elif( args.net_D_type == "unet" ):
-                            loss_D_encode, loss_D_real_encode, loss_D_fake_encode = loss_adv_fn.forward_D( d_real_encode, d_fake_encode )
-                            loss_D_decode, loss_D_real_decode, loss_D_fake_decode = loss_adv_fn.forward_D( d_fake_encode, d_fake_decode )
-                            loss_D = loss_D_encode + loss_D_decode
+                            d_real_encode, d_real_decode = model_D( torch.cat([image_s, image_t_gt], dim=1) )
+                            d_fake_encode, d_fake_decode = model_D( torch.cat([image_s, output.detach()], dim=1) )
+                            d_mix_encode, d_mix_decode = model_D( torch.cat([image_s, output_mix.detach()], dim=1) )
+
+                            # cutmix
+                            cutmix_fn.set_seed(random.randint(0,10000))
+                            d_fake_decode_mix, _ = cutmix_fn(d_fake_decode, d_real_decode)
                         else:
                             NotImplementedError()
 
@@ -374,7 +402,8 @@ if __name__ == '__main__':
                     elif( args.net_D_type == "unet" ):
                         loss_D_encode, loss_D_real_encode, loss_D_fake_encode = loss_adv_fn.forward_D( d_real_encode, d_fake_encode )
                         loss_D_decode, loss_D_real_decode, loss_D_fake_decode = loss_adv_fn.forward_D( d_fake_encode, d_fake_decode )
-                        loss_D = loss_D_encode + loss_D_decode
+                        loss_D_const = loss_const_fn( d_mix_decode, d_fake_decode_mix )
+                        loss_D = loss_D_encode + loss_D_decode + loss_D_const
 
                     if( args.net_D_type == "patchgan" ):
                         loss_D_total += loss_D
@@ -388,6 +417,7 @@ if __name__ == '__main__':
                         loss_D_decode_total += loss_D_decode
                         loss_D_real_decode_total += loss_D_real_decode
                         loss_D_fake_decode_total += loss_D_fake_decode
+                        loss_D_const_total += loss_D_const
 
                     # 生成画像表示
                     if( iter <= args.n_display_valid ):
@@ -397,8 +427,10 @@ if __name__ == '__main__':
                                 [ image_s.detach(), image_t_gt.detach(), output.detach() ],
                             ]
                         elif( args.net_D_type == "unet" ):
+                            zeros_tsr = torch.zeros( (1, 1, args.image_height, args.image_width) ).to(device)
                             visuals = [
-                                [ image_s.detach(), image_t_gt.detach(), output.detach(), d_real_decode.detach(), d_fake_decode.detach() ],
+                                [ image_s.detach(), image_t_gt.detach(), output.detach(),       d_real_decode.detach(), d_fake_decode.detach()      ],
+                                [ zeros_tsr,        zeros_tsr,           output_mix.detach(),   d_mix_decode.detach(),  d_fake_decode_mix.detach()  ]
                             ]
 
                         board_add_images(board_valid, 'valid/{}'.format(iter), visuals, step+1)
@@ -427,6 +459,7 @@ if __name__ == '__main__':
                     board_valid.add_scalar('D/loss_D_decode', loss_D_decode_total.item()/n_valid_loop, step)
                     board_valid.add_scalar('D/loss_D_real_decode', loss_D_real_decode_total.item()/n_valid_loop, step)
                     board_valid.add_scalar('D/loss_D_fake_decode', loss_D_fake_decode_total.item()/n_valid_loop, step)
+                    board_valid.add_scalar('D/loss_D_const', loss_D_const_total.item()/n_valid_loop, step)
 
             step += 1
             n_print -= 1

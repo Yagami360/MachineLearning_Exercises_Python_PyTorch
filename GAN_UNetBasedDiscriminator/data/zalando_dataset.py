@@ -18,6 +18,7 @@ from torchvision.utils import save_image
 
 from data.transforms.random_erasing import RandomErasing
 from data.transforms.tps_transform import TPSTransform
+from data.transforms.cutmix import CutMix
 from utils import set_random_seed, onehot_encode_tsr
 
 IMG_EXTENSIONS = (
@@ -49,10 +50,10 @@ class ZalandoDataset(data.Dataset):
                     transforms.RandomVerticalFlip(),
                     transforms.RandomAffine( degrees = (-10,10),  translate=(0.25,0.25), scale = (0.80,1.25), resample=Image.BICUBIC ),
                     transforms.CenterCrop( size = (args.image_height, args.image_width) ),
-                    TPSTransform( tps_points_per_dim = self.args.tps_points_per_dim ),
+                    TPSTransform( tps_points_per_dim = 3 ),
                     transforms.ToTensor(),
                     transforms.Normalize( [0.5,0.5,0.5], [0.5,0.5,0.5] ),
-                    #RandomErasing( probability = 0.5, sl = 0.02, sh = 0.2, r1 = 0.3, mean=[0.5, 0.5, 0.5] ),
+                    RandomErasing( probability = 0.5, sl = 0.02, sh = 0.2, r1 = 0.3, mean=[0.5, 0.5, 0.5] ),
                 ]
             )
 
@@ -63,10 +64,10 @@ class ZalandoDataset(data.Dataset):
                     transforms.RandomVerticalFlip(),
                     transforms.RandomAffine( degrees = (-10,10),  translate=(0.25,0.25), scale = (0.80,1.25), resample=Image.NEAREST ),
                     transforms.CenterCrop( size = (args.image_height, args.image_width) ),
-                    TPSTransform( tps_points_per_dim = self.args.tps_points_per_dim ),
+                    TPSTransform( tps_points_per_dim = 3 ),
                     transforms.ToTensor(),
                     transforms.Normalize( [0.5], [0.5] ),
-                    #RandomErasing( probability = 0.5, sl = 0.02, sh = 0.2, r1 = 0.3, mean=[0.5, 0.5, 0.5] ),
+                    RandomErasing( probability = 0.5, sl = 0.02, sh = 0.2, r1 = 0.3, mean=[0.5] ),
                 ]
             )
 
@@ -77,10 +78,10 @@ class ZalandoDataset(data.Dataset):
                     transforms.RandomVerticalFlip(),
                     transforms.RandomAffine( degrees = (-10,10),  translate=(0.25,0.25), scale = (0.80,1.25), resample=Image.NEAREST ),
                     transforms.CenterCrop( size = (args.image_height, args.image_width) ),
-                    TPSTransform( tps_points_per_dim = self.args.tps_points_per_dim ),
+                    TPSTransform( tps_points_per_dim = 3 ),
                     transforms.ToTensor(),
                     transforms.Normalize( [0.5,0.5,0.5], [0.5,0.5,0.5] ),
-                    #RandomErasing( probability = 0.5, sl = 0.02, sh = 0.2, r1 = 0.3, mean=[0.5, 0.5, 0.5] ),
+                    RandomErasing( probability = 0.5, sl = 0.02, sh = 0.2, r1 = 0.3, mean=[0.5, 0.5, 0.5] ),
                 ]
             )
 
@@ -91,8 +92,8 @@ class ZalandoDataset(data.Dataset):
                     transforms.RandomVerticalFlip(),
                     transforms.RandomAffine( degrees = (-10,10),  translate=(0.25,0.25), scale = (0.80,1.25), resample=Image.NEAREST ),
                     transforms.CenterCrop( size = (args.image_height, args.image_width) ),
-                    TPSTransform( tps_points_per_dim = self.args.tps_points_per_dim ),
-                    #RandomErasing( probability = 0.5, sl = 0.02, sh = 0.2, r1 = 0.3, mean=[0.5, 0.5, 0.5] ),
+                    TPSTransform( tps_points_per_dim = 3 ),
+                    RandomErasing( probability = 0.5, sl = 0.02, sh = 0.2, r1 = 0.3, mean=[0.5, 0.5, 0.5] ),
                 ]
             )
         else:
@@ -140,15 +141,19 @@ class ZalandoDataset(data.Dataset):
         pose_parsing_name = self.df_pairs["pose_parsing_name"].iloc[index]
         self.seed_da = random.randint(0,10000)
 
+        #----------------------------
         # pose
+        #----------------------------
         if( self.datamode in ["train", "valid"] ):
             pose_gt = Image.open( os.path.join(self.dataset_dir, "pose", pose_name) ).convert('RGB')
             if( self.data_augument ):
                 set_random_seed( self.seed_da )
 
             pose_gt = self.transform(pose_gt)
-
+            
+        #----------------------------
         # pose paring
+        #----------------------------
         #pose_parsing_pillow = Image.open( os.path.join(self.dataset_dir, "pose_parsing", pose_parsing_name) ).convert('L')
         pose_parsing_pillow = Image.open( os.path.join(self.dataset_dir, "pose_parsing_rgb", pose_parsing_name) ).convert('RGB')
         if( self.data_augument ):
@@ -163,6 +168,9 @@ class ZalandoDataset(data.Dataset):
             pose_parse = self.transform_mask(pose_parsing_pillow)
         """
 
+        #----------------------------
+        # return 値設定
+        #----------------------------
         if( self.datamode in ["train", "valid"] ):
             results_dict = {
                 "image_s_name" : pose_name,
