@@ -32,7 +32,7 @@ class CutMix(object):
         h, w = image_s.shape[2], image_s.shape[3]
         x1, y1, x2, y2 = self.random_boundingbox(h,w)
 
-        cutmix_mask = torch.ones((h,w))
+        cutmix_mask = torch.ones((h,w)).to(image_s.device)
         cutmix_mask[x1:x2,y1:y2] = 0
         if torch.rand(1) > self.prob:
             cutmix_mask = 1 - cutmix_mask

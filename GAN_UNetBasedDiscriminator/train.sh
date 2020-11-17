@@ -1,5 +1,6 @@
 #!/bin/sh
 #conda activate pytorch11_py36
+#nohup sh train.sh poweroff > _logs/netG-unet_netD-unet_b4_ep200_201117.out &
 set -eu
 mkdir -p _logs
 

@@ -166,6 +166,9 @@ if __name__ == '__main__':
     #================================
     # モデルの学習
     #================================    
+    cutmix_fn = CutMix(prob=1.0)
+    seed_cutmix = random.randint(0,10000)
+
     print("Starting Training Loop...")
     n_print = 1
     step = 0
@@ -193,9 +196,9 @@ if __name__ == '__main__':
                 print( "output.shape : ", output.shape )
 
             # cutmix
-            cutmix_fn = CutMix()
-            cutmix_fn.set_seed(random.randint(0,10000))
-            output_mix, _ = cutmix_fn(output, image_s)
+            seed_cutmix = random.randint(0,10000)
+            cutmix_fn.set_seed(seed_cutmix)
+            output_mix, _ = cutmix_fn(output, image_t_gt)
 
             #----------------------------------------------------
             # 識別器の更新処理
@@ -217,7 +220,7 @@ if __name__ == '__main__':
                 d_mix_encode, d_mix_decode = model_D( torch.cat([image_s, output_mix.detach()], dim=1) )
 
                 # cutmix
-                cutmix_fn.set_seed(random.randint(0,10000))
+                cutmix_fn.set_seed(seed_cutmix)
                 d_fake_decode_mix, _ = cutmix_fn(d_fake_decode, d_real_decode)
                 if( args.debug and n_print > 0 ):
                     print( "d_real_encode.shape :", d_real_encode.shape )
@@ -307,7 +310,7 @@ if __name__ == '__main__':
                     board_train.add_scalar('D/loss_D_decode', loss_D_decode.item(), step)
                     board_train.add_scalar('D/loss_D_real_decode', loss_D_real_decode.item(), step)
                     board_train.add_scalar('D/loss_D_fake_decode', loss_D_fake_decode.item(), step)
-                    board_train.add_scalar('G/loss_D_const', loss_D_const.item(), step)
+                    board_train.add_scalar('D/loss_D_const', loss_D_const.item(), step)
 
                 if( args.net_D_type == "patchgan" ):
                     print( "step={}, loss_G={:.5f}, loss_l1={:.5f}, loss_vgg={:.5f}, loss_adv={:.5f}".format(step, loss_G.item(), loss_l1.item(), loss_vgg.item(), loss_adv.item()) )
@@ -355,9 +358,9 @@ if __name__ == '__main__':
                         output = model_G( image_s )
 
                         # cutmix
-                        cutmix_fn = CutMix()
-                        cutmix_fn.set_seed(random.randint(0,10000))
-                        output_mix, _ = cutmix_fn(output, image_s)
+                        seed_cutmix = random.randint(0,10000)
+                        cutmix_fn.set_seed(seed_cutmix)
+                        output_mix, _ = cutmix_fn(output, image_t_gt)
 
                     with torch.no_grad():
                         if( args.net_D_type == "patchgan" ):
@@ -369,7 +372,7 @@ if __name__ == '__main__':
                             d_mix_encode, d_mix_decode = model_D( torch.cat([image_s, output_mix.detach()], dim=1) )
 
                             # cutmix
-                            cutmix_fn.set_seed(random.randint(0,10000))
+                            cutmix_fn.set_seed(seed_cutmix)
                             d_fake_decode_mix, _ = cutmix_fn(d_fake_decode, d_real_decode)
                         else:
                             NotImplementedError()
