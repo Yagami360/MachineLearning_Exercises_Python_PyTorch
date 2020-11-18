@@ -35,12 +35,12 @@ class TempleteDataset(data.Dataset):
         self.image_width = image_width
         self.debug = debug
 
-        self.image_dir = os.path.join( root_dir, "image" )
-        self.target_dir = os.path.join( root_dir, "target" )
-        #self.image_names = sorted( [f for f in os.listdir(self.image_dir) if f.endswith(IMG_EXTENSIONS)], key=lambda s: int(re.search(r'\d+', s).group()) )
-        #self.target_names = sorted( [f for f in os.listdir(self.target_dir) if f.endswith(IMG_EXTENSIONS)], key=lambda s: int(re.search(r'\d+', s).group()) )
-        self.image_names = sorted( [f for f in os.listdir(self.image_dir) if f.endswith(IMG_EXTENSIONS)], key=numerical_sort )
-        self.target_names = sorted( [f for f in os.listdir(self.target_dir) if f.endswith(IMG_EXTENSIONS)], key=numerical_sort )
+        self.image_s_dir = os.path.join( root_dir, "image_s" )
+        self.image_t_dir = os.path.join( root_dir, "image_t" )
+        #self.image_s_names = sorted( [f for f in os.listdir(self.image_s_dir) if f.endswith(IMG_EXTENSIONS)], key=lambda s: int(re.search(r'\d+', s).group()) )
+        #self.image_t_names = sorted( [f for f in os.listdir(self.image_t_dir) if f.endswith(IMG_EXTENSIONS)], key=lambda s: int(re.search(r'\d+', s).group()) )
+        self.image_s_names = sorted( [f for f in os.listdir(self.image_s_dir) if f.endswith(IMG_EXTENSIONS)], key=numerical_sort )
+        self.image_t_names = sorted( [f for f in os.listdir(self.image_t_dir) if f.endswith(IMG_EXTENSIONS)], key=numerical_sort )
 
         # transform
         if( data_augument ):
@@ -112,48 +112,57 @@ class TempleteDataset(data.Dataset):
             )
 
         if( self.debug ):
-            print( "self.image_dir :", self.image_dir)
-            print( "len(self.image_names) :", len(self.image_names))
-            print( "self.image_names[0:5] :", self.image_names[0:5])
+            print( "self.image_s_dir :", self.image_s_dir)
+            print( "self.image_t_dir :", self.image_t_dir)
+            print( "len(self.image_s_names) :", len(self.image_s_names))
+            print( "self.image_s_names[0:5] :", self.image_s_names[0:5])
 
         return
 
     def __len__(self):
-        return len(self.image_names)
+        return len(self.image_s_names)
 
     def __getitem__(self, index):
-        image_name = self.image_names[index]
-        target_name = self.target_names[index]
+        image_s_name = self.image_s_names[index]
+        image_t_name = self.image_t_names[index]
         self.seed_da = random.randint(0,10000)
 
-        # image
-        image = Image.open( os.path.join(self.image_dir,image_name) ).convert('RGB')
+        #---------------------
+        # image_s
+        #---------------------
+        image_s = Image.open( os.path.join(self.image_s_dir,image_s_name) ).convert('RGB')
         if( self.data_augument ):
             set_random_seed( self.seed_da )
 
-        image = self.transform(image)
+        image_s = self.transform(image_s)
 
-        # target
+        #---------------------
+        # image_t
+        #---------------------
         if( self.datamode == "train" ):
-            #target = Image.open( os.path.join(self.target_dir, target_name) )
-            target = Image.open( os.path.join(self.target_dir, target_name) ).convert('RGB')
+            #image_t = Image.open( os.path.join(self.image_t_dir, image_t_name) )
+            image_t = Image.open( os.path.join(self.image_t_dir, image_t_name) ).convert('RGB')
             #self.seed_da = random.randint(0,10000)
             if( self.data_augument ):
                 set_random_seed( self.seed_da )
 
-            target = self.transform_mask(target)
-            #target = torch.from_numpy( np.asarray(self.transform_mask_woToTensor(target)).astype("float32") ).unsqueeze(0)
+            image_t = self.transform_mask(image_t)
+            #image_t = torch.from_numpy( np.asarray(self.transform_mask_woToTensor(image_t)).astype("float32") ).unsqueeze(0)
 
+        #---------------------
+        # returns
+        #---------------------
         if( self.datamode == "train" ):
             results_dict = {
-                "image_name" : image_name,
-                "image" : image,
-                "target" : target,
+                "image_s_name" : image_s_name,
+                "image_t_name" : image_t_name,
+                "image_s" : image_s,
+                "image_t" : image_t,
             }
         else:
             results_dict = {
-                "image_name" : image_name,
-                "image" : image,
+                "image_s_name" : image_s_name,
+                "image_s" : image_s,
             }
 
         return results_dict

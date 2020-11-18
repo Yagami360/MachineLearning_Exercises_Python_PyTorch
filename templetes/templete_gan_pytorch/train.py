@@ -24,9 +24,11 @@ from tensorboardX import SummaryWriter
 from data.dataset import TempleteDataset, TempleteDataLoader
 from models.generators import Pix2PixHDGenerator
 from models.discriminators import PatchGANDiscriminator, MultiscaleDiscriminator
+from models.inception import InceptionV3
 from models.losses import VGGLoss, LSGANLoss
 from utils.utils import save_checkpoint, load_checkpoint
 from utils.utils import board_add_image, board_add_images, save_image_w_norm
+from utils.scores import calculate_fretchet
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -53,6 +55,7 @@ if __name__ == '__main__':
     parser.add_argument("--val_rate", type=float, default=0.01)
     parser.add_argument('--n_display_valid', type=int, default=8, help="valid データの tensorboard への表示数")
     parser.add_argument('--data_augument', action='store_true')
+    parser.add_argument('--diaplay_scores', action='store_true')
     parser.add_argument("--seed", type=int, default=71)
     parser.add_argument('--device', choices=['cpu', 'gpu'], default="gpu", help="使用デバイス (CPU or GPU)")
     parser.add_argument('--n_workers', type=int, default=4, help="CPUの並列化数（0 で並列化なし）")
@@ -144,6 +147,10 @@ if __name__ == '__main__':
         print( "model_G\n", model_G )
         print( "model_D\n", model_D )
 
+    # Inception モデル / FID スコアの計算用
+    if( args.diaplay_scores ):
+        inception = InceptionV3().to(device)
+
     #================================
     # optimizer_G の設定
     #================================
@@ -169,20 +176,20 @@ if __name__ == '__main__':
             model_D.train()
 
             # 一番最後のミニバッチループで、バッチサイズに満たない場合は無視する（後の計算で、shape の不一致をおこすため）
-            if inputs["image"].shape[0] != args.batch_size:
+            if inputs["image_s"].shape[0] != args.batch_size:
                 break
 
             # ミニバッチデータを GPU へ転送
-            image = inputs["image"].to(device)
-            target = inputs["target"].to(device)
+            image_s = inputs["image_s"].to(device)
+            image_t = inputs["image_t"].to(device)
             if( args.debug and n_print > 0):
-                print( "[image] shape={}, dtype={}, min={}, max={}".format(image.shape, image.dtype, torch.min(image), torch.max(image)) )
-                print( "[target] shape={}, dtype={}, min={}, max={}".format(target.shape, target.dtype, torch.min(target), torch.max(target)) )
+                print( "[image_s] shape={}, dtype={}, min={}, max={}".format(image_s.shape, image_s.dtype, torch.min(image_s), torch.max(image_s)) )
+                print( "[image_t] shape={}, dtype={}, min={}, max={}".format(image_t.shape, image_t.dtype, torch.min(image_t), torch.max(image_t)) )
 
             #----------------------------------------------------
             # 生成器 の forword 処理
             #----------------------------------------------------
-            output = model_G( image )
+            output = model_G( image_s )
             if( args.debug and n_print > 0 ):
                 print( "output.shape : ", output.shape )
 
@@ -194,8 +201,8 @@ if __name__ == '__main__':
                 param.requires_grad = True
 
             # 学習用データをモデルに流し込む
-            d_real = model_D( torch.cat([image, target], dim=1) )
-            d_fake = model_D( torch.cat([image, output.detach()], dim=1) )
+            d_real = model_D( torch.cat([image_s, image_t], dim=1) )
+            d_fake = model_D( torch.cat([image_s, output.detach()], dim=1) )
             if( args.debug and n_print > 0 ):
                 print( "d_real.shape :", d_real.shape )
                 print( "d_fake.shape :", d_fake.shape )
@@ -216,8 +223,8 @@ if __name__ == '__main__':
             # 生成器の更新処理
             #----------------------------------------------------
             # 損失関数を計算する
-            loss_l1 = loss_l1_fn( target, output )
-            loss_vgg = loss_vgg_fn( target, output )
+            loss_l1 = loss_l1_fn( image_t, output )
+            loss_vgg = loss_vgg_fn( image_t, output )
             loss_adv = loss_adv_fn.forward_G( d_fake )
             loss_G =  args.lambda_l1 * loss_l1 + args.lambda_vgg * loss_vgg + args.lambda_adv * loss_adv
 
@@ -249,9 +256,15 @@ if __name__ == '__main__':
 
                 # visual images
                 visuals = [
-                    [ image.detach(), target.detach(), output.detach() ],
+                    [ image_s.detach(), image_t.detach(), output.detach() ],
                 ]
                 board_add_images(board_train, 'train', visuals, step+1)
+
+                # scores
+                if( args.diaplay_scores ):
+                    score_fid = calculate_fretchet(image_t, output, inception)
+                    board_train.add_scalar('scores/FID', score_fid.item(), step)
+                    print( "step={}, FID={:.5f}".format(step, score_fid.item()) )
 
             #====================================================
             # valid データでの処理
@@ -259,30 +272,31 @@ if __name__ == '__main__':
             if( step % args.n_display_valid_step == 0 ):
                 loss_G_total, loss_l1_total, loss_vgg_total, loss_adv_total = 0, 0, 0, 0
                 loss_D_total, loss_D_real_total, loss_D_fake_total = 0, 0, 0
+                score_fid_total = 0
                 n_valid_loop = 0
                 for iter, inputs in enumerate( tqdm(dloader_valid, desc = "valid") ):
                     model_G.eval()            
                     model_D.eval()
 
                     # 一番最後のミニバッチループで、バッチサイズに満たない場合は無視する（後の計算で、shape の不一致をおこすため）
-                    if inputs["image"].shape[0] != args.batch_size_valid:
+                    if inputs["image_s"].shape[0] != args.batch_size_valid:
                         break
 
                     # ミニバッチデータを GPU へ転送
-                    image = inputs["image"].to(device)
-                    target = inputs["target"].to(device)
+                    image_s = inputs["image_s"].to(device)
+                    image_t = inputs["image_t"].to(device)
 
                     # 推論処理
                     with torch.no_grad():
-                        output = model_G( image )
+                        output = model_G( image_s )
 
                     with torch.no_grad():
-                        d_real = model_D( torch.cat([image, target], dim=1) )
-                        d_fake = model_D( torch.cat([image, output.detach()], dim=1) )
+                        d_real = model_D( torch.cat([image_s, image_t], dim=1) )
+                        d_fake = model_D( torch.cat([image_s, output.detach()], dim=1) )
 
                     # 損失関数を計算する
-                    loss_l1 = loss_l1_fn( target, output )
-                    loss_vgg = loss_vgg_fn( target, output )
+                    loss_l1 = loss_l1_fn( image_t, output )
+                    loss_vgg = loss_vgg_fn( image_t, output )
                     loss_adv = loss_adv_fn.forward_G( d_fake )
                     loss_G =  args.lambda_l1 * loss_l1 + args.lambda_vgg * loss_vgg + args.lambda_adv * loss_adv
 
@@ -296,11 +310,16 @@ if __name__ == '__main__':
                     loss_D_real_total += loss_D_real
                     loss_D_fake_total += loss_D_fake
 
+                    # scores
+                    if( args.diaplay_scores ):
+                        score_fid = calculate_fretchet(image_t, output, inception)
+                        score_fid_total += score_fid
+
                     # 生成画像表示
                     if( iter <= args.n_display_valid ):
                         # visual images
                         visuals = [
-                            [ image.detach(), target.detach(), output.detach() ],
+                            [ image_s.detach(), image_t.detach(), output.detach() ],
                         ]
                         board_add_images(board_valid, 'valid/{}'.format(iter), visuals, step+1)
 
@@ -315,6 +334,10 @@ if __name__ == '__main__':
                 board_valid.add_scalar('D/loss_D_real', loss_D_real_total.item()/n_valid_loop, step)
                 board_valid.add_scalar('D/loss_D_fake', loss_D_fake_total.item()/n_valid_loop, step)
                 
+                # scores
+                if( args.diaplay_scores ):
+                    board_valid.add_scalar('scores/FID', score_fid_total.item()/n_valid_loop, step)
+
             step += 1
             n_print -= 1
 
