@@ -19,10 +19,10 @@ class TempleteNetworks( nn.Module ):
     """
     ダミー用の何もしないネットワーク
     """
-    def __init__( self, n_in_channles = 3, n_out_channles = 1 ):
+    def __init__( self, in_dim = 3, out_dim = 1 ):
         super( TempleteNetworks, self ).__init__()
         self.dummmy_layer = nn.Sequential(
-            nn.Conv2d( n_in_channles, n_out_channles, kernel_size=1, stride=1, padding=0 ),
+            nn.Conv2d( in_dim, out_dim, kernel_size=1, stride=1, padding=0 ),
         )
         return
 

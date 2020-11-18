@@ -58,11 +58,12 @@ class MultiscaleDiscriminator(nn.Module):
     """
     Pix2Pix-HD のマルチスケール識別器
     """
-    def __init__( 
-        self, 
-        in_dim = 3, n_fmaps = 64,
+    def __init__(
+        self,
+        in_dim = 3,
+        n_fmaps = 64,
         n_dis = 3,                # 識別器の数
-#       n_layers = 3,        
+#        n_layers = 3,        
     ):
         super( MultiscaleDiscriminator, self ).__init__()
         self.n_dis = n_dis

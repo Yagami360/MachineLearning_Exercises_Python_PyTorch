@@ -18,3 +18,5 @@
 tensorboard
 checkpoints
 results
+
+!dataset

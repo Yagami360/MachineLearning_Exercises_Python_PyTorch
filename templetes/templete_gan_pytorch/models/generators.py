@@ -60,7 +60,7 @@ class ResnetBlock(nn.Module):
 
 
 class Pix2PixHDGenerator( nn.Module ):
-    def __init__( self, input_nc = 3, output_nc = 3, ngf=64, n_downsampling=3, n_blocks=9, norm_type = 'batch', padding_type='reflect'):
+    def __init__( self, in_dim = 3, out_dim = 3, ngf=64, n_downsampling=3, n_blocks=9, norm_type = 'batch', padding_type='reflect'):
         assert(n_blocks >= 0)
         super(Pix2PixHDGenerator, self).__init__()        
         activation = nn.ReLU(True)        
@@ -72,7 +72,7 @@ class Pix2PixHDGenerator( nn.Module ):
         else:
             raise NotImplementedError()
 
-        model = [nn.ReflectionPad2d(3), nn.Conv2d(input_nc, ngf, kernel_size=7, padding=0), norm_layer(ngf), activation]
+        model = [nn.ReflectionPad2d(3), nn.Conv2d(in_dim, ngf, kernel_size=7, padding=0), norm_layer(ngf), activation]
         ### downsample
         for i in range(n_downsampling):
             mult = 2**i
@@ -88,7 +88,7 @@ class Pix2PixHDGenerator( nn.Module ):
             mult = 2**(n_downsampling - i)
             model += [nn.ConvTranspose2d(ngf * mult, int(ngf * mult / 2), kernel_size=3, stride=2, padding=1, output_padding=1), norm_layer(int(ngf * mult / 2)), activation]
 
-        model += [nn.ReflectionPad2d(3), nn.Conv2d(ngf, output_nc, kernel_size=7, padding=0), nn.Tanh()]        
+        model += [nn.ReflectionPad2d(3), nn.Conv2d(ngf, out_dim, kernel_size=7, padding=0), nn.Tanh()]        
         self.model = nn.Sequential(*model)
             
     def forward(self, input):

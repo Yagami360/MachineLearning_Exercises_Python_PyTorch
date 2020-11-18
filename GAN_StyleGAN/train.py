@@ -21,8 +21,8 @@ from torchvision.utils import save_image
 from tensorboardX import SummaryWriter
 
 # 自作モジュール
-from data.dataset import TempleteDataset, TempleteDataLoader
-from models.generators import Pix2PixHDGenerator
+from data.noize_dataset import NoizeDataset
+from models.generators import TempleteNetworks, StyleGANGenerator
 from models.discriminators import PatchGANDiscriminator, MultiscaleDiscriminator
 from models.inception import InceptionV3
 from models.losses import VGGLoss, LSGANLoss
@@ -43,6 +43,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size_valid', type=int, default=1, help="バッチサイズ")
     parser.add_argument('--image_height', type=int, default=128, help="入力画像の高さ（pixel単位）")
     parser.add_argument('--image_width', type=int, default=128, help="入力画像の幅（pixel単位）")
+    parser.add_argument('--z_dims', type=int, default=512, help="入力ノイズの次元数")
     parser.add_argument('--lr', type=float, default=0.0002, help="学習率")
     parser.add_argument('--beta1', type=float, default=0.5, help="学習率の減衰率")
     parser.add_argument('--beta2', type=float, default=0.999, help="学習率の減衰率")
@@ -119,7 +120,7 @@ if __name__ == '__main__':
     # データセットの読み込み
     #================================    
     # 学習用データセットとテスト用データセットの設定
-    ds_train = TempleteDataset( args, args.dataset_dir, datamode = "train", image_height = args.image_height, image_width = args.image_width, data_augument = args.data_augument, debug = args.debug )
+    ds_train = NoizeDataset( args, args.dataset_dir, datamode = "train", z_dims = args.z_dims, image_height = args.image_height, image_width = args.image_width, data_augument = args.data_augument, debug = args.debug )
 
     # 学習用データセットとテスト用データセットの設定
     index = np.arange(len(ds_train))
@@ -136,8 +137,9 @@ if __name__ == '__main__':
     #================================
     # モデルの構造を定義する。
     #================================
-    model_G = Pix2PixHDGenerator().to(device)
-    model_D = PatchGANDiscriminator( in_dim = 3+3, n_fmaps = 64 ).to( device )
+    #model_G = TempleteNetworks(in_dim=512, out_dim=3).to(device)
+    model_G = StyleGANGenerator(in_dim=512, out_dim=3).to(device)
+    model_D = PatchGANDiscriminator( in_dim=3, n_fmaps = 64 ).to(device)
 
     # モデルを読み込む
     if not args.load_checkpoints_path == '' and os.path.exists(args.load_checkpoints_path):
@@ -176,20 +178,22 @@ if __name__ == '__main__':
             model_D.train()
 
             # 一番最後のミニバッチループで、バッチサイズに満たない場合は無視する（後の計算で、shape の不一致をおこすため）
-            if inputs["image_s"].shape[0] != args.batch_size:
+            if inputs["image_t"].shape[0] != args.batch_size:
                 break
 
             # ミニバッチデータを GPU へ転送
-            image_s = inputs["image_s"].to(device)
+            latent_z = inputs["latent_z"].to(device)
+            noize_map = inputs["noize_map"].to(device)
             image_t = inputs["image_t"].to(device)
             if( args.debug and n_print > 0):
-                print( "[image_s] shape={}, dtype={}, min={}, max={}".format(image_s.shape, image_s.dtype, torch.min(image_s), torch.max(image_s)) )
+                print( "[latent_z] shape={}, dtype={}, min={}, max={}".format(latent_z.shape, latent_z.dtype, torch.min(latent_z), torch.max(latent_z)) )
+                print( "[noize_map] shape={}, dtype={}, min={}, max={}".format(noize_map.shape, noize_map.dtype, torch.min(noize_map), torch.max(noize_map)) )
                 print( "[image_t] shape={}, dtype={}, min={}, max={}".format(image_t.shape, image_t.dtype, torch.min(image_t), torch.max(image_t)) )
 
             #----------------------------------------------------
             # 生成器 の forword 処理
             #----------------------------------------------------
-            output = model_G( image_s )
+            output = model_G( latent_z, noize_map )
             if( args.debug and n_print > 0 ):
                 print( "output.shape : ", output.shape )
 
@@ -201,8 +205,8 @@ if __name__ == '__main__':
                 param.requires_grad = True
 
             # 学習用データをモデルに流し込む
-            d_real = model_D( torch.cat([image_s, image_t], dim=1) )
-            d_fake = model_D( torch.cat([image_s, output.detach()], dim=1) )
+            d_real = model_D(image_t)
+            d_fake = model_D(output.detach())
             if( args.debug and n_print > 0 ):
                 print( "d_real.shape :", d_real.shape )
                 print( "d_fake.shape :", d_fake.shape )
@@ -256,7 +260,7 @@ if __name__ == '__main__':
 
                 # visual images
                 visuals = [
-                    [ image_s.detach(), image_t.detach(), output.detach() ],
+                    [ noize_map.detach(), image_t.detach(), output.detach() ],
                 ]
                 board_add_images(board_train, 'train', visuals, step+1)
 
@@ -279,20 +283,21 @@ if __name__ == '__main__':
                     model_D.eval()
 
                     # 一番最後のミニバッチループで、バッチサイズに満たない場合は無視する（後の計算で、shape の不一致をおこすため）
-                    if inputs["image_s"].shape[0] != args.batch_size_valid:
+                    if inputs["image_t"].shape[0] != args.batch_size_valid:
                         break
 
                     # ミニバッチデータを GPU へ転送
-                    image_s = inputs["image_s"].to(device)
+                    latent_z = inputs["latent_z"].to(device)
+                    noize_map = inputs["noize_map"].to(device)
                     image_t = inputs["image_t"].to(device)
 
                     # 推論処理
                     with torch.no_grad():
-                        output = model_G( image_s )
+                        output = model_G( latent_z, noize_map )
 
                     with torch.no_grad():
-                        d_real = model_D( torch.cat([image_s, image_t], dim=1) )
-                        d_fake = model_D( torch.cat([image_s, output.detach()], dim=1) )
+                        d_real = model_D( image_t )
+                        d_fake = model_D( output.detach() )
 
                     # 損失関数を計算する
                     loss_l1 = loss_l1_fn( image_t, output )
@@ -319,7 +324,7 @@ if __name__ == '__main__':
                     if( iter <= args.n_display_valid ):
                         # visual images
                         visuals = [
-                            [ image_s.detach(), image_t.detach(), output.detach() ],
+                            [ noize_map.detach(), image_t.detach(), output.detach() ],
                         ]
                         board_add_images(board_valid, 'valid/{}'.format(iter), visuals, step+1)
 
