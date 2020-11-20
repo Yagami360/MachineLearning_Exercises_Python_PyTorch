@@ -27,24 +27,23 @@ IMG_EXTENSIONS = (
 )
 
 class NoizeDataset(data.Dataset):
-    def __init__(self, args, root_dir, datamode = "train", z_dims = 512, image_height = 128, image_width = 128, data_augument = False, debug = False ):
+    def __init__(self, args, root_dir, datamode = "train", z_dims = 512, image_height = 128, image_width = 128, train_progress_max = 8, data_augument = False, debug = False ):
         super(NoizeDataset, self).__init__()
         self.args = args
         self.datamode = datamode
         self.data_augument = data_augument
         self.image_height = image_height
         self.image_width = image_width
+        self.train_progress_max = train_progress_max
         self.z_dims = z_dims
         self.train_progress = 0
         self.debug = debug
 
-        """
-        self.noize_sizes_h = [self.image_height]
-        self.noize_sizes_w = [self.image_width]
-        for i in range(train_progress_max):
-            self.noize_sizes_h.insert(0, int(self.noize_sizes_h[0] * 2) )
-            self.noize_sizes_w.insert(0, int(self.noize_sizes_w[0] * 2) )
-        """
+        self.noize_sizes_h = []
+        self.noize_sizes_w = []
+        for i in range(train_progress_max+1):
+            self.noize_sizes_h.append(2**(i+2))
+            self.noize_sizes_w.append(2**(i+2))
 
         self.image_t_dir = os.path.join( root_dir, "image_t" )
         self.image_t_names = sorted( [f for f in os.listdir(self.image_t_dir) if f.endswith(IMG_EXTENSIONS)], key=numerical_sort )
@@ -162,36 +161,38 @@ class NoizeDataset(data.Dataset):
         #--------------------------------
         # 入力ノイズマップ
         #--------------------------------
-        if( self.train_progress == 0 ):
-            noize_map = self.get_noize_map(c=1, h=4, w=4)
-        elif( self.train_progress == 1 ):
-            noize_map = self.get_noize_map(c=1, h=8, w=8)
-        elif( self.train_progress == 2 ):
-            noize_map = self.get_noize_map(c=1, h=16, w=16)
-        elif( self.train_progress == 3 ):
-            noize_map = self.get_noize_map(c=1, h=32, w=32)
-        elif( self.train_progress == 4 ):
-            noize_map = self.get_noize_map(c=1, h=64, w=64)
-        elif( self.train_progress == 5 ):
-            noize_map = self.get_noize_map(c=1, h=128, w=128)
-        elif( self.train_progress == 6 ):
-            noize_map = self.get_noize_map(c=1, h=256, w=256)
-        elif( self.train_progress == 7 ):
-            noize_map = self.get_noize_map(c=1, h=512, w=512)
-        else:
-            noize_map = self.get_noize_map(c=1, h=1024, w=1024)
+        noize_map_list = []
+        for train_progress in range(self.train_progress_max):
+            noize_h = self.noize_sizes_h[train_progress]
+            noize_w = self.noize_sizes_w[train_progress]
+
+            # input noize
+            noize_map = self.get_noize_map(c=1, h=noize_h, w=noize_w)
+            noize_map_list.append(noize_map)
 
         #---------------------
         # image_t
         #---------------------
         if( self.datamode == "train" ):
-            #image_t = Image.open( os.path.join(self.image_t_dir, image_t_name) )
-            image_t = Image.open( os.path.join(self.image_t_dir, image_t_name) ).convert('RGB')
-            #self.seed_da = random.randint(0,10000)
-            if( self.data_augument ):
-                set_random_seed( self.seed_da )
+            image_t_list = []
+            for train_progress in range(self.train_progress_max):
+                noize_h = self.noize_sizes_h[train_progress]
+                noize_w = self.noize_sizes_w[train_progress]
 
-            image_t = self.transform(image_t)
+                # transform
+                self.transform = transforms.Compose(
+                    [
+                        transforms.Resize( (noize_h, noize_w), interpolation=Image.LANCZOS ),
+                        transforms.CenterCrop( size = (noize_h, noize_w) ),
+                        transforms.ToTensor(),
+                        transforms.Normalize( [0.5,0.5,0.5], [0.5,0.5,0.5] ),
+                    ]
+                )
+
+                # image
+                image_t = Image.open( os.path.join(self.image_t_dir, image_t_name) ).convert('RGB')
+                image_t = self.transform(image_t)
+                image_t_list.append(image_t)
 
         #---------------------
         # returns
@@ -199,9 +200,9 @@ class NoizeDataset(data.Dataset):
         if( self.datamode == "train" ):
             results_dict = {
                 "latent_z" : latent_z,
-                "noize_map" : noize_map,
+                "noize_map_list" : noize_map_list,
                 "image_t_name" : image_t_name,
-                "image_t" : image_t,
+                "image_t_list" : image_t_list,
             }
         else:
             results_dict = {

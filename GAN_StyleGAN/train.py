@@ -22,10 +22,10 @@ from tensorboardX import SummaryWriter
 
 # 自作モジュール
 from data.noize_dataset import NoizeDataset
-from models.generators import TempleteNetworks, StyleGANGenerator
-from models.discriminators import PatchGANDiscriminator, MultiscaleDiscriminator
+from models.generators import StyleGANGenerator
+from models.discriminators import ProgressiveDiscriminator
 from models.inception import InceptionV3
-from models.losses import VGGLoss, LSGANLoss
+from models.losses import LSGANLoss
 from utils.utils import save_checkpoint, load_checkpoint
 from utils.utils import board_add_image, board_add_images, save_image_w_norm
 from utils.scores import calculate_fretchet
@@ -38,6 +38,7 @@ if __name__ == '__main__':
     parser.add_argument('--save_checkpoints_dir', type=str, default="checkpoints", help="モデルの保存ディレクトリ")
     parser.add_argument('--load_checkpoints_path', type=str, default="", help="モデルの読み込みファイルのパス")
     parser.add_argument('--tensorboard_dir', type=str, default="tensorboard", help="TensorBoard のディレクトリ")
+    parser.add_argument("--train_progress_max", type=int, default=8, help="")
     parser.add_argument("--n_epoches", type=int, default=100, help="エポック数")    
     parser.add_argument('--batch_size', type=int, default=4, help="バッチサイズ")
     parser.add_argument('--batch_size_valid', type=int, default=1, help="バッチサイズ")
@@ -48,11 +49,10 @@ if __name__ == '__main__':
     parser.add_argument('--beta1', type=float, default=0.5, help="学習率の減衰率")
     parser.add_argument('--beta2', type=float, default=0.999, help="学習率の減衰率")
     parser.add_argument('--lambda_l1', type=float, default=10.0, help="L1損失関数の係数値")
-    parser.add_argument('--lambda_vgg', type=float, default=10.0, help="VGG perceptual loss の係数値")
     parser.add_argument('--lambda_adv', type=float, default=1.0, help="Adv loss の係数値")
     parser.add_argument("--n_diaplay_step", type=int, default=100,)
     parser.add_argument('--n_display_valid_step', type=int, default=500, help="valid データの tensorboard への表示間隔")
-    parser.add_argument("--n_save_epoches", type=int, default=10,)
+    parser.add_argument("--n_save_epoches", type=int, default=10000,)
     parser.add_argument("--val_rate", type=float, default=0.01)
     parser.add_argument('--n_display_valid', type=int, default=8, help="valid データの tensorboard への表示数")
     parser.add_argument('--data_augument', action='store_true')
@@ -137,9 +137,8 @@ if __name__ == '__main__':
     #================================
     # モデルの構造を定義する。
     #================================
-    #model_G = TempleteNetworks(in_dim=512, out_dim=3).to(device)
     model_G = StyleGANGenerator(in_dim=512, out_dim=3).to(device)
-    model_D = PatchGANDiscriminator( in_dim=3, n_fmaps = 64 ).to(device)
+    model_D = ProgressiveDiscriminator().to(device)
 
     # モデルを読み込む
     if not args.load_checkpoints_path == '' and os.path.exists(args.load_checkpoints_path):
@@ -163,7 +162,6 @@ if __name__ == '__main__':
     # loss 関数の設定
     #================================
     loss_l1_fn = nn.L1Loss()
-    loss_vgg_fn = VGGLoss(device, n_channels=3)
     loss_adv_fn = LSGANLoss(device)
 
     #================================
@@ -172,189 +170,197 @@ if __name__ == '__main__':
     print("Starting Training Loop...")
     n_print = 1
     step = 0
-    for epoch in tqdm( range(args.n_epoches), desc = "epoches" ):
-        for iter, inputs in enumerate( tqdm( dloader_train, desc = "epoch={}".format(epoch) ) ):
-            model_G.train()
-            model_D.train()
+    for train_progress in range(args.train_progress_max):
+        for epoch in tqdm( range(args.n_epoches), desc = "epoches" ):
+            for iter, inputs in enumerate( tqdm( dloader_train, desc = "epoch={}".format(epoch) ) ):
+                model_G.train()
+                model_D.train()
 
-            # 一番最後のミニバッチループで、バッチサイズに満たない場合は無視する（後の計算で、shape の不一致をおこすため）
-            if inputs["image_t"].shape[0] != args.batch_size:
-                break
+                # 一番最後のミニバッチループで、バッチサイズに満たない場合は無視する（後の計算で、shape の不一致をおこすため）
+                if inputs["latent_z"].shape[0] != args.batch_size:
+                    break
 
-            # ミニバッチデータを GPU へ転送
-            latent_z = inputs["latent_z"].to(device)
-            noize_map = inputs["noize_map"].to(device)
-            image_t = inputs["image_t"].to(device)
-            if( args.debug and n_print > 0):
-                print( "[latent_z] shape={}, dtype={}, min={}, max={}".format(latent_z.shape, latent_z.dtype, torch.min(latent_z), torch.max(latent_z)) )
-                print( "[noize_map] shape={}, dtype={}, min={}, max={}".format(noize_map.shape, noize_map.dtype, torch.min(noize_map), torch.max(noize_map)) )
-                print( "[image_t] shape={}, dtype={}, min={}, max={}".format(image_t.shape, image_t.dtype, torch.min(image_t), torch.max(image_t)) )
+                # ミニバッチデータを GPU へ転送
+                latent_z = inputs["latent_z"].to(device)
+                noize_map_list = inputs["noize_map_list"]
+                for i in range(len(noize_map_list)):
+                    noize_map_list[i] = noize_map_list[i].to(device)
+                noize_map = noize_map_list[train_progress]
 
-            #----------------------------------------------------
-            # 生成器 の forword 処理
-            #----------------------------------------------------
-            output = model_G( latent_z, noize_map )
-            if( args.debug and n_print > 0 ):
-                print( "output.shape : ", output.shape )
+                image_t_list = inputs["image_t_list"]          
+                image_t = image_t_list[train_progress].to(device)
+                if( args.debug and n_print > 0 ):
+                    print( "[latent_z] shape={}, dtype={}, min={}, max={}".format(latent_z.shape, latent_z.dtype, torch.min(latent_z), torch.max(latent_z)) )
+                    for i in range(len(noize_map_list)):
+                        print( "noize_map_list[{}] shape={}, device={}, dtype={}, min={}, max={}".format(i, noize_map_list[i].shape, noize_map_list[i].device, noize_map_list[i].dtype, torch.min(noize_map_list[i]), torch.max(noize_map_list[i])) )
+                    for i in range(len(image_t_list)):
+                        print( "image_t_list[{}] shape={}, device={}, dtype={}, min={}, max={}".format(i, image_t_list[i].shape, image_t_list[i].device, image_t_list[i].dtype, torch.min(image_t_list[i]), torch.max(image_t_list[i])) )
 
-            #----------------------------------------------------
-            # 識別器の更新処理
-            #----------------------------------------------------
-            # 無効化していた識別器 D のネットワークの勾配計算を有効化。
-            for param in model_D.parameters():
-                param.requires_grad = True
+                #----------------------------------------------------
+                # 生成器 の forword 処理
+                #----------------------------------------------------
+                output = model_G( latent_z, noize_map_list, train_progress )
+                if( args.debug and n_print > 0 ):
+                    print( "output.shape : ", output.shape )
 
-            # 学習用データをモデルに流し込む
-            d_real = model_D(image_t)
-            d_fake = model_D(output.detach())
-            if( args.debug and n_print > 0 ):
-                print( "d_real.shape :", d_real.shape )
-                print( "d_fake.shape :", d_fake.shape )
+                #----------------------------------------------------
+                # 識別器の更新処理
+                #----------------------------------------------------
+                # 無効化していた識別器 D のネットワークの勾配計算を有効化。
+                for param in model_D.parameters():
+                    param.requires_grad = True
 
-            # 損失関数を計算する
-            loss_D, loss_D_real, loss_D_fake = loss_adv_fn.forward_D( d_real, d_fake )
+                # 学習用データをモデルに流し込む
+                d_real = model_D(image_t, train_progress)
+                d_fake = model_D(output.detach(), train_progress)
+                if( args.debug and n_print > 0 ):
+                    print( "d_real.shape :", d_real.shape )
+                    print( "d_fake.shape :", d_fake.shape )
 
-            # ネットワークの更新処理
-            optimizer_D.zero_grad()
-            loss_D.backward(retain_graph=True)
-            optimizer_D.step()
+                # 損失関数を計算する
+                loss_D, loss_D_real, loss_D_fake = loss_adv_fn.forward_D( d_real, d_fake )
 
-            # 無効化していた識別器 D のネットワークの勾配計算を有効化。
-            for param in model_D.parameters():
-                param.requires_grad = False
+                # ネットワークの更新処理
+                optimizer_D.zero_grad()
+                loss_D.backward(retain_graph=True)
+                optimizer_D.step()
 
-            #----------------------------------------------------
-            # 生成器の更新処理
-            #----------------------------------------------------
-            # 損失関数を計算する
-            loss_l1 = loss_l1_fn( image_t, output )
-            loss_vgg = loss_vgg_fn( image_t, output )
-            loss_adv = loss_adv_fn.forward_G( d_fake )
-            loss_G =  args.lambda_l1 * loss_l1 + args.lambda_vgg * loss_vgg + args.lambda_adv * loss_adv
+                # 無効化していた識別器 D のネットワークの勾配計算を有効化。
+                for param in model_D.parameters():
+                    param.requires_grad = False
 
-            # ネットワークの更新処理
-            optimizer_G.zero_grad()
-            loss_G.backward()
-            optimizer_G.step()
+                #----------------------------------------------------
+                # 生成器の更新処理
+                #----------------------------------------------------
+                # 損失関数を計算する
+                loss_l1 = loss_l1_fn( image_t, output )
+                loss_adv = loss_adv_fn.forward_G( d_fake )
+                loss_G =  args.lambda_l1 * loss_l1 + args.lambda_adv * loss_adv
 
-            #====================================================
-            # 学習過程の表示
-            #====================================================
-            if( step == 0 or ( step % args.n_diaplay_step == 0 ) ):
-                # lr
-                for param_group in optimizer_G.param_groups:
-                    lr = param_group['lr']
+                # ネットワークの更新処理
+                optimizer_G.zero_grad()
+                loss_G.backward()
+                optimizer_G.step()
 
-                board_train.add_scalar('lr/learning rate', lr, step )
+                #====================================================
+                # 学習過程の表示
+                #====================================================
+                if( step == 0 or ( step % args.n_diaplay_step == 0 ) ):
+                    # lr
+                    for param_group in optimizer_G.param_groups:
+                        lr = param_group['lr']
 
-                # loss
-                board_train.add_scalar('G/loss_l1', loss_l1.item(), step)
-                board_train.add_scalar('G/loss_vgg', loss_vgg.item(), step)
-                board_train.add_scalar('G/loss_adv', loss_adv.item(), step)
-                board_train.add_scalar('G/loss_G', loss_G.item(), step)
-                board_train.add_scalar('D/loss_D_real', loss_D_real.item(), step)
-                board_train.add_scalar('D/loss_D_fake', loss_D_fake.item(), step)
-                board_train.add_scalar('D/loss_D', loss_D.item(), step)
-                print( "step={}, loss_G={:.5f}, loss_l1={:.5f}, loss_vgg={:.5f}, loss_adv={:.5f}".format(step, loss_G.item(), loss_l1.item(), loss_vgg.item(), loss_adv.item()) )
-                print( "step={}, loss_D={:.5f}, loss_D_real={:.5f}, loss_D_fake={:.5f}".format(step, loss_D.item(), loss_D_real.item(), loss_D_fake.item()) )
+                    board_train.add_scalar('lr/learning rate', lr, step )
 
-                # visual images
-                visuals = [
-                    [ noize_map.detach(), image_t.detach(), output.detach() ],
-                ]
-                board_add_images(board_train, 'train', visuals, step+1)
+                    # loss
+                    board_train.add_scalar('G/loss_l1', loss_l1.item(), step)
+                    board_train.add_scalar('G/loss_adv', loss_adv.item(), step)
+                    board_train.add_scalar('G/loss_G', loss_G.item(), step)
+                    board_train.add_scalar('D/loss_D_real', loss_D_real.item(), step)
+                    board_train.add_scalar('D/loss_D_fake', loss_D_fake.item(), step)
+                    board_train.add_scalar('D/loss_D', loss_D.item(), step)
+                    print( "step={}, loss_G={:.5f}, loss_l1={:.5f}, loss_adv={:.5f}".format(step, loss_G.item(), loss_l1.item(), loss_adv.item()) )
+                    print( "step={}, loss_D={:.5f}, loss_D_real={:.5f}, loss_D_fake={:.5f}".format(step, loss_D.item(), loss_D_real.item(), loss_D_fake.item()) )
 
-                # scores
-                if( args.diaplay_scores ):
-                    score_fid = calculate_fretchet(image_t, output, inception)
-                    board_train.add_scalar('scores/FID', score_fid.item(), step)
-                    print( "step={}, FID={:.5f}".format(step, score_fid.item()) )
-
-            #====================================================
-            # valid データでの処理
-            #====================================================
-            if( step % args.n_display_valid_step == 0 ):
-                loss_G_total, loss_l1_total, loss_vgg_total, loss_adv_total = 0, 0, 0, 0
-                loss_D_total, loss_D_real_total, loss_D_fake_total = 0, 0, 0
-                score_fid_total = 0
-                n_valid_loop = 0
-                for iter, inputs in enumerate( tqdm(dloader_valid, desc = "valid") ):
-                    model_G.eval()            
-                    model_D.eval()
-
-                    # 一番最後のミニバッチループで、バッチサイズに満たない場合は無視する（後の計算で、shape の不一致をおこすため）
-                    if inputs["image_t"].shape[0] != args.batch_size_valid:
-                        break
-
-                    # ミニバッチデータを GPU へ転送
-                    latent_z = inputs["latent_z"].to(device)
-                    noize_map = inputs["noize_map"].to(device)
-                    image_t = inputs["image_t"].to(device)
-
-                    # 推論処理
-                    with torch.no_grad():
-                        output = model_G( latent_z, noize_map )
-
-                    with torch.no_grad():
-                        d_real = model_D( image_t )
-                        d_fake = model_D( output.detach() )
-
-                    # 損失関数を計算する
-                    loss_l1 = loss_l1_fn( image_t, output )
-                    loss_vgg = loss_vgg_fn( image_t, output )
-                    loss_adv = loss_adv_fn.forward_G( d_fake )
-                    loss_G =  args.lambda_l1 * loss_l1 + args.lambda_vgg * loss_vgg + args.lambda_adv * loss_adv
-
-                    loss_l1_total += loss_l1
-                    loss_vgg_total += loss_vgg
-                    loss_adv_total += loss_adv
-                    loss_G_total += loss_G
-
-                    loss_D, loss_D_real, loss_D_fake = loss_adv_fn.forward_D( d_real, d_fake )
-                    loss_D_total += loss_D
-                    loss_D_real_total += loss_D_real
-                    loss_D_fake_total += loss_D_fake
+                    # visual images
+                    visuals = [
+                        [ noize_map.detach(), image_t.detach(), output.detach() ],
+                    ]
+                    board_add_images(board_train, 'train', visuals, step+1)
 
                     # scores
                     if( args.diaplay_scores ):
                         score_fid = calculate_fretchet(image_t, output, inception)
-                        score_fid_total += score_fid
+                        board_train.add_scalar('scores/FID', score_fid.item(), step)
+                        print( "step={}, FID={:.5f}".format(step, score_fid.item()) )
 
-                    # 生成画像表示
-                    if( iter <= args.n_display_valid ):
-                        # visual images
-                        visuals = [
-                            [ noize_map.detach(), image_t.detach(), output.detach() ],
-                        ]
-                        board_add_images(board_valid, 'valid/{}'.format(iter), visuals, step+1)
+                #====================================================
+                # valid データでの処理
+                #====================================================
+                if( step % args.n_display_valid_step == 0 ):
+                    loss_G_total, loss_l1_total, loss_adv_total = 0, 0, 0
+                    loss_D_total, loss_D_real_total, loss_D_fake_total = 0, 0, 0
+                    score_fid_total = 0
+                    n_valid_loop = 0
+                    for iter, inputs in enumerate( tqdm(dloader_valid, desc = "valid") ):
+                        model_G.eval()            
+                        model_D.eval()
 
-                    n_valid_loop += 1
+                        # 一番最後のミニバッチループで、バッチサイズに満たない場合は無視する（後の計算で、shape の不一致をおこすため）
+                        if inputs["latent_z"].shape[0] != args.batch_size_valid:
+                            break
 
-                # loss 値表示
-                board_valid.add_scalar('G/loss_l1', loss_l1_total.item()/n_valid_loop, step)
-                board_valid.add_scalar('G/loss_vgg', loss_vgg_total.item()/n_valid_loop, step)
-                board_valid.add_scalar('G/loss_adv', loss_adv_total.item()/n_valid_loop, step)
-                board_valid.add_scalar('G/loss_G', loss_G_total.item()/n_valid_loop, step)
-                board_valid.add_scalar('D/loss_D', loss_D_total.item()/n_valid_loop, step)
-                board_valid.add_scalar('D/loss_D_real', loss_D_real_total.item()/n_valid_loop, step)
-                board_valid.add_scalar('D/loss_D_fake', loss_D_fake_total.item()/n_valid_loop, step)
-                
-                # scores
-                if( args.diaplay_scores ):
-                    board_valid.add_scalar('scores/FID', score_fid_total.item()/n_valid_loop, step)
+                        # ミニバッチデータを GPU へ転送
+                        latent_z = inputs["latent_z"].to(device)
+                        noize_map_list = inputs["noize_map_list"]
+                        for i in range(len(noize_map_list)):
+                            noize_map_list[i] = noize_map_list[i].to(device)
+                        noize_map = noize_map_list[train_progress]
 
-            step += 1
-            n_print -= 1
+                        image_t_list = inputs["image_t_list"]          
+                        image_t = image_t_list[train_progress].to(device)
 
-        #====================================================
-        # モデルの保存
-        #====================================================
-        if( epoch % args.n_save_epoches == 0 ):
-            save_checkpoint( model_G, device, os.path.join(args.save_checkpoints_dir, args.exper_name, 'model_G_ep%03d.pth' % (epoch)) )
-            save_checkpoint( model_G, device, os.path.join(args.save_checkpoints_dir, args.exper_name, 'model_G_final.pth') )
-            save_checkpoint( model_D, device, os.path.join(args.save_checkpoints_dir, args.exper_name, 'model_D_ep%03d.pth' % (epoch)) )
-            save_checkpoint( model_D, device, os.path.join(args.save_checkpoints_dir, args.exper_name, 'model_D_final.pth') )
-            print( "saved checkpoints" )
+                        # 推論処理
+                        with torch.no_grad():
+                            output = model_G( latent_z, noize_map_list, train_progress )
+
+                        with torch.no_grad():
+                            d_real = model_D( image_t, train_progress )
+                            d_fake = model_D( output.detach(), train_progress )
+
+                        # 損失関数を計算する
+                        loss_l1 = loss_l1_fn( image_t, output )
+                        loss_adv = loss_adv_fn.forward_G( d_fake )
+                        loss_G =  args.lambda_l1 * loss_l1 + args.lambda_adv * loss_adv
+
+                        loss_l1_total += loss_l1
+                        loss_adv_total += loss_adv
+                        loss_G_total += loss_G
+
+                        loss_D, loss_D_real, loss_D_fake = loss_adv_fn.forward_D( d_real, d_fake )
+                        loss_D_total += loss_D
+                        loss_D_real_total += loss_D_real
+                        loss_D_fake_total += loss_D_fake
+
+                        # scores
+                        if( args.diaplay_scores ):
+                            score_fid = calculate_fretchet(image_t, output, inception)
+                            score_fid_total += score_fid
+
+                        # 生成画像表示
+                        if( iter <= args.n_display_valid ):
+                            # visual images
+                            visuals = [
+                                [ noize_map.detach(), image_t.detach(), output.detach() ],
+                            ]
+                            board_add_images(board_valid, 'valid/{}'.format(iter), visuals, step+1)
+
+                        n_valid_loop += 1
+
+                    # loss 値表示
+                    board_valid.add_scalar('G/loss_l1', loss_l1_total.item()/n_valid_loop, step)
+                    board_valid.add_scalar('G/loss_adv', loss_adv_total.item()/n_valid_loop, step)
+                    board_valid.add_scalar('G/loss_G', loss_G_total.item()/n_valid_loop, step)
+                    board_valid.add_scalar('D/loss_D', loss_D_total.item()/n_valid_loop, step)
+                    board_valid.add_scalar('D/loss_D_real', loss_D_real_total.item()/n_valid_loop, step)
+                    board_valid.add_scalar('D/loss_D_fake', loss_D_fake_total.item()/n_valid_loop, step)
+                    
+                    # scores
+                    if( args.diaplay_scores ):
+                        board_valid.add_scalar('scores/FID', score_fid_total.item()/n_valid_loop, step)
+
+                step += 1
+                n_print -= 1
+
+            #====================================================
+            # モデルの保存
+            #====================================================
+            if( epoch % args.n_save_epoches == 0 ):
+                save_checkpoint( model_G, device, os.path.join(args.save_checkpoints_dir, args.exper_name, 'model_G_ep%03d.pth' % (epoch)) )
+                save_checkpoint( model_G, device, os.path.join(args.save_checkpoints_dir, args.exper_name, 'model_G_final.pth') )
+                save_checkpoint( model_D, device, os.path.join(args.save_checkpoints_dir, args.exper_name, 'model_D_ep%03d.pth' % (epoch)) )
+                save_checkpoint( model_D, device, os.path.join(args.save_checkpoints_dir, args.exper_name, 'model_D_final.pth') )
+                print( "saved checkpoints" )
 
     print("Finished Training Loop.")
     save_checkpoint( model_G, device, os.path.join(args.save_checkpoints_dir, args.exper_name, 'model_G_final.pth') )

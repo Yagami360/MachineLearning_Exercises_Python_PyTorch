@@ -210,8 +210,10 @@ class SynthesisBlock(nn.Module):
         self.conv2 = SConv2d(out_dim, out_dim, 3, padding=1)
         return
 
-    def forward( self, latent_z, noize_map, input ):
-        output = self.conv1(input)
+    def forward( self, latent_w, noize_map, input ):
+        # アップサンプリング
+        output = F.interpolate(input, scale_factor=2, mode='bilinear', align_corners=False)
+        output = self.conv1(output)
 
         # ノイズマップ（B）からの入力
         noize_B1 = self.apply_noize_map_B1( output, noize_map )
@@ -231,14 +233,10 @@ class SynthesisBlock(nn.Module):
 
 
 class SynthesisNetwork(nn.Module):
-    def __init__( self, in_dim_latent=512, out_dim=3, resolution_max=1024 ):
+    def __init__( self, in_dim_latent=512, out_dim=3, train_progress_max=8 ):
         super( SynthesisNetwork, self ).__init__()
-        """
-        resolution_log2 = int(np.log2(resolution))
-        assert resolution == 2 ** resolution_log2 and resolution >= 4
-        self.depth = resolution_log2 - 1
-        self.num_layers = resolution_log2 * 2 - 2
-        """
+        self.train_progress_max = train_progress_max
+
         in_dims = [in_dim_latent, in_dim_latent, in_dim_latent, in_dim_latent, in_dim_latent, in_dim_latent//2, in_dim_latent//4, in_dim_latent//8, in_dim_latent//16]
         out_dims = [in_dim_latent, in_dim_latent, in_dim_latent, in_dim_latent, in_dim_latent//2, in_dim_latent//4, in_dim_latent//8, in_dim_latent//16, in_dim_latent//32]
         print( "in_dims : ", in_dims )
@@ -257,13 +255,36 @@ class SynthesisNetwork(nn.Module):
         )
         return
 
-    def forward( self, latent_z, noize_map, train_progress = 0 ):
+    def forward( self, latent_z, noize_map_list, train_progress = 0 ):
         if( train_progress == 0 ):
-            output = self.synthesis_head(latent_z, noize_map)
+            output = self.synthesis_head(latent_z, noize_map_list[0])
+            output = self.out_layers["conv_{}".format(train_progress+1)](output)
         else:
-            output = self.synthesis_bodys["synthesis_{}".format(train_progress+1)](latent_z, noize_map)
+            output_list = []
 
-        output = self.out_layers["conv_{}".format(train_progress+1)](output)
+            # １段目
+            self.synthesis_head.eval()
+            with torch.no_grad():
+                output = self.synthesis_head(latent_z, noize_map_list[0])
+                output_list.append(output)
+
+            # ２段目以降
+            for i in range(train_progress):
+                #print( "[SynthesisNetwork] train_progress={}, i={}".format(train_progress, i) )
+                if( i >= train_progress ):
+                    output = self.synthesis_bodys["synthesis_{}".format(i+1)](latent_z, noize_map_list[i+1], output)
+                    output_list.append(output)
+                    break
+                else:
+                    self.synthesis_bodys["synthesis_{}".format(i+1)].eval()
+                    with torch.no_grad():
+                        output = self.synthesis_bodys["synthesis_{}".format(i+1)](latent_z, noize_map_list[i+1], output)
+                        output_list.append(output)
+                    continue
+
+            output = self.out_layers["conv_{}".format(train_progress+1)](output)
+            #print( "[SynthesisNetwork] output.shape : ", output.shape )
+
         return output
 
 
@@ -274,10 +295,10 @@ class StyleGANGenerator(nn.Module):
         self.synthesis_network = SynthesisNetwork()
         return
 
-    def forward( self, latent_z, noize_map, train_progress = 0 ):
+    def forward( self, latent_z, noize_map_list, train_progress = 0 ):
         latent_w = self.mapping_network(latent_z)
-        print( "[StyleGANGenerator] latent_w.shape : ", latent_w.shape )
+        #print( "[StyleGANGenerator] latent_w.shape : ", latent_w.shape )
 
-        output = self.synthesis_network(latent_w, noize_map, train_progress)
-        print( "[StyleGANGenerator] output.shape : ", output.shape )
+        output = self.synthesis_network(latent_w, noize_map_list, train_progress)
+        #print( "[StyleGANGenerator] output.shape : ", output.shape )
         return output

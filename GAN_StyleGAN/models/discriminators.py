@@ -1,6 +1,7 @@
 # -*- coding:utf-8 -*-
 import os
 import numpy as np
+from math import ceil
 
 import torch
 import torch.nn as nn
@@ -8,138 +9,289 @@ from torch.nn import functional as F
 import torchvision
 from torchvision import models
 
-#====================================
-# 識別器
-#====================================
-class PatchGANDiscriminator( nn.Module ):
+#==================================
+# StyleGAN の識別器
+#==================================
+# Scaled weight - He initialization
+# "explicitly scale the weights at runtime"
+class ScaleW:
+    '''
+    Constructor: name - name of attribute to be scaled
+    '''
+    def __init__(self, name):
+        self.name = name
+    
+    def scale(self, module):
+        weight = getattr(module, self.name + '_orig')
+        fan_in = weight.data.size(1) * weight.data[0][0].numel()
+        
+        return weight * math.sqrt(2 / fan_in)
+    
+    @staticmethod
+    def apply(module, name):
+        '''
+        Apply runtime scaling to specific module
+        '''
+        hook = ScaleW(name)
+        weight = getattr(module, name)
+        module.register_parameter(name + '_orig', nn.Parameter(weight.data))
+        del module._parameters[name]
+        module.register_forward_pre_hook(hook)
+    
+    def __call__(self, module, whatever):
+        weight = self.scale(module)
+        setattr(module, self.name, weight)
+
+def quick_scale(module, name='weight'):
+    ScaleW.apply(module, name)
+    return module
+
+
+class SLinear(nn.Module):
+    # Uniformly set the hyperparameters of Linears
+    # "We initialize all weights of the convolutional, fully-connected, and affine transform layers using N(0, 1)"
+    # 5/13: Apply scaled weights
+    def __init__(self, dim_in, dim_out):
+        super().__init__()
+        linear = nn.Linear(dim_in, dim_out)
+        linear.weight.data.normal_()
+        linear.bias.data.zero_()
+        self.linear = quick_scale(linear)
+
+    def forward(self, x):
+        return self.linear(x)
+
+
+class SConv2d(nn.Module):
+    # Uniformly set the hyperparameters of Conv2d
+    # "We initialize all weights of the convolutional, fully-connected, and affine transform layers using N(0, 1)"
+    # 5/13: Apply scaled weights
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+        conv = nn.Conv2d(*args, **kwargs)
+        conv.weight.data.normal_()
+        conv.bias.data.zero_()
+        self.conv = quick_scale(conv)
+
+    def forward(self, x):
+        return self.conv(x)
+
+
+class WScaleLayer(nn.Module):
     """
-    PatchGAN の識別器
+    Applies equalized learning rate to the preceding layer.
+    PGGAN が提案している equalized learning rate の手法（学習安定化のための手法）に従って、
+    前の層（preceding layer）の重みを正則化する。
+    1. 生成器と識別器のネットワークの各層（i）の重み w_i  の初期値を、w_i~N(0,1)  で初期化。
+    2. 初期化した重みを、各層の実行時（＝順伝搬での計算時）に、以下の式で再設定する。
+        w^^ = w_i/c  (標準化定数 c=\sqrt(2/層の数))
     """
-    def __init__( self, in_dim = 3, n_fmaps = 64 ):
-        super( PatchGANDiscriminator, self ).__init__()
-        def discriminator_block1( in_dim, out_dim ):
-            model = nn.Sequential(
-                nn.Conv2d( in_dim, out_dim, 4, stride=2, padding=1 ),
-                nn.LeakyReLU( 0.2, inplace=True )
-            )
-            return model
+    def __init__(self, pre_layer):
+        """
+        [Args]
+            pre_layer : <nn.Module> 重みの正規化を行う層
+        """
+        super(WScaleLayer, self).__init__()
+        self._pre_layer = pre_layer
+        self._scale = (torch.mean(self._pre_layer.weight.data ** 2)) ** 0.5            # 標準化定数 c
+        self._pre_layer.weight.data.copy_(self._pre_layer.weight.data / self._scale)     # w^ = w_i/c
+        self._bias = None
+        if self._pre_layer.bias is not None:
+            self._bias = self._pre_layer.bias
+            self._pre_layer.bias = None
 
-        def discriminator_block2( in_dim, out_dim ):
-            model = nn.Sequential(
-                nn.Conv2d( in_dim, out_dim, 4, stride=2, padding=1 ),
-                nn.InstanceNorm2d( out_dim ),
-                nn.LeakyReLU( 0.2, inplace=True )
-            )
-            return model
+    def forward(self, x):
+        x = self._scale * x
+        if self._bias is not None:
+            x += self._bias.view(1, self._bias.size()[0], 1, 1)
+        return x
 
-        #self.layer1 = discriminator_block1( in_dim * 2, n_fmaps )
-        self.layer1 = discriminator_block1( in_dim, n_fmaps )
-        self.layer2 = discriminator_block2( n_fmaps, n_fmaps*2 )
-        self.layer3 = discriminator_block2( n_fmaps*2, n_fmaps*4 )
-        self.layer4 = discriminator_block2( n_fmaps*4, n_fmaps*8 )
-
-        self.output_layer = nn.Sequential(
-            nn.ZeroPad2d( (1, 0, 1, 0) ),
-            nn.Conv2d( n_fmaps*8, 1, 4, padding=1, bias=False )
-        )
-
-    def forward(self, input ):
-        #output = torch.cat( [x, y], dim=1 )
-        output = self.layer1( input )
-        output = self.layer2( output )
-        output = self.layer3( output )
-        output = self.layer4( output )
-        output = self.output_layer( output )
-        output = output.view(-1)
-        return output
+    def __repr__(self):
+        param_str = '(pre_layer = %s)' % (self._pre_layer.__class__.__name__)
+        return self.__class__.__name__ + param_str
 
 
-class MultiscaleDiscriminator(nn.Module):
+class ProgressiveDiscriminator( nn.Module ):
     """
-    Pix2Pix-HD のマルチスケール識別器
+    PGGAN の識別器 D [Discriminator] 側のネットワーク構成を記述したモデル。
     """
     def __init__(
         self,
-        in_dim = 3,
-        n_fmaps = 64,
-        n_dis = 3,                # 識別器の数
-#        n_layers = 3,        
+        init_image_size = 4,
+        final_image_size = 32,
+        n_fmaps = 128,
+        n_rgb = 3,
     ):
-        super( MultiscaleDiscriminator, self ).__init__()
-        self.n_dis = n_dis
-        #self.n_layers = n_layers
-        
-        def discriminator_block1( in_dim, out_dim, stride, padding ):
-            model = nn.Sequential(
-                nn.Conv2d( in_dim, out_dim, 4, stride, padding ),
-                nn.LeakyReLU( 0.2, inplace=True ),
-            )
-            return model
+        super( ProgressiveDiscriminator, self ).__init__()
 
-        def discriminator_block2( in_dim, out_dim, stride, padding ):
-            model = nn.Sequential(
-                nn.Conv2d( in_dim, out_dim, 4, stride, padding ),
-                nn.InstanceNorm2d( out_dim ),
-                nn.LeakyReLU( 0.2, inplace=True )
-            )
-            return model
+        #==============================================
+        # RGB から 特徴マップ数への変換を行うネットワーク
+        #==============================================
+        self.fromRGBs = nn.ModuleList()
 
-        def discriminator_block3( in_dim, out_dim, stride, padding ):
-            model = nn.Sequential(
-                nn.Conv2d( in_dim, out_dim, 4, stride, padding ),
-            )
-            return model
+        # 4 × 4
+        layers = []
+        layers.append( nn.Conv2d( in_channels=n_rgb, out_channels=n_fmaps, kernel_size=1, stride=1, padding=0 ) )
+        layers.append( WScaleLayer( pre_layer = layers[-1] ) )
+        layers.append( nn.LeakyReLU(negative_slope=0.2) )
+        layers = nn.Sequential( *layers )
+        self.fromRGBs.append( layers )
 
-        # マルチスケール識別器で、入力画像を 1/2 スケールにする層
-        self.downsample_layer = nn.AvgPool2d(3, stride=2, padding=[1, 1], count_include_pad=False)
+        # 8 × 8
+        layers = []
+        layers.append( nn.Conv2d( in_channels=n_rgb, out_channels=n_fmaps, kernel_size=1, stride=1, padding=0 ) )
+        layers.append( WScaleLayer( pre_layer = layers[-1] ) )
+        layers.append( nn.LeakyReLU(negative_slope=0.2) )
+        layers = nn.Sequential( *layers )
+        self.fromRGBs.append( layers )
 
-        # setattr() を用いて self オブジェクトを動的に生成することで、各 Sequential ブロックに名前をつける
-        for i in range(self.n_dis):
-            setattr( self, 'scale'+str(i)+'_layer0', discriminator_block1( in_dim, n_fmaps, 2, 2) )
-            setattr( self, 'scale'+str(i)+'_layer1', discriminator_block2( n_fmaps, n_fmaps*2, 2, 2) )
-            setattr( self, 'scale'+str(i)+'_layer2', discriminator_block2( n_fmaps*2, n_fmaps*4, 2, 2) )
-            setattr( self, 'scale'+str(i)+'_layer3', discriminator_block2( n_fmaps*4, n_fmaps*8, 1, 2) )
-            setattr( self, 'scale'+str(i)+'_layer4', discriminator_block3( n_fmaps*8, 1, 1, 2) )
+        # 16 × 16
+        layers = []
+        layers.append( nn.Conv2d( in_channels=n_rgb, out_channels=n_fmaps, kernel_size=1, stride=1, padding=0 ) )
+        layers.append( WScaleLayer( pre_layer = layers[-1] ) )
+        layers.append( nn.LeakyReLU(negative_slope=0.2) )
+        layers = nn.Sequential( *layers )
+        self.fromRGBs.append( layers )
 
-        """
-        # この方法だと、各 Sequential ブロックに名前をつけられない（連番になる）
-        self.layers = nn.ModuleList()
-        for i in range(self.n_dis):
-            self.layers.append( discriminator_block1( in_dim*2, n_fmaps, 2, 2) )
-            self.layers.append( discriminator_block2( n_fmaps, n_fmaps*2, 2, 2) )
-            self.layers.append( scdiscriminator_block2( n_fmaps*2, n_fmaps*4, 2, 2)ale_layer )
-            self.layers.append( discriminator_block2( n_fmaps*4, n_fmaps*8, 1, 2) )
-            self.layers.append( discriminator_block3( n_fmaps*8, 1, 1, 2) )
-        """
+        # 32 × 32
+        layers = []
+        layers.append( nn.Conv2d( in_channels=n_rgb, out_channels=n_fmaps, kernel_size=1, stride=1, padding=0 ) )
+        layers.append( WScaleLayer( pre_layer = layers[-1] ) )
+        layers.append( nn.LeakyReLU(negative_slope=0.2) )
+        layers = nn.Sequential( *layers )
+        self.fromRGBs.append( layers )
+
+        #print( "fromRGBs :", self.fromRGBs )
+
+        #==============================================
+        # 0.0 < α <= 1.0 での conv 層
+        #==============================================
+        self.blocks = nn.ModuleList()
+
+        #-----------------------------------------
+        # 4 × 4
+        #-----------------------------------------
+        layers = []
+
+        # conv 3 × 3 : shape = [n_fmaps, 4, 4] → [n_fmaps, 4, 4]
+        layers.append( nn.Conv2d( in_channels=n_fmaps+1, out_channels=n_fmaps, kernel_size=3, stride=1, padding=1 ) )
+        layers.append( WScaleLayer( pre_layer = layers[-1] ) )
+        layers.append( nn.LeakyReLU(negative_slope=0.2) )
+
+        # conv 4 × 4 : shape = [n_fmaps, 4, 4] → [n_fmaps, 1, 1]
+        layers.append( nn.Conv2d( in_channels=n_fmaps, out_channels=n_fmaps, kernel_size=4, stride=1, padding=0 ) )
+        layers.append( WScaleLayer( pre_layer = layers[-1] ) )
+        layers.append( nn.LeakyReLU(negative_slope=0.2) )
+
+        # conv 1 × 1 : shape = [n_fmaps, 1, 1] → [1, 1, 1]
+        layers.append( nn.Conv2d( in_channels=n_fmaps, out_channels=1, kernel_size=1, stride=1, padding=0 ) )
+        layers.append( WScaleLayer( pre_layer = layers[-1] ) )
+        layers.append( nn.Sigmoid() )
+
+        layers = nn.Sequential( *layers )
+        self.blocks.append( layers )
+
+        #-----------------------------------------
+        # 8 × 8
+        #-----------------------------------------
+        layers = []
+
+        # conv 3 × 3 : [n_fmaps, 8, 8] → []
+        layers.append( nn.Conv2d( in_channels=n_fmaps, out_channels=n_fmaps, kernel_size=3, stride=1, padding=1 ) )
+        layers.append( WScaleLayer( pre_layer = layers[-1] ) )
+        layers.append( nn.LeakyReLU(negative_slope=0.2) )
+
+        # conv 3 × 3 : [n_fmaps, 8, 8] → []
+        layers.append( nn.Conv2d( in_channels=n_fmaps, out_channels=n_fmaps, kernel_size=3, stride=1, padding=1 ) )
+        layers.append( WScaleLayer( pre_layer = layers[-1] ) )
+        layers.append( nn.LeakyReLU(negative_slope=0.2) )
+        layers = nn.Sequential( *layers )
+        self.blocks.append( layers )
+
+        #-----------------------------------------
+        # 16 × 16
+        #-----------------------------------------
+        layers = []
+        layers.append( nn.Conv2d( in_channels=n_fmaps, out_channels=n_fmaps, kernel_size=3, stride=1, padding=1 ) )
+        layers.append( WScaleLayer( pre_layer = layers[-1] ) )
+        layers.append( nn.LeakyReLU(negative_slope=0.2) )
+        layers.append( nn.Conv2d( in_channels=n_fmaps, out_channels=n_fmaps, kernel_size=3, stride=1, padding=1 ) )
+        layers.append( WScaleLayer( pre_layer = layers[-1] ) )
+        layers.append( nn.LeakyReLU(negative_slope=0.2) )
+        layers = nn.Sequential( *layers )
+        self.blocks.append( layers )
+
+        #-----------------------------------------
+        # 32 × 32
+        #-----------------------------------------
+        layers = []
+        layers.append( nn.Conv2d( in_channels=n_fmaps, out_channels=n_fmaps, kernel_size=3, stride=1, padding=1 ) )
+        layers.append( WScaleLayer( pre_layer = layers[-1] ) )
+        layers.append( nn.LeakyReLU(negative_slope=0.2) )
+        layers.append( nn.Conv2d( in_channels=n_fmaps, out_channels=n_fmaps, kernel_size=3, stride=1, padding=1 ) )
+        layers.append( WScaleLayer( pre_layer = layers[-1] ) )
+        layers.append( nn.LeakyReLU(negative_slope=0.2) )
+        layers = nn.Sequential( *layers )
+        self.blocks.append( layers )
+
+        #print( "blocks :", blocks )
+
         return
 
-    def forward(self, input ):
+    def minibatchstd(self, input):
+        # must add 1e-8 in std for stability
+        return (input.var(dim=0) + 1e-8).sqrt().mean().view(1, 1, 1, 1)
+
+    def forward(self, input, train_progress=0 ):
         """
         [Args]
-            input : 入力画像 <torch.Float32> shape =[N,C,H,W]
-        [Returns]
-            outputs_allD : shape=[n_dis, n_layers=5, tensor=[N,C,H,W] ]
+            input : <Tensor> ネットワークへの入力
+            train_progress : <float> 現在の Training Progress / 0.0 → 0.0 ~ 1.0 → 1.0 → 1.0 ~ 2.0 → 2.0 → ...
         """
-        #input = torch.cat( [x, y], dim=1 )
+        #-----------------------------------------
+        # 学習開始時点（α=0.0）
+        #-----------------------------------------
+        if( train_progress % 1 == 0 ):
+            # shape = [1, x, x] → [n_fmaps, x, x]            
+            output = self.fromRGBs[int(ceil(train_progress))](input)
 
-        outputs_allD = []
-        for i in range(self.n_dis):
-            if i > 0:
-                # 入力画像を 1/2 スケールにする
-                input = self.downsample_layer(input)
+            # shape = [n_fmaps, x, x] → [n_fmaps, 4, 4]
+            for i in range(int(train_progress), 0, -1):
+                output = self.blocks[i](output)
+                output = F.avg_pool2d(output, kernel_size=2, stride=2)  # Downsampling
 
-            scale_layer0 = getattr( self, 'scale'+str(i)+'_layer0' )
-            scale_layer1 = getattr( self, 'scale'+str(i)+'_layer1' )
-            scale_layer2 = getattr( self, 'scale'+str(i)+'_layer2' )
-            scale_layer3 = getattr( self, 'scale'+str(i)+'_layer3' )
-            scale_layer4 = getattr( self, 'scale'+str(i)+'_layer4' )
+            # shape = [n_fmaps, 4, 4] → [n_fmaps+1, 4, 4]
+            output = torch.cat( ( output, self.minibatchstd(output).expand_as(output[:, 0].unsqueeze(1)) ), dim=1 )   # tmp : torch.Size([16, 129, 4, 4])
 
-            outputs_oneD = []
-            outputs_oneD.append( scale_layer0(input) )
-            outputs_oneD.append( scale_layer1(outputs_oneD[-1]) )
-            outputs_oneD.append( scale_layer2(outputs_oneD[-1]) )
-            outputs_oneD.append( scale_layer3(outputs_oneD[-1]) )
-            outputs_oneD.append( scale_layer4(outputs_oneD[-1]) )
-            outputs_allD.append( outputs_oneD )
+            # shape = [n_fmaps, 4, 4] → [1, 1, 1]
+            output = self.blocks[0]( output )
+            output = output.squeeze()
 
-        return outputs_allD
+        #-----------------------------------------
+        # 0.0 < α <= 1.0
+        #-----------------------------------------
+        else:
+            alpha = train_progress - int(train_progress)
+
+            output0 = F.avg_pool2d(input, kernel_size=2, stride=2)  # Downsampling
+            output0 = self.fromRGBs[int(train_progress)](output0)
+
+            output1 = self.fromRGBs[int(ceil(train_progress))](input)
+            output1 = self.blocks[int(ceil(train_progress))](output1)
+            output1 = F.avg_pool2d(output1, kernel_size=2, stride=2)  # Downsampling
+
+            output = alpha * output1 + (1 - alpha) * output0
+
+            # shape = [n_fmaps, x, x] → [n_fmaps, 4, 4]
+            for i in range(int(train_progress), 0, -1):
+                output = self.blocks[i](output)
+                output = F.avg_pool2d(output, kernel_size=2, stride=2)  # Downsampling
+
+            # shape = [n_fmaps, 4, 4] → [n_fmaps+1, 4, 4]
+            output = torch.cat( ( output, self.minibatchstd(output).expand_as(output[:, 0].unsqueeze(1)) ), dim=1 )   # tmp : torch.Size([16, 129, 4, 4])
+
+            # shape = [n_fmaps, 4, 4] → [1, 1, 1]
+            output = self.blocks[0]( output )
+            output = output.squeeze()
+
+        return output
