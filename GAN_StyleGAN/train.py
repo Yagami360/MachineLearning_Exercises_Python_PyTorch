@@ -48,7 +48,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=0.0002, help="学習率")
     parser.add_argument('--beta1', type=float, default=0.5, help="学習率の減衰率")
     parser.add_argument('--beta2', type=float, default=0.999, help="学習率の減衰率")
-    parser.add_argument('--lambda_l1', type=float, default=10.0, help="L1損失関数の係数値")
+    parser.add_argument('--lambda_l1', type=float, default=0.0, help="L1損失関数の係数値")
     parser.add_argument('--lambda_adv', type=float, default=1.0, help="Adv loss の係数値")
     parser.add_argument("--n_diaplay_step", type=int, default=100,)
     parser.add_argument('--n_display_valid_step', type=int, default=500, help="valid データの tensorboard への表示間隔")
@@ -172,7 +172,7 @@ if __name__ == '__main__':
     step = 0
     for train_progress in range(args.train_progress_max):
         for epoch in tqdm( range(args.n_epoches), desc = "epoches" ):
-            for iter, inputs in enumerate( tqdm( dloader_train, desc = "epoch={}".format(epoch) ) ):
+            for iter, inputs in enumerate( tqdm( dloader_train, desc = "train_progress={}, epoch={}".format(train_progress, epoch) ) ):
                 model_G.train()
                 model_D.train()
 
@@ -277,6 +277,7 @@ if __name__ == '__main__':
                 #====================================================
                 # valid データでの処理
                 #====================================================
+                """
                 if( step % args.n_display_valid_step == 0 ):
                     loss_G_total, loss_l1_total, loss_adv_total = 0, 0, 0
                     loss_D_total, loss_D_real_total, loss_D_fake_total = 0, 0, 0
@@ -307,6 +308,7 @@ if __name__ == '__main__':
                         with torch.no_grad():
                             d_real = model_D( image_t, train_progress )
                             d_fake = model_D( output.detach(), train_progress )
+                            print( "[valid] d_real={}, d_fake={}".format(d_real, d_fake) )
 
                         # 損失関数を計算する
                         loss_l1 = loss_l1_fn( image_t, output )
@@ -348,7 +350,7 @@ if __name__ == '__main__':
                     # scores
                     if( args.diaplay_scores ):
                         board_valid.add_scalar('scores/FID', score_fid_total.item()/n_valid_loop, step)
-
+                """
                 step += 1
                 n_print -= 1
 

@@ -10,7 +10,7 @@ import torchvision
 from torchvision import models
 
 #==================================
-# StyleGAN の識別器
+# PGGAN の識別器
 #==================================
 # Scaled weight - He initialization
 # "explicitly scale the weights at runtime"

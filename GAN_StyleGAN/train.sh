@@ -6,7 +6,7 @@ mkdir -p _logs
 #----------------------
 # model
 #----------------------
-N_EPOCHES=50
+N_EPOCHES=5
 BATCH_SIZE=4
 IMAGE_HIGHT=128
 IMAGE_WIDTH=128
