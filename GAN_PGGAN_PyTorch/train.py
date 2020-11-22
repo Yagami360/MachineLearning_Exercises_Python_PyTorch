@@ -294,7 +294,7 @@ if __name__ == '__main__':
 
             x = (epoch + step / len(dloader_train))
             progress = min(max(int(x / 2), x - ceil(x / 2), 0), final_progress)
-
+            
             # ミニバッチデータを GPU へ転送
             images = images.to( device )
 

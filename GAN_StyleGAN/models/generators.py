@@ -175,10 +175,10 @@ class SynthesisBlock(nn.Module):
     def __init__( self, in_dim_noize=512, in_dim_latent=512, out_dim=512 ):
         super( SynthesisBlock, self ).__init__()
         self.adain_A1 = AdaIN( n_hin_channles = out_dim, n_in_channles = in_dim_latent, net_type = "fc", norm_type = "instance")
-        #self.adain_A1.gamma_layer.bias.data = 1
+        self.adain_A1.gamma_layer.bias.data = torch.ones(self.adain_A1.gamma_layer.bias.data.shape).float()
         self.adain_A1.beta_layer.bias.data.zero_()
         self.adain_A2 = AdaIN( n_hin_channles = out_dim, n_in_channles = in_dim_latent, net_type = "fc", norm_type = "instance")
-        #self.adain_A2.gamma_layer.bias.data = 1
+        self.adain_A2.gamma_layer.bias.data = torch.ones(self.adain_A2.gamma_layer.bias.data.shape).float()
         self.adain_A2.beta_layer.bias.data.zero_()
 
         self.apply_noize_map_B1 = ApplyNoizeMapLayer(out_dim)
@@ -243,10 +243,10 @@ class SynthesisNetwork(nn.Module):
         )
         return
 
-    def forward( self, latent_z, noize_map_list, progress = 0.0 ):
-        if( int(progress) == 0 ):
+    def forward( self, latent_z, noize_map_list, progress = 0, alpha = 0.0 ):
+        if( progress == 0 ):
             output = self.synthesis_head(latent_z, noize_map_list[0])
-            output = self.out_layers["conv_{}".format(int(progress)+1)](output)
+            output = self.out_layers["conv_{}".format(progress+1)](output)
         else:
             output_list = []
 
@@ -255,9 +255,9 @@ class SynthesisNetwork(nn.Module):
             output_list.append(output)
 
             # ２段目以降
-            for i in range(int(progress)):
-                #print( "[SynthesisNetwork] int(progress)={}, i={}, synthesis_{}".format(int(progress), i, i+1) )
-                if( i+1 >= int(progress) ):
+            for i in range(progress):
+                #print( "[SynthesisNetwork] progress={}, i={}, synthesis_{}".format(progress, i, i+1) )
+                if( i+1 >= progress ):
                     output = self.synthesis_bodys["synthesis_{}".format(i+1)](latent_z, noize_map_list[i+1], output_list[-1])
                     output_list.append(output)
                     break
@@ -266,10 +266,10 @@ class SynthesisNetwork(nn.Module):
                     output_list.append(output)
                     continue
 
-            output = self.out_layers["conv_{}".format(int(progress)+1)](output_list[-1])
-            if( 0.0 < progress < 1.0 ):
-                alpha = progress - int(progress)
-                output_prev = self.self.out_layers["conv_{}".format(int(progress)-1)](output_list[-2])
+            output = self.out_layers["conv_{}".format(progress+1)](output_list[-1])
+            if( 0.0 < alpha < 1.0 ):
+                output_prev = F.interpolate(output_list[-2], scale_factor=2, mode='bilinear', align_corners=False)
+                output_prev = self.out_layers["conv_{}".format(progress)](output_prev)
                 output = alpha * output + (1 - alpha) * output_prev
 
             #print( "[SynthesisNetwork] output.shape : ", output.shape )
@@ -284,10 +284,10 @@ class StyleGANGenerator(nn.Module):
         self.synthesis_network = SynthesisNetwork()
         return
 
-    def forward( self, latent_z, noize_map_list, progress = 0.0 ):
+    def forward( self, latent_z, noize_map_list, progress = 0, alpha = 0.0 ):
         latent_w = self.mapping_network(latent_z)
         #print( "[StyleGANGenerator] latent_w.shape : ", latent_w.shape )
 
-        output = self.synthesis_network(latent_w, noize_map_list, progress)
+        output = self.synthesis_network(latent_w, noize_map_list, progress, alpha)
         #print( "[StyleGANGenerator] output.shape : ", output.shape )
         return output

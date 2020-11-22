@@ -115,18 +115,20 @@ class ProgressiveDiscriminator( nn.Module ):
     """
     PGGAN の識別器 D [Discriminator] 側のネットワーク構成を記述したモデル。
     """
-    def __init__( self, n_fmaps = 128, n_rgb = 3, image_size_init = 4, image_size_final = 1024 ):
+    def __init__( self, in_dim_latent = 512, n_rgb = 3, train_progress_max = 8 ):
         super( ProgressiveDiscriminator, self ).__init__()
-        self.progress_init = int(np.log2(image_size_init)) - 2
-        self.progress_final = int(np.log2(image_size_final)) -2
+        in_dims = [ in_dim_latent//32, in_dim_latent//16, in_dim_latent//8, in_dim_latent//4, in_dim_latent//2, in_dim_latent, in_dim_latent, in_dim_latent, in_dim_latent ]
+        out_dims = [ in_dim_latent//16, in_dim_latent//8, in_dim_latent//4, in_dim_latent//2, in_dim_latent, in_dim_latent, in_dim_latent, in_dim_latent, in_dim_latent ]
+        print( "[ProgressiveDiscriminator] in_dims : ", in_dims )
+        print( "[ProgressiveDiscriminator] out_dims : ", out_dims )
 
         #==============================================
         # RGB から 特徴マップ数への変換を行うネットワーク
         #==============================================
         self.fromRGBs = nn.ModuleList()
-        for i in range(self.progress_final):
+        for i, in_dim in enumerate(in_dims):
             layers = []
-            layers.append( nn.Conv2d( in_channels=n_rgb, out_channels=n_fmaps, kernel_size=1, stride=1, padding=0 ) )
+            layers.append( nn.Conv2d( in_channels=n_rgb, out_channels=in_dim, kernel_size=1, stride=1, padding=0 ) )
             layers.append( WScaleLayer( pre_layer = layers[-1] ) )
             layers.append( nn.LeakyReLU(negative_slope=0.2) )
             layers = nn.Sequential( *layers )
@@ -136,30 +138,32 @@ class ProgressiveDiscriminator( nn.Module ):
         # 0.0 < α <= 1.0 での conv 層
         #==============================================
         self.blocks = nn.ModuleList()
-        for i in range(self.progress_final):
-            if( i== 0 ):
-                layers = []
+        for i, (in_dim, out_dim) in enumerate(zip(in_dims,out_dims)):
+            layers = []
+            if( i == 0 ):
+#            if( i == (len(in_dims)-1) ):
                 # conv 3 × 3 : shape = [n_fmaps, 4, 4] → [n_fmaps, 4, 4]
-                layers.append( nn.Conv2d( in_channels=n_fmaps+1, out_channels=n_fmaps, kernel_size=3, stride=1, padding=1 ) )
+                layers.append( nn.Conv2d( in_channels=in_dim+1, out_channels=out_dim, kernel_size=3, stride=1, padding=1 ) )
                 layers.append( WScaleLayer( pre_layer = layers[-1] ) )
                 layers.append( nn.LeakyReLU(negative_slope=0.2) )
+
                 # conv 4 × 4 : shape = [n_fmaps, 4, 4] → [n_fmaps, 1, 1]
-                layers.append( nn.Conv2d( in_channels=n_fmaps, out_channels=n_fmaps, kernel_size=4, stride=1, padding=0 ) )
+                layers.append( nn.Conv2d( in_channels=out_dim, out_channels=out_dim, kernel_size=4, stride=1, padding=0 ) )
                 layers.append( WScaleLayer( pre_layer = layers[-1] ) )
                 layers.append( nn.LeakyReLU(negative_slope=0.2) )
+
                 # conv 1 × 1 : shape = [n_fmaps, 1, 1] → [1, 1, 1]
-                layers.append( nn.Conv2d( in_channels=n_fmaps, out_channels=1, kernel_size=1, stride=1, padding=0 ) )
+                layers.append( nn.Conv2d( in_channels=out_dim, out_channels=1, kernel_size=1, stride=1, padding=0 ) )
                 layers.append( WScaleLayer( pre_layer = layers[-1] ) )
                 layers.append( nn.Sigmoid() )
             else:
-                layers = []
                 # conv 3 × 3 : [n_fmaps, H, W] → []
-                layers.append( nn.Conv2d( in_channels=n_fmaps, out_channels=n_fmaps, kernel_size=3, stride=1, padding=1 ) )
+                layers.append( nn.Conv2d( in_channels=in_dim, out_channels=out_dim, kernel_size=3, stride=1, padding=1 ) )
                 layers.append( WScaleLayer( pre_layer = layers[-1] ) )
                 layers.append( nn.LeakyReLU(negative_slope=0.2) )
 
                 # conv 3 × 3 : [n_fmaps, H, W] → []
-                layers.append( nn.Conv2d( in_channels=n_fmaps, out_channels=n_fmaps, kernel_size=3, stride=1, padding=1 ) )
+                layers.append( nn.Conv2d( in_channels=out_dim, out_channels=out_dim, kernel_size=3, stride=1, padding=1 ) )
                 layers.append( WScaleLayer( pre_layer = layers[-1] ) )
                 layers.append( nn.LeakyReLU(negative_slope=0.2) )
 
@@ -172,18 +176,26 @@ class ProgressiveDiscriminator( nn.Module ):
         # must add 1e-8 in std for stability
         return (input.var(dim=0) + 1e-8).sqrt().mean().view(1, 1, 1, 1)
 
-    def forward(self, input, progress = 0, alpha = 0.0 ):
+    def forward(self, input, train_progress=0 ):
+        """
+        [Args]
+            input : <Tensor> ネットワークへの入力
+            train_progress : <float> 現在の Training Progress / 0.0 → 0.0 ~ 1.0 → 1.0 → 1.0 ~ 2.0 → 2.0 → ...
+        """
         #-----------------------------------------
-        # 
+        # 学習開始時点（α=0.0）
         #-----------------------------------------
-        if( alpha == 0.0 ):
+        if( train_progress % 1 == 0 ):
             # shape = [1, x, x] → [n_fmaps, x, x]            
-            output = self.fromRGBs[progress](input)
+            output = self.fromRGBs[int(ceil(train_progress))](input)
+            print( "[ProgressiveDiscriminator] output.shape", output.shape )
 
             # shape = [n_fmaps, x, x] → [n_fmaps, 4, 4]
-            for i in range(progress, 0, -1):
+            for i in range(int(train_progress), 0, -1):
+                print( "[ProgressiveDiscriminator] i", i )
                 output = self.blocks[i](output)
                 output = F.avg_pool2d(output, kernel_size=2, stride=2)  # Downsampling
+                print( "[ProgressiveDiscriminator] output.shape", output.shape )
 
             # shape = [n_fmaps, 4, 4] → [n_fmaps+1, 4, 4]
             output = torch.cat( ( output, self.minibatchstd(output).expand_as(output[:, 0].unsqueeze(1)) ), dim=1 )   # tmp : torch.Size([16, 129, 4, 4])
@@ -196,14 +208,21 @@ class ProgressiveDiscriminator( nn.Module ):
         # 0.0 < α <= 1.0
         #-----------------------------------------
         else:
-            output0 = self.fromRGBs[progress](input)
-            output1 = self.fromRGBs[progress+1](input)
-            output1 = self.blocks[progress+1](output1)
+            alpha = train_progress - int(train_progress)
+
+            output0 = F.avg_pool2d(input, kernel_size=2, stride=2)  # Downsampling
+            output0 = self.fromRGBs[int(train_progress)](output0)
+
+            output1 = self.fromRGBs[int(ceil(train_progress))](input)
+            output1 = self.blocks[int(ceil(train_progress))](output1)
+            output1 = F.avg_pool2d(output1, kernel_size=2, stride=2)  # Downsampling
+
             output = alpha * output1 + (1 - alpha) * output0
 
             # shape = [n_fmaps, x, x] → [n_fmaps, 4, 4]
-            for i in range(progress, 0, -1):
+            for i in range(int(train_progress), 0, -1):
                 output = self.blocks[i](output)
+                output = F.avg_pool2d(output, kernel_size=2, stride=2)  # Downsampling
 
             # shape = [n_fmaps, 4, 4] → [n_fmaps+1, 4, 4]
             output = torch.cat( ( output, self.minibatchstd(output).expand_as(output[:, 0].unsqueeze(1)) ), dim=1 )   # tmp : torch.Size([16, 129, 4, 4])

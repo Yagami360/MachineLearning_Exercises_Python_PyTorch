@@ -8,4 +8,4 @@
 - ToDo
     - [ ] LSGAN -> WGAN-GP に変更
     - [ ] reconstruction loss が適切に機能しているかの確認
-
+    - [ ] PGGAN, StyleGAN のような train progress の段階的な移行処理追加（alpha で出力を線形結合）
