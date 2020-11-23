@@ -31,6 +31,7 @@ python train.py \
     --image_size_init ${IMAGE_SIZE_INIT} --image_size_final ${IMAGE_SIZE_FINAL} --batch_size ${BATCH_SIZE} \
     --n_diaplay_step ${N_DISPLAY_STEP} --n_display_valid_step ${N_DISPLAY_VALID_STEP} \
     --diaplay_scores \
+    --lambda_l1 10.0 --lambda_adv 1.0 \
     --debug
 
 #    --use_amp \

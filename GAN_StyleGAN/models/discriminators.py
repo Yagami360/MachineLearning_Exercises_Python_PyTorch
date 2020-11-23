@@ -1,6 +1,7 @@
 # -*- coding:utf-8 -*-
 import os
 import numpy as np
+import math
 from math import ceil
 
 import torch
@@ -77,95 +78,64 @@ class SConv2d(nn.Module):
         return self.conv(x)
 
 
-class WScaleLayer(nn.Module):
-    """
-    Applies equalized learning rate to the preceding layer.
-    PGGAN が提案している equalized learning rate の手法（学習安定化のための手法）に従って、
-    前の層（preceding layer）の重みを正則化する。
-    1. 生成器と識別器のネットワークの各層（i）の重み w_i  の初期値を、w_i~N(0,1)  で初期化。
-    2. 初期化した重みを、各層の実行時（＝順伝搬での計算時）に、以下の式で再設定する。
-        w^^ = w_i/c  (標準化定数 c=\sqrt(2/層の数))
-    """
-    def __init__(self, pre_layer):
-        """
-        [Args]
-            pre_layer : <nn.Module> 重みの正規化を行う層
-        """
-        super(WScaleLayer, self).__init__()
-        self._pre_layer = pre_layer
-        self._scale = (torch.mean(self._pre_layer.weight.data ** 2)) ** 0.5            # 標準化定数 c
-        self._pre_layer.weight.data.copy_(self._pre_layer.weight.data / self._scale)     # w^ = w_i/c
-        self._bias = None
-        if self._pre_layer.bias is not None:
-            self._bias = self._pre_layer.bias
-            self._pre_layer.bias = None
-
-    def forward(self, x):
-        x = self._scale * x
-        if self._bias is not None:
-            x += self._bias.view(1, self._bias.size()[0], 1, 1)
-        return x
-
-    def __repr__(self):
-        param_str = '(pre_layer = %s)' % (self._pre_layer.__class__.__name__)
-        return self.__class__.__name__ + param_str
-
+class ConvBlock(nn.Module):
+    '''
+    Used to construct progressive discriminator
+    '''
+    def __init__(self, in_channel, out_channel, size_kernel1, padding1, 
+                 size_kernel2 = None, padding2 = None):
+        super().__init__()
+        
+        if size_kernel2 == None:
+            size_kernel2 = size_kernel1
+        if padding2 == None:
+            padding2 = padding1
+        
+        self.conv = nn.Sequential(
+            SConv2d(in_channel, out_channel, size_kernel1, padding=padding1),
+            nn.LeakyReLU(0.2),
+            SConv2d(out_channel, out_channel, size_kernel2, padding=padding2),
+            nn.LeakyReLU(0.2)
+        )
+    
+    def forward(self, image):
+        # Downsample now proxyed by discriminator
+        # result = nn.functional.interpolate(image, scale_factor=0.5, mode="bilinear", align_corners=False)
+        # Conv
+        result = self.conv(image)
+        return result
 
 class ProgressiveDiscriminator( nn.Module ):
     """
     PGGAN の識別器 D [Discriminator] 側のネットワーク構成を記述したモデル。
     """
-    def __init__( self, n_fmaps = 128, n_rgb = 3, image_size_init = 4, image_size_final = 1024 ):
+    def __init__( self, n_rgb = 3, in_dim_latent = 512, image_size_init = 4, image_size_final = 1024 ):
         super( ProgressiveDiscriminator, self ).__init__()
         self.progress_init = int(np.log2(image_size_init)) - 2
         self.progress_final = int(np.log2(image_size_final)) -2
+        in_dims = [ in_dim_latent//32, in_dim_latent//16, in_dim_latent//8, in_dim_latent//4, in_dim_latent//2, in_dim_latent, in_dim_latent, in_dim_latent, in_dim_latent ]
+        out_dims = [ in_dim_latent//16, in_dim_latent//8, in_dim_latent//4, in_dim_latent//2, in_dim_latent, in_dim_latent, in_dim_latent, in_dim_latent, in_dim_latent ]
+        print( "[ProgressiveDiscriminator] in_dims : ", in_dims )
+        print( "[ProgressiveDiscriminator] out_dims : ", out_dims )
 
         #==============================================
         # RGB から 特徴マップ数への変換を行うネットワーク
         #==============================================
         self.fromRGBs = nn.ModuleList()
-        for i in range(self.progress_final):
-            layers = []
-            layers.append( nn.Conv2d( in_channels=n_rgb, out_channels=n_fmaps, kernel_size=1, stride=1, padding=0 ) )
-            layers.append( WScaleLayer( pre_layer = layers[-1] ) )
-            layers.append( nn.LeakyReLU(negative_slope=0.2) )
-            layers = nn.Sequential( *layers )
-            self.fromRGBs.append( layers )
+        for i, in_dim in enumerate(in_dims):
+            self.fromRGBs.append( SConv2d( in_channels=n_rgb, out_channels=in_dim, kernel_size=1, stride=1, padding=0 ) )
 
         #==============================================
-        # 0.0 < α <= 1.0 での conv 層
+        # 
         #==============================================
         self.blocks = nn.ModuleList()
-        for i in range(self.progress_final):
-            if( i== 0 ):
-                layers = []
-                # conv 3 × 3 : shape = [n_fmaps, 4, 4] → [n_fmaps, 4, 4]
-                layers.append( nn.Conv2d( in_channels=n_fmaps+1, out_channels=n_fmaps, kernel_size=3, stride=1, padding=1 ) )
-                layers.append( WScaleLayer( pre_layer = layers[-1] ) )
-                layers.append( nn.LeakyReLU(negative_slope=0.2) )
-                # conv 4 × 4 : shape = [n_fmaps, 4, 4] → [n_fmaps, 1, 1]
-                layers.append( nn.Conv2d( in_channels=n_fmaps, out_channels=n_fmaps, kernel_size=4, stride=1, padding=0 ) )
-                layers.append( WScaleLayer( pre_layer = layers[-1] ) )
-                layers.append( nn.LeakyReLU(negative_slope=0.2) )
-                # conv 1 × 1 : shape = [n_fmaps, 1, 1] → [1, 1, 1]
-                layers.append( nn.Conv2d( in_channels=n_fmaps, out_channels=1, kernel_size=1, stride=1, padding=0 ) )
-                layers.append( WScaleLayer( pre_layer = layers[-1] ) )
-                layers.append( nn.Sigmoid() )
+        for i, (in_dim, out_dim) in enumerate(zip(in_dims,out_dims)):
+            if( i == len(in_dims) - 1 ):
+                self.blocks.append( ConvBlock( in_channel=in_dim+1, out_channel=out_dim, size_kernel1=3, padding1=1, size_kernel2 = 4, padding2 = 0 ) )
             else:
-                layers = []
-                # conv 3 × 3 : [n_fmaps, H, W] → []
-                layers.append( nn.Conv2d( in_channels=n_fmaps, out_channels=n_fmaps, kernel_size=3, stride=1, padding=1 ) )
-                layers.append( WScaleLayer( pre_layer = layers[-1] ) )
-                layers.append( nn.LeakyReLU(negative_slope=0.2) )
+                self.blocks.append( ConvBlock( in_channel=in_dim, out_channel=out_dim, size_kernel1=3, padding1=1, size_kernel2 = None, padding2 = None ) )
 
-                # conv 3 × 3 : [n_fmaps, H, W] → []
-                layers.append( nn.Conv2d( in_channels=n_fmaps, out_channels=n_fmaps, kernel_size=3, stride=1, padding=1 ) )
-                layers.append( WScaleLayer( pre_layer = layers[-1] ) )
-                layers.append( nn.LeakyReLU(negative_slope=0.2) )
-
-            layers = nn.Sequential( *layers )
-            self.blocks.append( layers )
-
+        self.out_layer = SLinear(out_dims[-1], 1)
         return
 
     def minibatchstd(self, input):
@@ -173,43 +143,36 @@ class ProgressiveDiscriminator( nn.Module ):
         return (input.var(dim=0) + 1e-8).sqrt().mean().view(1, 1, 1, 1)
 
     def forward(self, input, progress = 0, alpha = 0.0 ):
-        #-----------------------------------------
-        # 
-        #-----------------------------------------
-        if( alpha == 0.0 ):
-            # shape = [1, x, x] → [n_fmaps, x, x]            
-            output = self.fromRGBs[progress](input)
+        for i in range(progress, -1, -1):
+            layer_index = self.progress_final - i
+            #print( "progress={}, i={}, layer_index={}".format(progress,i,layer_index) )
 
-            # shape = [n_fmaps, x, x] → [n_fmaps, 4, 4]
-            for i in range(progress, 0, -1):
-                output = self.blocks[i](output)
-                output = F.avg_pool2d(output, kernel_size=2, stride=2)  # Downsampling
+            # First layer, need to use from_rgb to convert to n_channel data
+            if i == progress: 
+                output = self.fromRGBs[layer_index](input)
 
-            # shape = [n_fmaps, 4, 4] → [n_fmaps+1, 4, 4]
-            output = torch.cat( ( output, self.minibatchstd(output).expand_as(output[:, 0].unsqueeze(1)) ), dim=1 )   # tmp : torch.Size([16, 129, 4, 4])
+            # Before final layer, do minibatch stddev
+            if i == 0:
+                output = torch.cat( ( output, self.minibatchstd(output).expand_as(output[:, 0].unsqueeze(1)) ), dim=1 )
 
-            # shape = [n_fmaps, 4, 4] → [1, 1, 1]
-            output = self.blocks[0]( output )
-            output = output.squeeze()
+            # Conv
+            output = self.blocks[layer_index](output)
 
-        #-----------------------------------------
-        # 0.0 < α <= 1.0
-        #-----------------------------------------
-        else:
-            output0 = self.fromRGBs[progress](input)
-            output1 = self.fromRGBs[progress+1](input)
-            output1 = self.blocks[progress+1](output1)
-            output = alpha * output1 + (1 - alpha) * output0
+            # Not the final layer
+            if i > 0:
+                # Downsample for further usage
+                output = nn.functional.interpolate(output, scale_factor=0.5, mode='bilinear', align_corners=False)
 
-            # shape = [n_fmaps, x, x] → [n_fmaps, 4, 4]
-            for i in range(progress, 0, -1):
-                output = self.blocks[i](output)
-
-            # shape = [n_fmaps, 4, 4] → [n_fmaps+1, 4, 4]
-            output = torch.cat( ( output, self.minibatchstd(output).expand_as(output[:, 0].unsqueeze(1)) ), dim=1 )   # tmp : torch.Size([16, 129, 4, 4])
-
-            # shape = [n_fmaps, 4, 4] → [1, 1, 1]
-            output = self.blocks[0]( output )
-            output = output.squeeze()
-
+                # Alpha set, combine the result of different layers when input
+                if i == progress and 0 <= alpha < 1:
+                    output_next = self.fromRGBs[layer_index + 1](input)
+                    output_next = nn.functional.interpolate(output_next, scale_factor=0.5, mode = 'bilinear', align_corners=False)
+                    output = alpha * output + (1 - alpha) * output_next
+                    
+        # Now, result is [batch, channel(512), 1, 1]
+        # Convert it into [batch, channel(512)], so the fully-connetced layer 
+        # could process it.
+        output = output.squeeze(2).squeeze(2)
+        output = self.out_layer(output)
         return output
+

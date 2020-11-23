@@ -53,7 +53,7 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=0.0002, help="学習率")
     parser.add_argument('--beta1', type=float, default=0.5, help="学習率の減衰率")
     parser.add_argument('--beta2', type=float, default=0.999, help="学習率の減衰率")
-    parser.add_argument('--lambda_l1', type=float, default=0.0, help="L1損失関数の係数値")
+    parser.add_argument('--lambda_l1', type=float, default=10.0, help="L1損失関数の係数値")
     parser.add_argument('--lambda_adv', type=float, default=1.0, help="Adv loss の係数値")
     parser.add_argument("--n_diaplay_step", type=int, default=100,)
     parser.add_argument('--n_display_valid_step', type=int, default=500, help="valid データの tensorboard への表示間隔")
@@ -215,6 +215,8 @@ if __name__ == '__main__':
                 noize_map = noize_map_list[progress]
 
                 image_t_list = inputs["image_t_list"]          
+                for i in range(len(image_t_list)):
+                    image_t_list[i] = image_t_list[i].to(device)
                 image_t = image_t_list[progress].to(device)
                 if( args.debug and n_print > 0 ):
                     print( "[latent_z] shape={}, dtype={}, min={}, max={}".format(latent_z.shape, latent_z.dtype, torch.min(latent_z), torch.max(latent_z)) )

@@ -132,10 +132,10 @@ class SynthesisHeadBlock(nn.Module):
     def __init__( self, in_dim_noize=512, in_dim_latent=512, out_dim=512, h=4, w=4 ):
         super( SynthesisHeadBlock, self ).__init__()
         self.adain_A1 = AdaIN( n_hin_channles = in_dim_noize, n_in_channles = in_dim_latent, net_type = "fc", norm_type = "instance")
-        #self.adain_A1.gamma_layer.bias.data = 1
+        self.adain_A1.gamma_layer.bias.data = torch.ones(self.adain_A1.gamma_layer.bias.data.shape).float()
         self.adain_A1.beta_layer.bias.data.zero_()
         self.adain_A2 = AdaIN( n_hin_channles = in_dim_noize, n_in_channles = in_dim_latent, net_type = "fc", norm_type = "instance")
-        #self.adain_A2.gamma_layer.bias.data = 1
+        self.adain_A2.gamma_layer.bias.data = torch.ones(self.adain_A2.gamma_layer.bias.data.shape).float()
         self.adain_A2.beta_layer.bias.data.zero_()
 
         self.input_const = nn.Parameter(torch.ones(1, in_dim_noize, h, w))
