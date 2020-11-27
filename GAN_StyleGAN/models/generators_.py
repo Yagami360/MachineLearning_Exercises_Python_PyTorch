@@ -9,6 +9,8 @@ import torch.nn as nn
 from torch.nn import functional as F
 import torchvision
 
+from models.adain import AdaIN
+
 #==================================
 # StyleGAN の生成器
 #==================================
@@ -115,39 +117,6 @@ class SConv2d(nn.Module):
     def forward(self, x):
         return self.conv(x)
 
-# "learned affine transform" A
-class FC_A(nn.Module):
-    '''
-    Learned affine transform A, this module is used to transform
-    midiate vector w into a style vector
-    '''
-    def __init__(self, dim_latent, n_channel):
-        super().__init__()
-        self.transform = SLinear(dim_latent, n_channel * 2)
-        # "the biases associated with ys that we initialize to one"
-        self.transform.linear.bias.data[:n_channel] = 1
-        self.transform.linear.bias.data[n_channel:] = 0
-
-    def forward(self, w):
-        # Gain scale factor and bias with:
-        style = self.transform(w).unsqueeze(2).unsqueeze(3)
-        return style
-    
-# AdaIn (AdaptiveInstanceNorm)
-class AdaIn(nn.Module):
-    '''
-    adaptive instance normalization
-    '''
-    def __init__(self, n_channel):
-        super().__init__()
-        self.norm = nn.InstanceNorm2d(n_channel)
-        
-    def forward(self, image, style):
-        factor, bias = style.chunk(2, 1)
-        result = self.norm(image)
-        result = result * factor + bias  
-        return result
-
 
 class ApplyNoizeMapLayer(nn.Module):
     def __init__( self, n_fmaps=512 ):
@@ -162,9 +131,12 @@ class ApplyNoizeMapLayer(nn.Module):
 class SynthesisHeadBlock(nn.Module):
     def __init__( self, in_dim_noize=512, in_dim_latent=512, out_dim=512, h=4, w=4 ):
         super( SynthesisHeadBlock, self ).__init__()
-        self.adain_A1_style = FC_A(in_dim_latent, in_dim_noize)
-        self.adain_A2_style = FC_A(in_dim_latent, in_dim_noize)
-        self.adain = AdaIn(in_dim_noize)
+        self.adain_A1 = AdaIN( n_hin_channles = in_dim_noize, n_in_channles = in_dim_latent, net_type = "fc", norm_type = "instance")
+        self.adain_A1.gamma_layer.bias.data = torch.ones(self.adain_A1.gamma_layer.bias.data.shape).float()
+        self.adain_A1.beta_layer.bias.data.zero_()
+        self.adain_A2 = AdaIN( n_hin_channles = in_dim_noize, n_in_channles = in_dim_latent, net_type = "fc", norm_type = "instance")
+        self.adain_A2.gamma_layer.bias.data = torch.ones(self.adain_A2.gamma_layer.bias.data.shape).float()
+        self.adain_A2.beta_layer.bias.data.zero_()
 
         self.input_const = nn.Parameter(torch.ones(1, in_dim_noize, h, w))
         self.apply_noize_map_B1 = quick_scale( ApplyNoizeMapLayer(in_dim_noize) )
@@ -184,18 +156,16 @@ class SynthesisHeadBlock(nn.Module):
         #print( "[SynthesisHeadBlock] noize_B2.shape", noize_B2.shape )
 
         # AdaIN A1
-        adain_A1_style = self.adain_A1_style(latent_w)
-        adain_A1 = self.adain(noize_B1, adain_A1_style)
+        adain_A1 = self.adain_A1(noize_B1, latent_w)
         #print( "[SynthesisHeadBlock] adain_A1.shape", adain_A1.shape )
 
         # conv
         conv = self.activate(adain_A1)
         conv = self.conv(conv)
-        #print( "[SynthesisHeadBlock] conv.shape", conv.shape )
+        #print( "[SynthesisHeadBlock] adain_A1.shape", adain_A1.shape )
 
         # AdaIN A2
-        adain_A2_style = self.adain_A2_style(latent_w)
-        adain_A2 = self.adain(conv, adain_A2_style)
+        adain_A2 = self.adain_A1(conv, latent_w)
         #print( "[SynthesisHeadBlock] adain_A2.shape", adain_A2.shape )
         output = self.activate(adain_A2)
         return output
@@ -204,9 +174,12 @@ class SynthesisHeadBlock(nn.Module):
 class SynthesisBlock(nn.Module):
     def __init__( self, in_dim_noize=512, in_dim_latent=512, out_dim=512 ):
         super( SynthesisBlock, self ).__init__()
-        self.adain_A1_style = FC_A(in_dim_latent, out_dim)
-        self.adain_A2_style = FC_A(in_dim_latent, out_dim)
-        self.adain = AdaIn(out_dim)
+        self.adain_A1 = AdaIN( n_hin_channles = out_dim, n_in_channles = in_dim_latent, net_type = "fc", norm_type = "instance")
+        self.adain_A1.gamma_layer.bias.data = torch.ones(self.adain_A1.gamma_layer.bias.data.shape).float()
+        self.adain_A1.beta_layer.bias.data.zero_()
+        self.adain_A2 = AdaIN( n_hin_channles = out_dim, n_in_channles = in_dim_latent, net_type = "fc", norm_type = "instance")
+        self.adain_A2.gamma_layer.bias.data = torch.ones(self.adain_A2.gamma_layer.bias.data.shape).float()
+        self.adain_A2.beta_layer.bias.data.zero_()
 
         self.apply_noize_map_B1 = quick_scale( ApplyNoizeMapLayer(out_dim) )
         self.apply_noize_map_B2 = quick_scale( ApplyNoizeMapLayer(out_dim) )
@@ -230,8 +203,7 @@ class SynthesisBlock(nn.Module):
         #print( "[SynthesisBlock] noize_B2.shape", noize_B2.shape )
 
         # AdaIN A1
-        adain_A1_style = self.adain_A1_style(latent_w)
-        adain_A1 = self.adain(noize_B1, adain_A1_style)
+        adain_A1 = self.adain_A1(noize_B1, latent_w)
         #print( "[SynthesisBlock] adain_A1.shape", adain_A1.shape )
 
         # conv
@@ -240,8 +212,7 @@ class SynthesisBlock(nn.Module):
         #print( "[SynthesisBlock] output.shape", output.shape )
 
         # AdaIN A2
-        adain_A2_style = self.adain_A2_style(latent_w)
-        adain_A2 = self.adain(output, adain_A2_style)
+        adain_A2 = self.adain_A1(output, latent_w)
         #print( "[SynthesisBlock] adain_A2.shape", adain_A2.shape )
         output = self.activate(adain_A2)
         #print( "[SynthesisBlock] output.shape", output.shape )
