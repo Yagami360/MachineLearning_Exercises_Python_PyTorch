@@ -8,6 +8,7 @@ from torch.nn import functional as F
 import torchvision
 from torchvision import models
 
+
 #====================================
 # 識別器
 #====================================
@@ -142,3 +143,110 @@ class MultiscaleDiscriminator(nn.Module):
             outputs_allD.append( outputs_oneD )
 
         return outputs_allD
+
+
+#------------------------------------
+# light-weight GAN の 識別器
+#------------------------------------
+class InputLayer(nn.Module):
+    def __init__(self, in_dims, n_fmaps, image_size = 1024 ):
+        super(InputLayer, self).__init__()
+        if( image_size == 256 ):
+            self.layers = nn.Sequential(
+                nn.Conv2d(in_dims, n_fmaps//4, kernel_size=3, stride=2, padding=1, bias=False),
+                nn.LeakyReLU(0.2, inplace=True),
+            )
+        elif( image_size == 512 ):
+            self.layers = nn.Sequential(
+                nn.Conv2d(in_dims, n_fmaps//4, kernel_size=4, stride=2, padding=1, bias=False),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(n_fmaps//4, n_fmaps//4, kernel_size=4, stride=2, padding=1, bias=False),
+                nn.BatchNorm2d(n_fmaps//4),
+                nn.LeakyReLU(0.2, inplace=True),
+            )
+        elif( image_size == 1024 ):
+            self.layers = nn.Sequential(
+                nn.Conv2d(in_dims, n_fmaps//8, kernel_size=4, stride=2, padding=1, bias=False),
+                nn.LeakyReLU(0.2, inplace=True),
+                nn.Conv2d(n_fmaps//8, n_fmaps//8, kernel_size=4, stride=2, padding=1, bias=False),
+                nn.BatchNorm2d(n_fmaps//8),
+                nn.LeakyReLU(0.2, inplace=True),
+            )
+        else:
+            NotImplementedError()
+
+        return
+
+    def forward(self, input):
+        output = self.layers(input)
+        return output
+
+class DownBlock(nn.Module):
+    def __init__(self, in_dims, out_dims, h = 2, w = 2 ):
+        super(DownBlock, self).__init__()
+        self.layer1 = nn.Sequential(
+            nn.Conv2d(in_dims, out_dims, kernel_size=4, stride=2, padding=1, bias=False),
+            nn.BatchNorm2d(out_dims),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Conv2d(out_dims, out_dims, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(out_dims),
+            nn.LeakyReLU(0.2, inplace=True),
+        )
+        self.layer2 = nn.Sequential(
+            nn.AvgPool2d((h,w)),
+            nn.Conv2d(in_dims, out_dims, kernel_size=1, stride=1, padding=0, bias=False),
+            nn.BatchNorm2d(out_dims),
+            nn.LeakyReLU(0.2, inplace=True),
+        )
+        return
+
+    def forward(self, input):
+        output1 = self.layer1(input)
+        output2 = self.layer2(input)
+        output = output1 + output2
+        return output
+
+class SLEblock(nn.Module):
+    """
+    light-weight GAN の SLE [Skip-Layer Excitation module]
+    """
+    def __init__(self, in_dims, out_dims, h = 4, w = 4 ):
+        super(SLEblock, self).__init__()
+        self.layers = nn.Sequential(
+            nn.AdaptiveAvgPool2d((h,w)),
+            nn.Conv2d(in_dims, out_dims, kernel_size=4, stride=1, padding=0, bias=False),            
+            Swish(),
+            nn.Conv2d(out_dims, out_dims, kernel_size=1, stride=1, padding=0, bias=False),                        
+            nn.Sigmoid(),
+        )
+        return
+        
+    def forward(self, input, input_skip ):
+        #print( "[SLEblock] input.shape : ", input.shape )
+        #print( "[SLEblock] input_skip.shape : ", input_skip.shape )
+        output = self.layers(input)
+        #print( "[SLEblock] output.shape : ", output.shape )
+        output = output * input_skip
+        #print( "[SLEblock] output.shape : ", output.shape )
+        return output
+
+class LightweightGANDiscriminator(nn.Module):
+    """
+    light-weight GAN の識別器
+    """
+    def __init__( self, in_dim = 3, n_fmaps = 64, image_size = 1024 ):
+        super(LightweightGANDiscriminator, self).__init__()
+        self.input_layer = InputLayer(in_dim, n_fmaps, image_size )
+        self.down = DownBlock(n_fmaps//4, n_fmaps//2)
+        return
+
+    def forward(self, input, input_128 = None, interpolate_mode = "bilinear" ):
+        if input_128 is None : 
+            input_128 = F.interpolate(input, size=128, mode = interpolate_mode)
+
+        output = self.input_layer(input)
+        print( "[LightweightGANDiscriminator] output.shape", output.shape )
+        output = self.down(output)
+        print( "[LightweightGANDiscriminator] output.shape", output.shape )
+
+        return output

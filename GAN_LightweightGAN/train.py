@@ -23,7 +23,7 @@ from tensorboardX import SummaryWriter
 # 自作モジュール
 from data.noize_dataset import NoizeDataset
 from models.generators import LightweightGANGenerator
-from models.discriminators import PatchGANDiscriminator, MultiscaleDiscriminator
+from models.discriminators import PatchGANDiscriminator, LightweightGANDiscriminator
 from models.inception import InceptionV3
 from models.losses import VGGLoss, LSGANLoss
 from utils.utils import save_checkpoint, load_checkpoint
@@ -41,8 +41,7 @@ if __name__ == '__main__':
     parser.add_argument("--n_epoches", type=int, default=100, help="エポック数")    
     parser.add_argument('--batch_size', type=int, default=4, help="バッチサイズ")
     parser.add_argument('--batch_size_valid', type=int, default=1, help="バッチサイズ")
-    parser.add_argument('--image_height', type=int, default=1024, help="入力画像の高さ（pixel単位）")
-    parser.add_argument('--image_width', type=int, default=1024, help="入力画像の幅（pixel単位）")
+    parser.add_argument('--image_size', type=int, choices=[128, 256, 512, 1024], default=1024, help="出力画像の解像度")
     parser.add_argument('--z_dims', type=int, default=256, help="入力ノイズの次元数")
     parser.add_argument('--lr', type=float, default=0.0002, help="学習率")
     parser.add_argument('--beta1', type=float, default=0.5, help="学習率の減衰率")
@@ -120,7 +119,7 @@ if __name__ == '__main__':
     # データセットの読み込み
     #================================    
     # 学習用データセットとテスト用データセットの設定
-    ds_train = NoizeDataset( args, args.dataset_dir, datamode = "train", image_height = args.image_height, image_width = args.image_width, z_dims = args.z_dims, debug = args.debug )
+    ds_train = NoizeDataset( args, args.dataset_dir, datamode = "train", image_size = args.image_size, z_dims = args.z_dims, debug = args.debug )
 
     # 学習用データセットとテスト用データセットの設定
     index = np.arange(len(ds_train))
@@ -137,8 +136,8 @@ if __name__ == '__main__':
     #================================
     # モデルの構造を定義する。
     #================================
-    model_G = LightweightGANGenerator( z_dims = args.z_dims, n_fmaps = 64, out_dims = 3, image_size = args.image_height ).to(device)
-    model_D = PatchGANDiscriminator( in_dim = 3, n_fmaps = 64 ).to( device )
+    model_G = LightweightGANGenerator( z_dims = args.z_dims, n_fmaps = 64, out_dims = 3, image_size = args.image_size ).to(device)
+    model_D = LightweightGANDiscriminator( in_dim = 3, n_fmaps = 64 ).to( device )
 
     # モデルを読み込む
     if not args.load_checkpoints_path == '' and os.path.exists(args.load_checkpoints_path):
@@ -190,12 +189,10 @@ if __name__ == '__main__':
             #----------------------------------------------------
             # 生成器 の forword 処理
             #----------------------------------------------------
-            output_list = model_G( latent_z )
-            output = output_list[0]
+            output, output_res128 = model_G( latent_z )
             if( args.debug and n_print > 0 ):
                 print( "output.shape : ", output.shape )
-                for i in range(len(output_list)):
-                    print( "output_list[{}] shape={}, device={}, dtype={}, min={}, max={}".format(i, output_list[i].shape, output_list[i].device, output_list[i].dtype, torch.min(output_list[i]), torch.max(output_list[i])) )
+                print( "output_res128.shape : ", output_res128.shape )
 
             #----------------------------------------------------
             # 識別器の更新処理
@@ -206,7 +203,7 @@ if __name__ == '__main__':
 
             # 学習用データをモデルに流し込む
             d_real = model_D( image_t )
-            d_fake = model_D( output.detach() )
+            d_fake = model_D( output.detach(), output_res128.detach() )
             if( args.debug and n_print > 0 ):
                 print( "d_real.shape :", d_real.shape )
                 print( "d_fake.shape :", d_fake.shape )
@@ -292,12 +289,11 @@ if __name__ == '__main__':
 
                     # 推論処理
                     with torch.no_grad():
-                        output_list = model_G( latent_z )
-                        output = output_list[0]
+                        output, output_res128 = model_G( latent_z )
 
                     with torch.no_grad():
                         d_real = model_D( image_t )
-                        d_fake = model_D( output.detach() )
+                        d_fake = model_D( output.detach(), output_res128.detach() )
 
                     # 損失関数を計算する
                     loss_l1 = loss_l1_fn( image_t, output )

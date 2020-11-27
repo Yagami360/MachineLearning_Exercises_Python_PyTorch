@@ -8,8 +8,10 @@ mkdir -p _logs
 #----------------------
 N_EPOCHES=5
 BATCH_SIZE=4
-IMAGE_HIGHT=1024
-IMAGE_WIDTH=1024
+
+IMAGE_SIZE=256
+#IMAGE_SIZE=512
+#IMAGE_SIZE=1024
 
 EXPER_NAME=debug
 rm -rf tensorboard/${EXPER_NAME}
@@ -25,7 +27,7 @@ fi
 python train.py \
     --exper_name ${EXPER_NAME} \
     --n_epoches ${N_EPOCHES} \
-    --image_height ${IMAGE_HIGHT} --image_width ${IMAGE_WIDTH} --batch_size ${BATCH_SIZE} \
+    --image_size ${IMAGE_SIZE} --batch_size ${BATCH_SIZE} \
     --n_diaplay_step ${N_DISPLAY_STEP} --n_display_valid_step ${N_DISPLAY_VALID_STEP} \
     --diaplay_scores \
     --debug

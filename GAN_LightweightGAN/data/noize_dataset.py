@@ -26,12 +26,11 @@ IMG_EXTENSIONS = (
 )
 
 class NoizeDataset(data.Dataset):
-    def __init__(self, args, root_dir, datamode = "train", image_height = 1024, image_width = 1024, z_dims = 256, debug = False ):
+    def __init__(self, args, root_dir, datamode = "train", image_size = 1024, z_dims = 256, debug = False ):
         super(NoizeDataset, self).__init__()
         self.args = args
         self.datamode = datamode
-        self.image_height = image_height
-        self.image_width = image_width
+        self.image_size = image_size
         self.z_dims = z_dims
         self.debug = debug
 
@@ -40,16 +39,16 @@ class NoizeDataset(data.Dataset):
 
         self.transform = transforms.Compose(
             [
-                transforms.Resize( (args.image_height, args.image_width), interpolation=Image.LANCZOS ),
-                transforms.CenterCrop( size = (args.image_height, args.image_width) ),
+                transforms.Resize( (args.image_size, args.image_size), interpolation=Image.LANCZOS ),
+                transforms.CenterCrop( size = (args.image_size, args.image_size) ),
                 transforms.ToTensor(),
                 transforms.Normalize( [0.5,0.5,0.5], [0.5,0.5,0.5] ),
             ]
         )
         self.transform_mask = transforms.Compose(
             [
-                transforms.Resize( (args.image_height, args.image_width), interpolation=Image.NEAREST ),
-                transforms.CenterCrop( size = (args.image_height, args.image_width) ),
+                transforms.Resize( (args.image_size, args.image_size), interpolation=Image.NEAREST ),
+                transforms.CenterCrop( size = (args.image_size, args.image_size) ),
                 transforms.ToTensor(),
 #                    transforms.Normalize( [0.5], [0.5] ),
                 transforms.Normalize( [0.5,0.5,0.5], [0.5,0.5,0.5] ),
@@ -57,8 +56,8 @@ class NoizeDataset(data.Dataset):
         )
         self.transform_mask_woToTensor = transforms.Compose(
             [
-                transforms.Resize( (args.image_height, args.image_width), interpolation=Image.NEAREST ),
-                transforms.CenterCrop( size = (args.image_height, args.image_width) ),
+                transforms.Resize( (args.image_size, args.image_size), interpolation=Image.NEAREST ),
+                transforms.CenterCrop( size = (args.image_size, args.image_size) ),
             ]
         )
 

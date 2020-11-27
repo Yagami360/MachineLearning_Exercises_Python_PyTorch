@@ -40,3 +40,10 @@ class GLU(nn.Module):
 
     def forward(self, input ):
         return F.glu(input, self.split_dim)
+
+class Swish(nn.Module):
+    """
+    Swish 活性化関数
+    """                                   
+    def forward(self, input):
+        return input * torch.sigmoid(input)
