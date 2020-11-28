@@ -243,10 +243,6 @@ if __name__ == '__main__':
             #----------------------------------------------------
             # 識別器の更新処理
             #----------------------------------------------------
-            # 無効化していた識別器 D のネットワークの勾配計算を有効化。
-            for param in model_D.parameters():
-                param.requires_grad = True
-
             # 学習用データをモデルに流し込む
             d_outputs_real = model_D( image_t )
             d_outputs_fake = model_D( output.detach(), output_res128.detach() )
@@ -273,25 +269,27 @@ if __name__ == '__main__':
             else:
                 NotImplementedError()
 
-            loss_D = loss_D_real + loss_D_fake + loss_D_rec_f1 + loss_D_rec_f2 + loss_D_rec_res128
+            loss_D = loss_D_real + loss_D_rec_f1 + loss_D_rec_f2 + loss_D_rec_res128
 
             # ネットワークの更新処理
             optimizer_D.zero_grad()
             if( args.use_amp ):
                 with amp.scale_loss(loss_D, optimizer_D, loss_id=0) as loss_D_scaled:
-                    loss_D_scaled.backward(retain_graph=True)
+                    loss_D_scaled.backward()
+                with amp.scale_loss(loss_D_fake, optimizer_D, loss_id=0) as loss_D_fake_scaled:
+                    loss_D_fake_scaled.backward()
             else:
-                loss_D.backward(retain_graph=True)
+                loss_D.backward()
+                loss_D_fake.backward()
 
-            optimizer_D.step()
-
-            # 無効化していた識別器 D のネットワークの勾配計算を有効化。
-            for param in model_D.parameters():
-                param.requires_grad = False
+            optimizer_D.step()            
 
             #----------------------------------------------------
             # 生成器の更新処理
             #----------------------------------------------------
+            d_outputs_fake = model_D( output, output_res128 )
+            d_fake = d_outputs_fake["d_output"]
+
             # 損失関数を計算する
             loss_l1 = loss_l1_fn( image_t, output )
             loss_vgg = loss_vgg_fn( image_t, output )
@@ -305,7 +303,7 @@ if __name__ == '__main__':
                     loss_G_scaled.backward()
             else:
                 loss_G.backward()
-
+                
             optimizer_G.step()
 
             #====================================================
@@ -347,6 +345,7 @@ if __name__ == '__main__':
             #====================================================
             # valid データでの処理
             #====================================================
+            """
             if( step % args.n_display_valid_step == 0 ):
                 loss_G_total, loss_l1_total, loss_vgg_total, loss_adv_total = 0, 0, 0, 0
                 loss_D_total, loss_D_real_total, loss_D_fake_total, loss_D_rec_f1_total, loss_D_rec_f2_total, loss_D_rec_res128_total = 0, 0, 0, 0, 0, 0
@@ -386,17 +385,9 @@ if __name__ == '__main__':
                     loss_G_total += loss_G
 
                     _, loss_D_real, loss_D_fake = loss_adv_fn.forward_D( d_real, d_fake )
-                    if( args.rec_loss_type == "vgg" ):
-                        loss_D_rec_f1 = loss_rec_fn( F.interpolate(model_D.random_crop(image_t), d_outputs_real["rec_img_f1"].shape[2]), d_outputs_real["rec_img_f1"] )
-                        loss_D_rec_f2 = loss_rec_fn( F.interpolate(image_t, d_outputs_real["rec_img_f2"].shape[2]), d_outputs_real["rec_img_f2"] )
-                        loss_D_rec_res128 = loss_rec_fn( F.interpolate(image_t, d_outputs_real["rec_img_res128"].shape[2]), d_outputs_real["rec_img_res128"] )
-                    elif( args.rec_loss_type == "lpips" ):
-                        loss_D_rec_f1 = loss_rec_fn( F.interpolate(model_D.random_crop(image_t), d_outputs_real["rec_img_f1"].shape[2]), d_outputs_real["rec_img_f1"] ).sum()
-                        loss_D_rec_f2 = loss_rec_fn( F.interpolate(image_t, d_outputs_real["rec_img_f2"].shape[2]), d_outputs_real["rec_img_f2"] ).sum()
-                        loss_D_rec_res128 = loss_rec_fn( F.interpolate(image_t, d_outputs_real["rec_img_res128"].shape[2]), d_outputs_real["rec_img_res128"] ).sum()
-                    else:
-                        NotImplementedError()
-
+                    loss_D_rec_f1 = loss_vgg_fn( F.interpolate(image_t, d_outputs_real["rec_img_f1"].shape[2]), d_outputs_real["rec_img_f1"] )
+                    loss_D_rec_f2 = loss_vgg_fn( F.interpolate(image_t, d_outputs_real["rec_img_f2"].shape[2]), d_outputs_real["rec_img_f2"] )
+                    loss_D_rec_res128 = loss_vgg_fn( F.interpolate(image_t, d_outputs_real["rec_img_res128"].shape[2]), d_outputs_real["rec_img_res128"] )
                     loss_D = loss_D_real + loss_D_fake + loss_D_rec_f1 + loss_D_rec_f2 + loss_D_rec_res128
 
                     loss_D_total += loss_D
@@ -436,7 +427,7 @@ if __name__ == '__main__':
                 # scores
                 if( args.diaplay_scores ):
                     board_valid.add_scalar('scores/FID', score_fid_total.item()/n_valid_loop, step)
-
+            """
             step += 1
             n_print -= 1
 

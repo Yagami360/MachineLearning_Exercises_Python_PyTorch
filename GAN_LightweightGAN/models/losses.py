@@ -197,7 +197,38 @@ class HingeGANLoss(nn.Module):
         return loss_D, loss_D_real, loss_D_fake
 
     def forward_G(self, d_fake):
-        real_ones_tsr =  torch.ones( d_fake.shape ).to(self.device)
+        loss_G = - torch.mean(d_fake)
+        return loss_G
+
+    def forward(self, d_real, d_fake, dis_or_gen = True ):
+        # Discriminator 用の loss
+        if dis_or_gen:
+            loss, _, _ = self.forward_D( d_real, d_fake )
+        # Generator 用の loss
+        else:
+            loss = self.forward_G( d_fake )
+
+        return loss
+
+
+class HingeGANLoss2(nn.Module):
+    """
+    GAN の Hinge loss
+        −min(x−1,0)     if D and real
+        −min(−x−1,0)    if D and fake
+        −x              if G
+    """
+    def __init__(self):
+        super(HingeGANLoss2, self).__init__()
+        return
+
+    def forward_D_re(self, d_real, d_fake):
+        loss_D_real = F.relu( torch.rand_like(d_real) * 0.2 + 0.8 - d_real).mean()
+        loss_D_fake = F.relu( torch.rand_like(d_fake) * 0.2 + 0.8 + d_fake).mean()
+        loss_D = loss_D_real + loss_D_fake
+        return loss_D, loss_D_real, loss_D_fake
+
+    def forward_G(self, d_fake):
         loss_G = - torch.mean(d_fake)
         return loss_G
 

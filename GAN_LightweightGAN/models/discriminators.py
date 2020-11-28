@@ -1,6 +1,7 @@
 # -*- coding:utf-8 -*-
 import os
 import numpy as np
+import random
 
 import torch
 import torch.nn as nn
@@ -150,6 +151,8 @@ class LightweightGANDiscriminator(nn.Module):
     """
     def __init__( self, in_dim = 3, n_fmaps = 64, image_size = 1024 ):
         super(LightweightGANDiscriminator, self).__init__()
+        self.crop_rand_idx = 0
+
         # 入力層
         self.input_layer = InputLayer(in_dim, n_fmaps, image_size )
 
@@ -174,7 +177,8 @@ class LightweightGANDiscriminator(nn.Module):
         self.sle_64_8 = SLEblock(n_fmaps, n_fmaps*8)
 
         # decoder 層
-        self.decoder_f1 = SimpleDecoder(n_fmaps*4, 3)
+        #self.decoder_f1 = SimpleDecoder(n_fmaps*4, 3)
+        self.decoder_f1 = SimpleDecoder(n_fmaps*2, 3)
         self.decoder_f2 = SimpleDecoder(n_fmaps*8, 3)
         self.decoder_res128 = SimpleDecoder(n_fmaps*4, 3)
 
@@ -182,6 +186,17 @@ class LightweightGANDiscriminator(nn.Module):
         self.output_layer = OutputLayer(n_fmaps*8, 1)
         self.output_res128_layer = spectral_norm( nn.Conv2d(n_fmaps*4, 1, 4, 1, 0, bias=False) )
         return
+
+    def random_crop(self, image_tsr):
+        hw = image_tsr.shape[2]//2
+        if self.crop_rand_idx == 0 :
+            return image_tsr[:,:,:hw,:hw]
+        if self.crop_rand_idx == 1 :
+            return image_tsr[:,:,:hw,hw:]
+        if self.crop_rand_idx == 2 :
+            return image_tsr[:,:,hw:,:hw]
+        if self.crop_rand_idx == 3 :
+            return image_tsr[:,:,hw:,hw:]
 
     def forward(self, input, input_res128 = None, interpolate_mode = "bilinear" ):
         if input_res128 is None : 
@@ -192,7 +207,7 @@ class LightweightGANDiscriminator(nn.Module):
         # 入力層
         #-------------------------------------
         feat256 = self.input_layer(input)
-        print( "[LightweightGANDiscriminator] feat256.shape", feat256.shape )
+        #print( "[LightweightGANDiscriminator] feat256.shape", feat256.shape )
 
         #-------------------------------------
         # down sampling & SLE 層
@@ -218,18 +233,28 @@ class LightweightGANDiscriminator(nn.Module):
         #-------------------------------------
         d_output_resmax = self.output_layer(feat8_skip)
         d_output_res128 = self.output_res128_layer(feat8_res128)
-        print( "[LightweightGANDiscriminator] d_output_resmax.shape", d_output_resmax.shape )
-        print( "[LightweightGANDiscriminator] d_output_res128.shape", d_output_res128.shape )
+        #print( "[LightweightGANDiscriminator] d_output_resmax.shape", d_output_resmax.shape )
+        #print( "[LightweightGANDiscriminator] d_output_res128.shape", d_output_res128.shape )
         d_output = torch.cat( [d_output_resmax, d_output_res128], dim = 1)
         #print( "[LightweightGANDiscriminator] d_output.shape", d_output.shape )
 
         #-------------------------------------
         # decoder 層
         #-------------------------------------
-        rec_img_f1_part = self.decoder_f1(feat16_skip)
+        #rec_img_f1 = self.decoder_f1(feat16_skip)
+        self.crop_rand_idx = random.randint(0, 3)
+        if self.crop_rand_idx == 0 :
+            rec_img_f1 = self.decoder_f1(feat32_skip[:,:,:8,:8])
+        if self.crop_rand_idx == 1 :
+            rec_img_f1 = self.decoder_f1(feat32_skip[:,:,:8,8:])
+        if self.crop_rand_idx == 2 :
+            rec_img_f1 = self.decoder_f1(feat32_skip[:,:,8:,:8])
+        if self.crop_rand_idx == 3 :
+            rec_img_f1 = self.decoder_f1(feat32_skip[:,:,8:,8:])
+
         rec_img_f2 = self.decoder_f2(feat8_skip)
         rec_img_res128 = self.decoder_res128(feat8_res128)
-        #print( "[LightweightGANDiscriminator] rec_img_f1_part.shape", rec_img_f1_part.shape )
+        #print( "[LightweightGANDiscriminator] rec_img_f1.shape", rec_img_f1.shape )
         #print( "[LightweightGANDiscriminator] rec_img_f2.shape", rec_img_f2.shape )
         #print( "[LightweightGANDiscriminator] rec_img_res128.shape", rec_img_res128.shape )
 
@@ -240,7 +265,7 @@ class LightweightGANDiscriminator(nn.Module):
             "d_output" : d_output,
             "d_output_resmax" : d_output_resmax,
             "d_output_res128" : d_output_res128,
-            "rec_img_f1_part" : rec_img_f1_part,
+            "rec_img_f1" : rec_img_f1,
             "rec_img_f2" : rec_img_f2,
             "rec_img_res128" : rec_img_res128,
         }

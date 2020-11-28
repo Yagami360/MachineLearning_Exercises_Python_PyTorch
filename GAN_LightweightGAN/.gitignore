@@ -20,3 +20,5 @@ checkpoints
 results
 
 !dataset
+!lpips/weights/v0.0/*.pth
+!lpips/weights/v0.1/*.pth

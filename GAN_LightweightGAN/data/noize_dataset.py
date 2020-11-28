@@ -72,7 +72,8 @@ class NoizeDataset(data.Dataset):
 
     def get_latent_z(self, z_dims, noize_type = "uniform" ):
         if( noize_type == "uniform" ):
-            latent_z = torch.randn([z_dims])
+            #latent_z = torch.randn([z_dims])
+            latent_z = torch.Tensor(z_dims).normal_(0, 1)
         else:
             NotImplementedError()
 

@@ -10,13 +10,13 @@ mkdir -p _logs
 N_EPOCHES=100
 BATCH_SIZE=4
 
-IMAGE_SIZE=256
-#IMAGE_SIZE=512
+#IMAGE_SIZE=256
+IMAGE_SIZE=512
 #IMAGE_SIZE=1024
 
 EXPER_NAME=debug
-#EXPER_NAME=light-weight-gan_size${IMAGE_SIZE}_b${BATCH_SIZE}_ep${N_EPOCHES}_201128
-#EXPER_NAME=light-weight-gan_l1-10_vgg-10_adv-1_size${IMAGE_SIZE}_b${BATCH_SIZE}_ep${N_EPOCHES}_201128
+#EXPER_NAME=light-weight-gan2_size${IMAGE_SIZE}_b${BATCH_SIZE}_ep${N_EPOCHES}_201128
+#EXPER_NAME=light-weight-gan2_l1-10_vgg-10_adv-1_size${IMAGE_SIZE}_b${BATCH_SIZE}_ep${N_EPOCHES}_201128
 rm -rf tensorboard/${EXPER_NAME}
 rm -rf tensorboard/${EXPER_NAME}_valid
 if [ ${EXPER_NAME} = "debug" ] ; then
@@ -27,7 +27,7 @@ else
     N_DISPLAY_VALID_STEP=500
 fi
 
-python train.py \
+python train2.py \
     --exper_name ${EXPER_NAME} \
     --n_epoches ${N_EPOCHES} \
     --image_size ${IMAGE_SIZE} --batch_size ${BATCH_SIZE} \
