@@ -45,7 +45,7 @@ class UpsamplingLayer(nn.Module):
         super(UpsamplingLayer, self).__init__()
         self.layers = nn.Sequential(
             nn.Upsample( scale_factor = scale_factor, mode = mode ),
-            nn.Conv2d(in_dims, out_dims*2, kernel_size=3, stride=1, padding=1, bias=False),
+            spectral_norm( nn.Conv2d(in_dims, out_dims*2, kernel_size=3, stride=1, padding=1, bias=False) ),
             nn.BatchNorm2d(out_dims*2),
             GLU(split_dim=1),
         )
@@ -60,11 +60,11 @@ class UpsamplingWithNoizeLayer(nn.Module):
         super(UpsamplingWithNoizeLayer, self).__init__()
         self.layers = nn.Sequential(
             nn.Upsample( scale_factor = scale_factor, mode = mode ),
-            nn.Conv2d(in_dims, out_dims*2, kernel_size=3, stride=1, padding=1, bias=False),
+            spectral_norm( nn.Conv2d(in_dims, out_dims*2, kernel_size=3, stride=1, padding=1, bias=False) ),
             NoiseInjection(),
             nn.BatchNorm2d(out_dims*2),
             GLU(split_dim=1),
-            nn.Conv2d(out_dims, out_dims*2, kernel_size=3, stride=1, padding=1, bias=False),
+            spectral_norm( nn.Conv2d(out_dims, out_dims*2, kernel_size=3, stride=1, padding=1, bias=False) ),
             NoiseInjection(),
             nn.BatchNorm2d(out_dims*2),
             GLU(split_dim=1),
@@ -83,9 +83,9 @@ class SLEblock(nn.Module):
         super(SLEblock, self).__init__()
         self.layers = nn.Sequential(
             nn.AdaptiveAvgPool2d((h,w)),
-            nn.Conv2d(in_dims, out_dims, kernel_size=4, stride=1, padding=0, bias=False),            
+            spectral_norm( nn.Conv2d(in_dims, out_dims, kernel_size=4, stride=1, padding=0, bias=False) ),            
             Swish(),
-            nn.Conv2d(out_dims, out_dims, kernel_size=1, stride=1, padding=0, bias=False),                        
+            spectral_norm( nn.Conv2d(out_dims, out_dims, kernel_size=1, stride=1, padding=0, bias=False) ),                        
             nn.Sigmoid(),
         )
         return
@@ -150,13 +150,13 @@ class LightweightGANGenerator(nn.Module):
             self.upsampling_1024 = UpsamplingLayer(in_dims_dict["1024x1024"], out_dims_dict["1024x1024"])
 
         # SLE 
-        self.sle_8 = SLEblock(out_dims_dict["8x8"],out_dims_dict["128x128"])
+        self.sle_8_128 = SLEblock(out_dims_dict["8x8"],out_dims_dict["128x128"])
         if( image_size > 256 ):
-            self.sle_16 = SLEblock(out_dims_dict["16x16"],out_dims_dict["256x256"])
+            self.sle_16_256 = SLEblock(out_dims_dict["16x16"],out_dims_dict["256x256"])
         if( image_size > 512 ):
-            self.sle_32 = SLEblock(out_dims_dict["32x32"],out_dims_dict["512x512"])
+            self.sle_32_512 = SLEblock(out_dims_dict["32x32"],out_dims_dict["512x512"])
         if( image_size > 1024 ):
-            self.sle_64 = SLEblock(out_dims_dict["64x64"],out_dims_dict["1024x1024"])
+            self.sle_64_1024 = SLEblock(out_dims_dict["64x64"],out_dims_dict["1024x1024"])
 
         # 出力層
         if( image_size == 256 ):
@@ -181,7 +181,7 @@ class LightweightGANGenerator(nn.Module):
         #print( "feat64.shape : ", feat64.shape )
         feat128 = self.upsampling_128(feat64)
         #print( "feat128.shape : ", feat128.shape )
-        feat128_skip = self.sle_8(feat8, feat128)
+        feat128_skip = self.sle_8_128(feat8, feat128)
         #print( "feat128_skip.shape : ", feat128_skip.shape )
 
         feat256 = self.upsampling_256(feat128_skip)
@@ -191,15 +191,15 @@ class LightweightGANGenerator(nn.Module):
             return output_resmax, output_res128
 
         if( self.image_size == 512 ):
-            feat256_skip = self.sle_16(feat16, feat256)
+            feat256_skip = self.sle_16_256(feat16, feat256)
             feat512 = self.upsampling_512(feat256_skip)
             output_resmax, output_res128 = self.output_layer(feat512, feat128_skip)
             return output_resmax, output_res128
 
         if( self.image_size == 1024 ):
-            feat256_skip = self.sle_16(feat16, feat256)
+            feat256_skip = self.sle_16_256(feat16, feat256)
             feat512 = self.upsampling_512(feat256_skip)
-            feat512_skip = self.sle_32(feat32, feat512)
+            feat512_skip = self.sle_32_512(feat32, feat512)
             feat1024 = self.upsampling_1024(feat512_skip)
             output_resmax, output_res128 = self.output_layer(feat1024, feat128_skip)
             return output_resmax, output_res128

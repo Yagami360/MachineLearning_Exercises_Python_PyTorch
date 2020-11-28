@@ -23,7 +23,7 @@ from tensorboardX import SummaryWriter
 # 自作モジュール
 from data.noize_dataset import NoizeDataset
 from models.generators import LightweightGANGenerator
-from models.discriminators import PatchGANDiscriminator, LightweightGANDiscriminator
+from models.discriminators import LightweightGANDiscriminator
 from models.inception import InceptionV3
 from models.losses import VGGLoss, LSGANLoss
 from utils.utils import save_checkpoint, load_checkpoint
@@ -137,7 +137,7 @@ if __name__ == '__main__':
     # モデルの構造を定義する。
     #================================
     model_G = LightweightGANGenerator( z_dims = args.z_dims, n_fmaps = 64, out_dims = 3, image_size = args.image_size ).to(device)
-    model_D = LightweightGANDiscriminator( in_dim = 3, n_fmaps = 64 ).to( device )
+    model_D = LightweightGANDiscriminator( in_dim = 3, n_fmaps = 64, image_size = args.image_size ).to( device )
 
     # モデルを読み込む
     if not args.load_checkpoints_path == '' and os.path.exists(args.load_checkpoints_path):
@@ -202,14 +202,22 @@ if __name__ == '__main__':
                 param.requires_grad = True
 
             # 学習用データをモデルに流し込む
-            d_real = model_D( image_t )
-            d_fake = model_D( output.detach(), output_res128.detach() )
+            d_outputs_real = model_D( image_t )
+            d_outputs_fake = model_D( output.detach(), output_res128.detach() )
+            d_real = d_outputs_real["d_output"]
+            d_fake = d_outputs_fake["d_output"]
             if( args.debug and n_print > 0 ):
                 print( "d_real.shape :", d_real.shape )
                 print( "d_fake.shape :", d_fake.shape )
+                for key, value in d_outputs_real.items():
+                    print('[d_outputs_real] {} : shape={}, dype={}'.format(str(key), value.shape, value.dtype) )
+                for key, value in d_outputs_fake.items():
+                    print('[d_outputs_fake] {} : shape={}, dype={}'.format(str(key), value.shape, value.dtype) )
 
             # 損失関数を計算する
-            loss_D, loss_D_real, loss_D_fake = loss_adv_fn.forward_D( d_real, d_fake )
+            _, loss_D_real, loss_D_fake = loss_adv_fn.forward_D( d_real, d_fake )
+            loss_D_rec_f2 = loss_vgg_fn( d_outputs_real["rec_img_res128"], d_outputs_real["rec_img_f2"] )
+            loss_D = loss_D_real + loss_D_fake + loss_D_rec_f2
 
             # ネットワークの更新処理
             optimizer_D.zero_grad()
@@ -251,9 +259,10 @@ if __name__ == '__main__':
                 board_train.add_scalar('G/loss_G', loss_G.item(), step)
                 board_train.add_scalar('D/loss_D_real', loss_D_real.item(), step)
                 board_train.add_scalar('D/loss_D_fake', loss_D_fake.item(), step)
+                board_train.add_scalar('D/loss_D_rec_f2', loss_D_rec_f2.item(), step)
                 board_train.add_scalar('D/loss_D', loss_D.item(), step)
                 print( "step={}, loss_G={:.5f}, loss_l1={:.5f}, loss_vgg={:.5f}, loss_adv={:.5f}".format(step, loss_G.item(), loss_l1.item(), loss_vgg.item(), loss_adv.item()) )
-                print( "step={}, loss_D={:.5f}, loss_D_real={:.5f}, loss_D_fake={:.5f}".format(step, loss_D.item(), loss_D_real.item(), loss_D_fake.item()) )
+                print( "step={}, loss_D={:.5f}, loss_D_real={:.5f}, loss_D_fake={:.5f}, loss_D_rec_f2={:.5f}".format(step, loss_D.item(), loss_D_real.item(), loss_D_fake.item(), loss_D_rec_f2.item()) )
 
                 # visual images
                 visuals = [
@@ -272,7 +281,7 @@ if __name__ == '__main__':
             #====================================================
             if( step % args.n_display_valid_step == 0 ):
                 loss_G_total, loss_l1_total, loss_vgg_total, loss_adv_total = 0, 0, 0, 0
-                loss_D_total, loss_D_real_total, loss_D_fake_total = 0, 0, 0
+                loss_D_total, loss_D_real_total, loss_D_fake_total, loss_D_rec_f2_total = 0, 0, 0, 0
                 score_fid_total = 0
                 n_valid_loop = 0
                 for iter, inputs in enumerate( tqdm(dloader_valid, desc = "valid") ):
@@ -292,8 +301,10 @@ if __name__ == '__main__':
                         output, output_res128 = model_G( latent_z )
 
                     with torch.no_grad():
-                        d_real = model_D( image_t )
-                        d_fake = model_D( output.detach(), output_res128.detach() )
+                        d_outputs_real = model_D( image_t )
+                        d_outputs_fake = model_D( output.detach(), output_res128.detach() )
+                        d_real = d_outputs_real["d_output"]
+                        d_fake = d_outputs_fake["d_output"]
 
                     # 損失関数を計算する
                     loss_l1 = loss_l1_fn( image_t, output )
@@ -306,10 +317,13 @@ if __name__ == '__main__':
                     loss_adv_total += loss_adv
                     loss_G_total += loss_G
 
-                    loss_D, loss_D_real, loss_D_fake = loss_adv_fn.forward_D( d_real, d_fake )
+                    _, loss_D_real, loss_D_fake = loss_adv_fn.forward_D( d_real, d_fake )
+                    loss_D_rec_f2 = loss_vgg_fn( d_outputs_real["rec_img_res128"], d_outputs_real["rec_img_f2"] )
+                    loss_D = loss_D_real + loss_D_fake + loss_D_rec_f2
                     loss_D_total += loss_D
                     loss_D_real_total += loss_D_real
                     loss_D_fake_total += loss_D_fake
+                    loss_D_rec_f2_total += loss_D_rec_f2
 
                     # scores
                     if( args.diaplay_scores ):
@@ -334,7 +348,8 @@ if __name__ == '__main__':
                 board_valid.add_scalar('D/loss_D', loss_D_total.item()/n_valid_loop, step)
                 board_valid.add_scalar('D/loss_D_real', loss_D_real_total.item()/n_valid_loop, step)
                 board_valid.add_scalar('D/loss_D_fake', loss_D_fake_total.item()/n_valid_loop, step)
-                
+                board_valid.add_scalar('D/loss_D_rec_f2', loss_D_rec_f2_total.item()/n_valid_loop, step)
+
                 # scores
                 if( args.diaplay_scores ):
                     board_valid.add_scalar('scores/FID', score_fid_total.item()/n_valid_loop, step)

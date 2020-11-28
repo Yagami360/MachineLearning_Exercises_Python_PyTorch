@@ -5,146 +5,15 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+from torch.nn.utils import spectral_norm
 import torchvision
 from torchvision import models
 
+from models.network_base import GLU, Swish
 
 #====================================
 # 識別器
 #====================================
-class PatchGANDiscriminator( nn.Module ):
-    """
-    PatchGAN の識別器
-    """
-    def __init__( self, in_dim = 3, n_fmaps = 64 ):
-        super( PatchGANDiscriminator, self ).__init__()
-        def discriminator_block1( in_dim, out_dim ):
-            model = nn.Sequential(
-                nn.Conv2d( in_dim, out_dim, 4, stride=2, padding=1 ),
-                nn.LeakyReLU( 0.2, inplace=True )
-            )
-            return model
-
-        def discriminator_block2( in_dim, out_dim ):
-            model = nn.Sequential(
-                nn.Conv2d( in_dim, out_dim, 4, stride=2, padding=1 ),
-                nn.InstanceNorm2d( out_dim ),
-                nn.LeakyReLU( 0.2, inplace=True )
-            )
-            return model
-
-        #self.layer1 = discriminator_block1( in_dim * 2, n_fmaps )
-        self.layer1 = discriminator_block1( in_dim, n_fmaps )
-        self.layer2 = discriminator_block2( n_fmaps, n_fmaps*2 )
-        self.layer3 = discriminator_block2( n_fmaps*2, n_fmaps*4 )
-        self.layer4 = discriminator_block2( n_fmaps*4, n_fmaps*8 )
-
-        self.output_layer = nn.Sequential(
-            nn.ZeroPad2d( (1, 0, 1, 0) ),
-            nn.Conv2d( n_fmaps*8, 1, 4, padding=1, bias=False )
-        )
-
-    def forward(self, input ):
-        #output = torch.cat( [x, y], dim=1 )
-        output = self.layer1( input )
-        output = self.layer2( output )
-        output = self.layer3( output )
-        output = self.layer4( output )
-        output = self.output_layer( output )
-        output = output.view(-1)
-        return output
-
-
-class MultiscaleDiscriminator(nn.Module):
-    """
-    Pix2Pix-HD のマルチスケール識別器
-    """
-    def __init__( 
-        self, 
-        in_dim = 3, n_fmaps = 64,
-        n_dis = 3,                # 識別器の数
-#       n_layers = 3,        
-    ):
-        super( MultiscaleDiscriminator, self ).__init__()
-        self.n_dis = n_dis
-        #self.n_layers = n_layers
-        
-        def discriminator_block1( in_dim, out_dim, stride, padding ):
-            model = nn.Sequential(
-                nn.Conv2d( in_dim, out_dim, 4, stride, padding ),
-                nn.LeakyReLU( 0.2, inplace=True ),
-            )
-            return model
-
-        def discriminator_block2( in_dim, out_dim, stride, padding ):
-            model = nn.Sequential(
-                nn.Conv2d( in_dim, out_dim, 4, stride, padding ),
-                nn.InstanceNorm2d( out_dim ),
-                nn.LeakyReLU( 0.2, inplace=True )
-            )
-            return model
-
-        def discriminator_block3( in_dim, out_dim, stride, padding ):
-            model = nn.Sequential(
-                nn.Conv2d( in_dim, out_dim, 4, stride, padding ),
-            )
-            return model
-
-        # マルチスケール識別器で、入力画像を 1/2 スケールにする層
-        self.downsample_layer = nn.AvgPool2d(3, stride=2, padding=[1, 1], count_include_pad=False)
-
-        # setattr() を用いて self オブジェクトを動的に生成することで、各 Sequential ブロックに名前をつける
-        for i in range(self.n_dis):
-            setattr( self, 'scale'+str(i)+'_layer0', discriminator_block1( in_dim, n_fmaps, 2, 2) )
-            setattr( self, 'scale'+str(i)+'_layer1', discriminator_block2( n_fmaps, n_fmaps*2, 2, 2) )
-            setattr( self, 'scale'+str(i)+'_layer2', discriminator_block2( n_fmaps*2, n_fmaps*4, 2, 2) )
-            setattr( self, 'scale'+str(i)+'_layer3', discriminator_block2( n_fmaps*4, n_fmaps*8, 1, 2) )
-            setattr( self, 'scale'+str(i)+'_layer4', discriminator_block3( n_fmaps*8, 1, 1, 2) )
-
-        """
-        # この方法だと、各 Sequential ブロックに名前をつけられない（連番になる）
-        self.layers = nn.ModuleList()
-        for i in range(self.n_dis):
-            self.layers.append( discriminator_block1( in_dim*2, n_fmaps, 2, 2) )
-            self.layers.append( discriminator_block2( n_fmaps, n_fmaps*2, 2, 2) )
-            self.layers.append( scdiscriminator_block2( n_fmaps*2, n_fmaps*4, 2, 2)ale_layer )
-            self.layers.append( discriminator_block2( n_fmaps*4, n_fmaps*8, 1, 2) )
-            self.layers.append( discriminator_block3( n_fmaps*8, 1, 1, 2) )
-        """
-        return
-
-    def forward(self, input ):
-        """
-        [Args]
-            input : 入力画像 <torch.Float32> shape =[N,C,H,W]
-        [Returns]
-            outputs_allD : shape=[n_dis, n_layers=5, tensor=[N,C,H,W] ]
-        """
-        #input = torch.cat( [x, y], dim=1 )
-
-        outputs_allD = []
-        for i in range(self.n_dis):
-            if i > 0:
-                # 入力画像を 1/2 スケールにする
-                input = self.downsample_layer(input)
-
-            scale_layer0 = getattr( self, 'scale'+str(i)+'_layer0' )
-            scale_layer1 = getattr( self, 'scale'+str(i)+'_layer1' )
-            scale_layer2 = getattr( self, 'scale'+str(i)+'_layer2' )
-            scale_layer3 = getattr( self, 'scale'+str(i)+'_layer3' )
-            scale_layer4 = getattr( self, 'scale'+str(i)+'_layer4' )
-
-            outputs_oneD = []
-            outputs_oneD.append( scale_layer0(input) )
-            outputs_oneD.append( scale_layer1(outputs_oneD[-1]) )
-            outputs_oneD.append( scale_layer2(outputs_oneD[-1]) )
-            outputs_oneD.append( scale_layer3(outputs_oneD[-1]) )
-            outputs_oneD.append( scale_layer4(outputs_oneD[-1]) )
-            outputs_allD.append( outputs_oneD )
-
-        return outputs_allD
-
-
 #------------------------------------
 # light-weight GAN の 識別器
 #------------------------------------
@@ -153,23 +22,20 @@ class InputLayer(nn.Module):
         super(InputLayer, self).__init__()
         if( image_size == 256 ):
             self.layers = nn.Sequential(
-                nn.Conv2d(in_dims, n_fmaps//4, kernel_size=3, stride=2, padding=1, bias=False),
+                spectral_norm( nn.Conv2d(in_dims, n_fmaps//4, kernel_size=3, stride=1, padding=1, bias=False) ),
                 nn.LeakyReLU(0.2, inplace=True),
             )
         elif( image_size == 512 ):
             self.layers = nn.Sequential(
-                nn.Conv2d(in_dims, n_fmaps//4, kernel_size=4, stride=2, padding=1, bias=False),
-                nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(n_fmaps//4, n_fmaps//4, kernel_size=4, stride=2, padding=1, bias=False),
-                nn.BatchNorm2d(n_fmaps//4),
+                spectral_norm( nn.Conv2d(in_dims, n_fmaps//4, kernel_size=4, stride=2, padding=1, bias=False) ),
                 nn.LeakyReLU(0.2, inplace=True),
             )
         elif( image_size == 1024 ):
             self.layers = nn.Sequential(
-                nn.Conv2d(in_dims, n_fmaps//8, kernel_size=4, stride=2, padding=1, bias=False),
+                spectral_norm( nn.Conv2d(in_dims, n_fmaps//8, kernel_size=4, stride=2, padding=1, bias=False) ),
                 nn.LeakyReLU(0.2, inplace=True),
-                nn.Conv2d(n_fmaps//8, n_fmaps//8, kernel_size=4, stride=2, padding=1, bias=False),
-                nn.BatchNorm2d(n_fmaps//8),
+                spectral_norm( nn.Conv2d(n_fmaps//8, n_fmaps//4, kernel_size=4, stride=2, padding=1, bias=False) ),
+                nn.BatchNorm2d(n_fmaps//4),
                 nn.LeakyReLU(0.2, inplace=True),
             )
         else:
@@ -185,16 +51,16 @@ class DownBlock(nn.Module):
     def __init__(self, in_dims, out_dims, h = 2, w = 2 ):
         super(DownBlock, self).__init__()
         self.layer1 = nn.Sequential(
-            nn.Conv2d(in_dims, out_dims, kernel_size=4, stride=2, padding=1, bias=False),
+            spectral_norm( nn.Conv2d(in_dims, out_dims, kernel_size=4, stride=2, padding=1, bias=False) ),
             nn.BatchNorm2d(out_dims),
             nn.LeakyReLU(0.2, inplace=True),
-            nn.Conv2d(out_dims, out_dims, kernel_size=3, stride=1, padding=1, bias=False),
+            spectral_norm( nn.Conv2d(out_dims, out_dims, kernel_size=3, stride=1, padding=1, bias=False) ),
             nn.BatchNorm2d(out_dims),
             nn.LeakyReLU(0.2, inplace=True),
         )
         self.layer2 = nn.Sequential(
             nn.AvgPool2d((h,w)),
-            nn.Conv2d(in_dims, out_dims, kernel_size=1, stride=1, padding=0, bias=False),
+            spectral_norm( nn.Conv2d(in_dims, out_dims, kernel_size=1, stride=1, padding=0, bias=False) ),
             nn.BatchNorm2d(out_dims),
             nn.LeakyReLU(0.2, inplace=True),
         )
@@ -214,9 +80,9 @@ class SLEblock(nn.Module):
         super(SLEblock, self).__init__()
         self.layers = nn.Sequential(
             nn.AdaptiveAvgPool2d((h,w)),
-            nn.Conv2d(in_dims, out_dims, kernel_size=4, stride=1, padding=0, bias=False),            
+            spectral_norm( nn.Conv2d(in_dims, out_dims, kernel_size=4, stride=1, padding=0, bias=False) ),            
             Swish(),
-            nn.Conv2d(out_dims, out_dims, kernel_size=1, stride=1, padding=0, bias=False),                        
+            spectral_norm( nn.Conv2d(out_dims, out_dims, kernel_size=1, stride=1, padding=0, bias=False) ),                        
             nn.Sigmoid(),
         )
         return
@@ -230,23 +96,152 @@ class SLEblock(nn.Module):
         #print( "[SLEblock] output.shape : ", output.shape )
         return output
 
+class UpsamplingLayer(nn.Module):
+    def __init__(self, in_dims, out_dims, scale_factor = 2, mode = "nearest"):
+        super(UpsamplingLayer, self).__init__()
+        self.layers = nn.Sequential(
+            nn.Upsample( scale_factor = scale_factor, mode = mode ),
+            spectral_norm( nn.Conv2d(in_dims, out_dims*2, kernel_size=3, stride=1, padding=1, bias=False) ),
+            nn.BatchNorm2d(out_dims*2),
+            GLU(split_dim=1),
+        )
+        return
+
+    def forward(self, input):
+        output = self.layers(input)
+        return output
+
+class SimpleDecoder(nn.Module):
+    def __init__(self, in_dims, out_dims = 3, crop_h = 8, crop_w = 8 ):
+        super(SimpleDecoder, self).__init__()
+        self.layers = nn.Sequential(
+            nn.AdaptiveAvgPool2d((crop_h, crop_w)), # crop 処理有無で同等の処理になるようにするための GAP
+            UpsamplingLayer(in_dims, in_dims//2),
+            UpsamplingLayer(in_dims//2, in_dims//4),
+            UpsamplingLayer(in_dims//4, in_dims//8),
+            UpsamplingLayer(in_dims//8, in_dims//16),
+            spectral_norm( nn.Conv2d(in_dims//16, out_dims, kernel_size=3, stride=1, padding=1, bias=False) ),
+            nn.Tanh(),
+        )
+        return
+
+    def forward(self, input):
+        output = self.layers(input)
+        return output
+
+class OutputLayer(nn.Module):
+    def __init__(self, in_dims, out_dims = 1 ):
+        super(OutputLayer, self).__init__()
+        self.layers = nn.Sequential(
+            spectral_norm( nn.Conv2d(in_dims, in_dims, kernel_size=1, stride=1, padding=0, bias=False) ),
+            nn.BatchNorm2d(in_dims),
+            nn.LeakyReLU(0.2, inplace=True),
+            spectral_norm( nn.Conv2d(in_dims, out_dims, kernel_size=4, stride=1, padding=0, bias=False) ),
+        )
+        return
+
+    def forward(self, input):
+        output = self.layers(input)
+        return output
+
 class LightweightGANDiscriminator(nn.Module):
     """
     light-weight GAN の識別器
     """
     def __init__( self, in_dim = 3, n_fmaps = 64, image_size = 1024 ):
         super(LightweightGANDiscriminator, self).__init__()
+        # 入力層
         self.input_layer = InputLayer(in_dim, n_fmaps, image_size )
-        self.down = DownBlock(n_fmaps//4, n_fmaps//2)
+
+        # conv + ave pooling の２パスでのダウンサンプリング層
+        self.down_256 = DownBlock(n_fmaps//4, n_fmaps//2)
+        self.down_128 = DownBlock(n_fmaps//2, n_fmaps)
+        self.down_64 = DownBlock(n_fmaps, n_fmaps*2)
+        self.down_32 = DownBlock(n_fmaps*2, n_fmaps*4)
+        self.down_16 = DownBlock(n_fmaps*4, n_fmaps*8)
+
+        self.down_16_res128 = nn.Sequential(
+            spectral_norm( nn.Conv2d(in_dim, n_fmaps//2, kernel_size=4, stride=2, padding=1, bias=False) ),
+            nn.LeakyReLU(0.2, inplace=True),
+            DownBlock(n_fmaps//2, n_fmaps),
+            DownBlock(n_fmaps, n_fmaps*2),
+            DownBlock(n_fmaps*2, n_fmaps*4),
+        )
+
+        # SLE
+        self.sle_256_32 = SLEblock(n_fmaps//4, n_fmaps*2)
+        self.sle_128_16 = SLEblock(n_fmaps//2, n_fmaps*4)
+        self.sle_64_8 = SLEblock(n_fmaps, n_fmaps*8)
+
+        # decoder 層
+        self.decoder_f1 = SimpleDecoder(n_fmaps*4, 3)
+        self.decoder_f2 = SimpleDecoder(n_fmaps*8, 3)
+        self.decoder_res128 = SimpleDecoder(n_fmaps*4, 3)
+
+        # 出力層
+        self.output_layer = OutputLayer(n_fmaps*8, 1)
+        self.output_res128_layer = spectral_norm( nn.Conv2d(n_fmaps*4, 1, 4, 1, 0, bias=False) )
         return
 
-    def forward(self, input, input_128 = None, interpolate_mode = "bilinear" ):
-        if input_128 is None : 
-            input_128 = F.interpolate(input, size=128, mode = interpolate_mode)
+    def forward(self, input, input_res128 = None, interpolate_mode = "bilinear" ):
+        if input_res128 is None : 
+            input_res128 = F.interpolate(input, size=128, mode = interpolate_mode)
 
-        output = self.input_layer(input)
-        print( "[LightweightGANDiscriminator] output.shape", output.shape )
-        output = self.down(output)
-        print( "[LightweightGANDiscriminator] output.shape", output.shape )
+        #print( "[LightweightGANDiscriminator] input.shape", input.shape )
+        #-------------------------------------
+        # 入力層
+        #-------------------------------------
+        feat256 = self.input_layer(input)
+        print( "[LightweightGANDiscriminator] feat256.shape", feat256.shape )
 
-        return output
+        #-------------------------------------
+        # down sampling & SLE 層
+        #-------------------------------------
+        feat128 = self.down_256(feat256)
+        #print( "[LightweightGANDiscriminator] feat128.shape", feat128.shape )
+        feat64 = self.down_128(feat128)
+        feat32 = self.down_64(feat64)
+        feat32_skip = self.sle_256_32(feat256, feat32)
+        #print( "[LightweightGANDiscriminator] feat32_skip.shape", feat32_skip.shape )
+        feat16 = self.down_32(feat32_skip)
+        feat16_skip = self.sle_128_16(feat128, feat16)
+        feat8 = self.down_16(feat16_skip)
+        #print( "[LightweightGANDiscriminator] feat8.shape", feat8.shape )
+        feat8_skip = self.sle_64_8(feat64, feat8)
+        #print( "[LightweightGANDiscriminator] feat8_skip.shape", feat8_skip.shape )
+
+        feat8_res128 = self.down_16_res128(input_res128)
+        #print( "[LightweightGANDiscriminator] feat8_res128.shape", feat8_res128.shape )
+
+        #-------------------------------------
+        # 出力層
+        #-------------------------------------
+        d_output_resmax = self.output_layer(feat8_skip)
+        d_output_res128 = self.output_res128_layer(feat8_res128)
+        print( "[LightweightGANDiscriminator] d_output_resmax.shape", d_output_resmax.shape )
+        print( "[LightweightGANDiscriminator] d_output_res128.shape", d_output_res128.shape )
+        d_output = torch.cat( [d_output_resmax, d_output_res128], dim = 1)
+        #print( "[LightweightGANDiscriminator] d_output.shape", d_output.shape )
+
+        #-------------------------------------
+        # decoder 層
+        #-------------------------------------
+        rec_img_f1_part = self.decoder_f1(feat16_skip)
+        rec_img_f2 = self.decoder_f2(feat8_skip)
+        rec_img_res128 = self.decoder_res128(feat8_res128)
+        #print( "[LightweightGANDiscriminator] rec_img_f1_part.shape", rec_img_f1_part.shape )
+        #print( "[LightweightGANDiscriminator] rec_img_f2.shape", rec_img_f2.shape )
+        #print( "[LightweightGANDiscriminator] rec_img_res128.shape", rec_img_res128.shape )
+
+        #-------------------------------------
+        # return 値
+        #-------------------------------------
+        outputs = {
+            "d_output" : d_output,
+            "d_output_resmax" : d_output_resmax,
+            "d_output_res128" : d_output_res128,
+            "rec_img_f1_part" : rec_img_f1_part,
+            "rec_img_f2" : rec_img_f2,
+            "rec_img_res128" : rec_img_res128,
+        }
+        return outputs
