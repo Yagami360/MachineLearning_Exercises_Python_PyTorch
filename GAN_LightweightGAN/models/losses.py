@@ -222,7 +222,7 @@ class HingeGANLoss2(nn.Module):
         super(HingeGANLoss2, self).__init__()
         return
 
-    def forward_D_re(self, d_real, d_fake):
+    def forward_D(self, d_real, d_fake):
         loss_D_real = F.relu( torch.rand_like(d_real) * 0.2 + 0.8 - d_real).mean()
         loss_D_fake = F.relu( torch.rand_like(d_fake) * 0.2 + 0.8 + d_fake).mean()
         loss_D = loss_D_real + loss_D_fake
