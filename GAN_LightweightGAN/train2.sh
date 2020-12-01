@@ -1,6 +1,6 @@
 #!/bin/sh
 #conda activate pytorch11_py36
-#nohup sh train.sh > _logs/light-weight-gan_size256_b4_ep1000_201128
+#nohup sh train2.sh > _logs/light-weight-gan_size256_b4_ep1000_201128 &
 set -eu
 mkdir -p _logs
 

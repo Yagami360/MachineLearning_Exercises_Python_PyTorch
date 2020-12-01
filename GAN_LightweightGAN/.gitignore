@@ -4,7 +4,6 @@
 *.xlsx
 *.lnk
 *.ini
-*.png
 *.code-workspace
 *.html
 *.pt
@@ -20,5 +19,19 @@ checkpoints
 results
 
 !dataset
+dataset/few-shot-images/100-shot-grumpy_cat
+dataset/few-shot-images/100-shot-obama
+!dataset/few-shot-images/100-shot-panda
+dataset/few-shot-images/AnimalFace-cat
+dataset/few-shot-images/AnimalFace-dog
+dataset/few-shot-images/anime-face
+dataset/few-shot-images/art-painting
+dataset/few-shot-images/fauvism-still-life
+dataset/few-shot-images/flat-colored
+dataset/few-shot-images/moongate
+dataset/few-shot-images/pokemon
+dataset/few-shot-images/shells
+dataset/few-shot-images/skulls
+
 !lpips/weights/v0.0/*.pth
 !lpips/weights/v0.1/*.pth

@@ -40,11 +40,12 @@ from models.losses import VGGLoss, LSGANLoss, HingeGANLoss, HingeGANLoss2
 from utils.utils import save_checkpoint, load_checkpoint
 from utils.utils import board_add_image, board_add_images, save_image_w_norm
 from utils.scores import calculate_fretchet
+from data.transforms.diffaug import DiffAugment
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--exper_name", default="debug", help="実験名")
-    parser.add_argument("--dataset_dir", type=str, default="dataset/templete_dataset")
+    parser.add_argument("--dataset_dir", type=str, default="dataset/few-shot-images/100-shot-panda")
     parser.add_argument("--results_dir", type=str, default="results")
     parser.add_argument('--save_checkpoints_dir', type=str, default="checkpoints", help="モデルの保存ディレクトリ")
     parser.add_argument('--load_checkpoints_path', type=str, default="", help="モデルの読み込みファイルのパス")
@@ -65,9 +66,9 @@ if __name__ == '__main__':
     parser.add_argument("--n_diaplay_step", type=int, default=100,)
     parser.add_argument('--n_display_valid_step', type=int, default=500, help="valid データの tensorboard への表示間隔")
     parser.add_argument("--n_save_epoches", type=int, default=100,)
-    parser.add_argument("--val_rate", type=float, default=0.01)
+    parser.add_argument("--val_rate", type=float, default=0.05)
     parser.add_argument('--n_display_valid', type=int, default=8, help="valid データの tensorboard への表示数")
-    parser.add_argument('--data_augument', action='store_true')
+    parser.add_argument('--data_augument_type', choices=['none', 'color,translation'], default="color,translation",help="DAの種類")
     parser.add_argument('--diaplay_scores', action='store_true')
     parser.add_argument("--seed", type=int, default=71)
     parser.add_argument('--device', choices=['cpu', 'gpu'], default="gpu", help="使用デバイス (CPU or GPU)")
@@ -240,6 +241,12 @@ if __name__ == '__main__':
                 print( "output.shape : ", output.shape )
                 print( "output_res128.shape : ", output_res128.shape )
 
+            # DA
+            if( args.data_augument_type != "none" ):
+                image_t = DiffAugment(image_t, policy=args.data_augument_type)
+                output = DiffAugment(output, policy=args.data_augument_type)
+                output_res128 = DiffAugment(output_res128, policy=args.data_augument_type)
+
             #----------------------------------------------------
             # 識別器の更新処理
             #----------------------------------------------------
@@ -345,12 +352,12 @@ if __name__ == '__main__':
             #====================================================
             # valid データでの処理
             #====================================================
-            """
             if( step % args.n_display_valid_step == 0 ):
                 loss_G_total, loss_l1_total, loss_vgg_total, loss_adv_total = 0, 0, 0, 0
                 loss_D_total, loss_D_real_total, loss_D_fake_total, loss_D_rec_f1_total, loss_D_rec_f2_total, loss_D_rec_res128_total = 0, 0, 0, 0, 0, 0
                 score_fid_total = 0
                 n_valid_loop = 0
+
                 for iter, inputs in enumerate( tqdm(dloader_valid, desc = "valid") ):
                     model_G.eval()            
                     model_D.eval()
@@ -427,7 +434,7 @@ if __name__ == '__main__':
                 # scores
                 if( args.diaplay_scores ):
                     board_valid.add_scalar('scores/FID', score_fid_total.item()/n_valid_loop, step)
-            """
+
             step += 1
             n_print -= 1
 

@@ -44,7 +44,7 @@ from utils.scores import calculate_fretchet
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--exper_name", default="debug", help="実験名")
-    parser.add_argument("--dataset_dir", type=str, default="dataset/templete_dataset")
+    parser.add_argument("--dataset_dir", type=str, default="dataset/few-shot-images/100-shot-panda")
     parser.add_argument("--results_dir", type=str, default="results")
     parser.add_argument('--save_checkpoints_dir', type=str, default="checkpoints", help="モデルの保存ディレクトリ")
     parser.add_argument('--load_checkpoints_path', type=str, default="", help="モデルの読み込みファイルのパス")
@@ -65,7 +65,7 @@ if __name__ == '__main__':
     parser.add_argument("--n_diaplay_step", type=int, default=100,)
     parser.add_argument('--n_display_valid_step', type=int, default=500, help="valid データの tensorboard への表示間隔")
     parser.add_argument("--n_save_epoches", type=int, default=100,)
-    parser.add_argument("--val_rate", type=float, default=0.01)
+    parser.add_argument("--val_rate", type=float, default=0.05)
     parser.add_argument('--n_display_valid', type=int, default=8, help="valid データの tensorboard への表示数")
     parser.add_argument('--data_augument', action='store_true')
     parser.add_argument('--diaplay_scores', action='store_true')

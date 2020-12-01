@@ -34,8 +34,9 @@ class NoizeDataset(data.Dataset):
         self.z_dims = z_dims
         self.debug = debug
 
-        self.image_t_dir = os.path.join( root_dir, "image_t" )
+        self.image_t_dir = os.path.join( root_dir )
         self.image_t_names = sorted( [f for f in os.listdir(self.image_t_dir) if f.endswith(IMG_EXTENSIONS)], key=numerical_sort )
+        self.latent_z_fixed = self.get_latent_z(z_dims)
 
         self.transform = transforms.Compose(
             [
@@ -85,7 +86,10 @@ class NoizeDataset(data.Dataset):
         #---------------------
         # input noize z
         #---------------------
-        latent_z = self.get_latent_z(self.z_dims)
+        if( self.datamode == "train" ):
+            latent_z = self.get_latent_z(self.z_dims)
+        else:
+            latent_z = self.latent_z_fixed
 
         #---------------------
         # image_t
