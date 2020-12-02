@@ -63,7 +63,6 @@ if __name__ == '__main__':
     parser.add_argument('--use_cuda_deterministic', action='store_true', help="再現性確保のために cuDNN に決定論的振る舞い有効化")
     parser.add_argument('--detect_nan', action='store_true')
     parser.add_argument('--debug', action='store_true')
-
     args = parser.parse_args()
     if( args.debug ):
         for key, value in vars(args).items():

@@ -36,10 +36,11 @@ from models.network_base import weights_init
 from models.generators import LightweightGANGenerator
 from models.discriminators import LightweightGANDiscriminator
 from models.inception import InceptionV3
-from models.losses import VGGLoss, LSGANLoss, HingeGANLoss, HingeGANLoss2
+from models.losses import VGGLoss, LSGANLoss, HingeGANLoss
 from utils.utils import save_checkpoint, load_checkpoint
 from utils.utils import board_add_image, board_add_images, save_image_w_norm
 from utils.scores import calculate_fretchet
+from data.transforms.diffaug import DiffAugment
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -49,7 +50,7 @@ if __name__ == '__main__':
     parser.add_argument('--save_checkpoints_dir', type=str, default="checkpoints", help="モデルの保存ディレクトリ")
     parser.add_argument('--load_checkpoints_path', type=str, default="", help="モデルの読み込みファイルのパス")
     parser.add_argument('--tensorboard_dir', type=str, default="tensorboard", help="TensorBoard のディレクトリ")
-    parser.add_argument("--n_epoches", type=int, default=100, help="エポック数")    
+    parser.add_argument("--n_epoches", type=int, default=1000, help="エポック数")    
     parser.add_argument('--batch_size', type=int, default=4, help="バッチサイズ")
     parser.add_argument('--batch_size_valid', type=int, default=1, help="バッチサイズ")
     parser.add_argument('--image_size', type=int, choices=[128, 256, 512, 1024], default=1024, help="出力画像の解像度")
@@ -57,17 +58,17 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=0.0002, help="学習率")
     parser.add_argument('--beta1', type=float, default=0.5, help="学習率の減衰率")
     parser.add_argument('--beta2', type=float, default=0.999, help="学習率の減衰率")
-    parser.add_argument('--gan_loss_type', choices=['lsgan', 'hinge', 'hinge2'], default="hinge2", help="Adv loss の種類")
+    parser.add_argument('--gan_loss_type', choices=['lsgan', 'hinge'], default="hinge", help="Adv loss の種類")
     parser.add_argument('--rec_loss_type', choices=['vgg', 'lpips'], default="vgg", help="reconstruction loss の種類")
-    parser.add_argument('--lambda_l1', type=float, default=10.0, help="L1損失関数の係数値")
-    parser.add_argument('--lambda_vgg', type=float, default=10.0, help="VGG perceptual loss の係数値")
+    parser.add_argument('--lambda_l1', type=float, default=0.0, help="L1損失関数の係数値")
+    parser.add_argument('--lambda_vgg', type=float, default=0.0, help="VGG perceptual loss の係数値")
     parser.add_argument('--lambda_adv', type=float, default=1.0, help="Adv loss の係数値")
     parser.add_argument("--n_diaplay_step", type=int, default=100,)
     parser.add_argument('--n_display_valid_step', type=int, default=500, help="valid データの tensorboard への表示間隔")
     parser.add_argument("--n_save_epoches", type=int, default=100,)
     parser.add_argument("--val_rate", type=float, default=0.05)
     parser.add_argument('--n_display_valid', type=int, default=8, help="valid データの tensorboard への表示数")
-    parser.add_argument('--data_augument', action='store_true')
+    parser.add_argument('--data_augument_type', choices=['none', 'color,translation'], default="color,translation",help="DAの種類")
     parser.add_argument('--diaplay_scores', action='store_true')
     parser.add_argument("--seed", type=int, default=71)
     parser.add_argument('--device', choices=['cpu', 'gpu'], default="gpu", help="使用デバイス (CPU or GPU)")
@@ -78,7 +79,6 @@ if __name__ == '__main__':
     parser.add_argument('--use_amp', action='store_true', help="AMP [Automatic Mixed Precision] の使用有効化")
     parser.add_argument('--opt_level', choices=['O0','O1','O2','O3'], default='O1', help='mixed precision calculation mode')
     parser.add_argument('--debug', action='store_true')
-
     args = parser.parse_args()
     if( args.debug ):
         for key, value in vars(args).items():
@@ -194,9 +194,7 @@ if __name__ == '__main__':
     if( args.gan_loss_type == "lsgan" ):
         loss_adv_fn = LSGANLoss(device)
     elif( args.gan_loss_type == "hinge" ):
-        loss_adv_fn = HingeGANLoss(device)
-    elif( args.gan_loss_type == "hinge2" ):
-        loss_adv_fn = HingeGANLoss2()
+        loss_adv_fn = HingeGANLoss()
     else:
         NotImplementedError()
 
@@ -240,12 +238,20 @@ if __name__ == '__main__':
                 print( "output.shape : ", output.shape )
                 print( "output_res128.shape : ", output_res128.shape )
 
+            # Differentiable Augmentation for Data-Efficient GAN Training
+            if( args.data_augument_type != "none" ):
+                image_t = DiffAugment(image_t, policy=args.data_augument_type)
+                output = DiffAugment(output, policy=args.data_augument_type)
+                output_res128 = DiffAugment(output_res128, policy=args.data_augument_type)
+
             #----------------------------------------------------
             # 識別器の更新処理
             #----------------------------------------------------
+            """
             # 無効化していた識別器 D のネットワークの勾配計算を有効化。
             for param in model_D.parameters():
                 param.requires_grad = True
+            """
 
             # 学習用データをモデルに流し込む
             d_outputs_real = model_D( image_t )
@@ -279,19 +285,23 @@ if __name__ == '__main__':
             optimizer_D.zero_grad()
             if( args.use_amp ):
                 with amp.scale_loss(loss_D, optimizer_D, loss_id=0) as loss_D_scaled:
-                    loss_D_scaled.backward(retain_graph=True)
+                    loss_D_scaled.backward()
             else:
-                loss_D.backward(retain_graph=True)
+                loss_D.backward()
 
             optimizer_D.step()
 
+            """
             # 無効化していた識別器 D のネットワークの勾配計算を有効化。
             for param in model_D.parameters():
                 param.requires_grad = False
-
+            """
             #----------------------------------------------------
             # 生成器の更新処理
             #----------------------------------------------------
+            d_outputs_fake = model_D( output, output_res128 )
+            d_fake = d_outputs_fake["d_output"]
+
             # 損失関数を計算する
             loss_l1 = loss_l1_fn( image_t, output )
             loss_vgg = loss_vgg_fn( image_t, output )

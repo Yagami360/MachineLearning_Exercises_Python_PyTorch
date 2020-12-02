@@ -10,8 +10,8 @@ mkdir -p _logs
 N_EPOCHES=100
 BATCH_SIZE=4
 
-IMAGE_SIZE=256
-#IMAGE_SIZE=512
+#IMAGE_SIZE=256
+IMAGE_SIZE=512
 #IMAGE_SIZE=1024
 
 EXPER_NAME=debug
@@ -24,7 +24,7 @@ if [ ${EXPER_NAME} = "debug" ] ; then
     N_DISPLAY_VALID_STEP=50
 else
     N_DISPLAY_STEP=100
-    N_DISPLAY_VALID_STEP=500
+    N_DISPLAY_VALID_STEP=100
 fi
 
 python train.py \
@@ -32,7 +32,7 @@ python train.py \
     --n_epoches ${N_EPOCHES} \
     --image_size ${IMAGE_SIZE} --batch_size ${BATCH_SIZE} \
     --n_diaplay_step ${N_DISPLAY_STEP} --n_display_valid_step ${N_DISPLAY_VALID_STEP} \
-    --gan_loss_type hinge2 --rec_loss_type lpips \
+    --gan_loss_type hinge --rec_loss_type lpips \
     --lambda_l1 0.0 --lambda_vgg 0.0 --lambda_adv 1.0 \
     --diaplay_scores \
     --debug
