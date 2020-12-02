@@ -56,7 +56,7 @@ nvidia-docker2 で動作します。
     1. [Relativistic GANs（RGAN）](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_RGAN_PyTorch)
     1. [ProgressiveGAN](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_PGGAN_PyTorch)
     1. [Pix2Pix](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_Pix2Pix_PyTorch)
-    1. [Pix2Pix-HD](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_Pix2PixHD_PyTorch)
+    1. [light-weight GAN](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_LightweightGAN)
 1. Graph Convolutional Networks (GCN)
     1. [GCN_simple_classication](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GCN_simple_classication)
     1. [GCN_graphonomy](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GCN_graphonomy)
