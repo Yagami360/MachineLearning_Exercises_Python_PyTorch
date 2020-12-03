@@ -140,7 +140,11 @@ class ProgressiveDiscriminator( nn.Module ):
 
     def minibatchstd(self, input):
         # must add 1e-8 in std for stability
-        return (input.var(dim=0) + 1e-8).sqrt().mean().view(1, 1, 1, 1)
+        var = input.var(dim=0, unbiased=False) + 1e-8
+        std = torch.sqrt(var)
+        mean_std = std.mean().expand(input.size(0), 1, 4, 4)
+        return mean_std
+        #return (input.var(dim=0) + 1e-8).sqrt().mean().view(1, 1, 1, 1)
 
     def forward(self, input, progress = 0, alpha = 0.0 ):
         for i in range(progress, -1, -1):
@@ -154,6 +158,7 @@ class ProgressiveDiscriminator( nn.Module ):
             # Before final layer, do minibatch stddev
             if i == 0:
                 output = torch.cat( ( output, self.minibatchstd(output).expand_as(output[:, 0].unsqueeze(1)) ), dim=1 )
+                #print( "[output] shape={}, dtype={}, min={}, max={}".format(output.shape, output.dtype, torch.min(output), torch.max(output)) )
 
             # Conv
             output = self.blocks[layer_index](output)

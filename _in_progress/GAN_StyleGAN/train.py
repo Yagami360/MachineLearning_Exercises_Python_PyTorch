@@ -359,7 +359,7 @@ if __name__ == '__main__':
                         with torch.no_grad():
                             d_real = model_D( image_t, progress, alpha )
                             d_fake = model_D( output.detach(), progress, alpha )
-                            #print( "[valid] d_real={}, d_fake={}".format(d_real, d_fake) )
+                            print( "[valid] d_real={}, d_fake={}".format(d_real, d_fake) )
 
                         # 損失関数を計算する
                         #d_fake = model_D(output, progress, alpha )
