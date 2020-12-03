@@ -44,13 +44,13 @@ if __name__ == '__main__':
     parser.add_argument('--save_checkpoints_dir', type=str, default="checkpoints", help="モデルの保存ディレクトリ")
     parser.add_argument('--load_checkpoints_path', type=str, default="", help="モデルの読み込みファイルのパス")
     parser.add_argument('--tensorboard_dir', type=str, default="tensorboard", help="TensorBoard のディレクトリ")
-    parser.add_argument("--n_epoches", type=int, default=100, help="エポック数")    
-    parser.add_argument('--batch_size', type=int, default=4, help="バッチサイズ")
+    parser.add_argument("--n_epoches", type=str, default="4,4,4,4,8,16,32,64,64", help="各解像度スケール（4,8,16,32,64,128,256,512,1024）毎のエポック数のリスト")
+    parser.add_argument('--batch_size', type=str, default="256,256,128,64,32,16,8,4,4", help="各解像度スケール（4,8,16,32,64,128,256,512,1024）毎のバッチサイズのリスト")
     parser.add_argument('--batch_size_valid', type=int, default=1, help="バッチサイズ")
     parser.add_argument("--image_size_init", type=int, default=4, help="出力画像の初期解像度")
     parser.add_argument("--image_size_final", type=int, default=1024, help="出力画像の最終解像度")
     parser.add_argument('--z_dims', type=int, default=512, help="入力ノイズの次元数")
-    parser.add_argument('--lr', type=float, default=0.0002, help="学習率")
+    parser.add_argument('--lr', type=str, default="0.0015,0.0015,0.0015,0.0015,0.0015,0.0015,0.002,0.003,0.003", help="各解像度スケール（4,8,16,32,64,128,256,512,1024）毎の学習率のリスト")
     parser.add_argument('--beta1', type=float, default=0.5, help="学習率の減衰率")
     parser.add_argument('--beta2', type=float, default=0.999, help="学習率の減衰率")
     parser.add_argument('--gan_loss_type', choices=['lsgan', 'hinge'], default="hinge", help="Adv loss の種類")
@@ -71,8 +71,23 @@ if __name__ == '__main__':
     parser.add_argument('--use_amp', action='store_true', help="AMP [Automatic Mixed Precision] の使用有効化")
     parser.add_argument('--opt_level', choices=['O0','O1','O2','O3'], default='O1', help='mixed precision calculation mode')
     parser.add_argument('--debug', action='store_true')
-
     args = parser.parse_args()
+
+    n_epoches = []
+    for epoche in args.n_epoches.split(","):
+        n_epoches.append(int(epoche))
+    args.n_epoches = n_epoches
+
+    lr = []
+    for i in args.lr.split(","):
+        lr.append(float(i))
+    args.lr = lr
+
+    batch_size = []
+    for i in args.batch_size.split(","):
+        batch_size.append(int(i))
+    args.batch_size = batch_size
+
     if( args.debug ):
         for key, value in vars(args).items():
             print('%s: %s' % (str(key), str(value)))
@@ -138,7 +153,7 @@ if __name__ == '__main__':
         print( "train_index[0:10] : ", train_index[0:10] )
         print( "valid_index[0:10] : ", valid_index[0:10] )
 
-    dloader_train = torch.utils.data.DataLoader(Subset(ds_train, train_index), batch_size=args.batch_size, shuffle=True, num_workers = args.n_workers, pin_memory = True )
+    dloader_train = torch.utils.data.DataLoader(Subset(ds_train, train_index), batch_size=args.batch_size[0], shuffle=True, num_workers = args.n_workers, pin_memory = True )
     dloader_valid = torch.utils.data.DataLoader(Subset(ds_train, valid_index), batch_size=args.batch_size_valid, shuffle=False, num_workers = args.n_workers, pin_memory = True )
 
     #================================
@@ -162,8 +177,8 @@ if __name__ == '__main__':
     #================================
     # optimizer_G の設定
     #================================
-    optimizer_G = optim.Adam( params = model_G.parameters(), lr = args.lr, betas = (args.beta1,args.beta2) )
-    optimizer_D = optim.Adam( params = model_D.parameters(), lr = args.lr, betas = (args.beta1,args.beta2) )
+    optimizer_G = optim.Adam( params = model_G.parameters(), lr = args.lr[0], betas = (args.beta1,args.beta2) )
+    optimizer_D = optim.Adam( params = model_D.parameters(), lr = args.lr[0], betas = (args.beta1,args.beta2) )
 
     #================================
     # apex initialize
@@ -197,10 +212,31 @@ if __name__ == '__main__':
     n_print = 1
     step = 0
     for progress in range(progress_final):
+        # エポック数の更新
+        n_epoche = args.n_epoches[progress]
+
+        # バッチサイズの更新
+        del dloader_train
+        dloader_train = torch.utils.data.DataLoader(Subset(ds_train, train_index), batch_size=args.batch_size[progress], shuffle=True, num_workers = args.n_workers, pin_memory = True )
+
+        # 学習率の更新
+        lr = args.lr[progress]
+        for pam_group in optimizer_G.param_groups:
+            mul = pam_group.get('mul', 1)
+            pam_group['lr'] = lr * mul
+        for pam_group in optimizer_D.param_groups:
+            mul = pam_group.get('mul', 1)
+            pam_group['lr'] = lr * mul
+
+        #
         step_per_progress = 0
-        step_per_progress_total = args.n_epoches * len(dloader_train)
+        step_per_progress_total = n_epoche * len(dloader_train)
         alpha = 0.0
-        for epoch in tqdm( range(args.n_epoches), desc = "epoches" ):
+
+        #--------------------------
+        # 各解像度スケールでの学習
+        #--------------------------
+        for epoch in tqdm( range(n_epoche), desc = "epoches" ):
             for iter, inputs in enumerate( tqdm( dloader_train, desc = "progress={}, alpha={:0.4f}, epoch={}".format(progress, alpha, epoch) ) ):
                 model_G.train()
                 model_D.train()

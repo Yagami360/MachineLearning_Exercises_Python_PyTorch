@@ -7,13 +7,11 @@ mkdir -p _logs
 #----------------------
 # model
 #----------------------
-N_EPOCHES=10
-BATCH_SIZE=4
 IMAGE_SIZE_INIT=4
 IMAGE_SIZE_FINAL=1024
 
 EXPER_NAME=debug
-#EXPER_NAME=stylegan_${IMAGE_SIZE_FINAL}_b${BATCH_SIZE}_ep${N_EPOCHES}_201121
+#EXPER_NAME=stylegan_${IMAGE_SIZE_FINAL}_201121
 
 rm -rf tensorboard/${EXPER_NAME}
 rm -rf tensorboard/${EXPER_NAME}_valid
@@ -27,8 +25,9 @@ fi
 
 python train.py \
     --exper_name ${EXPER_NAME} \
-    --n_epoches ${N_EPOCHES} \
-    --image_size_init ${IMAGE_SIZE_INIT} --image_size_final ${IMAGE_SIZE_FINAL} --batch_size ${BATCH_SIZE} \
+    --n_epoches "40,40,40,40,80,160,320,640,640" \
+    --image_size_init ${IMAGE_SIZE_INIT} --image_size_final ${IMAGE_SIZE_FINAL} \
+    --batch_size "16,16,16,16,16,16,8,4,4" \
     --n_diaplay_step ${N_DISPLAY_STEP} --n_display_valid_step ${N_DISPLAY_VALID_STEP} \
     --diaplay_scores \
     --lambda_l1 0.0 --lambda_adv 1.0 \
