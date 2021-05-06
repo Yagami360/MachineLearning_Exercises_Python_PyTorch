@@ -26,24 +26,28 @@ except ImportError:
     amp = None
 
 # 自作モジュール
-from data.dataset import TempleteDataset, TempleteDataLoader
-from models.networks import TempleteNetworks
+from data.dataset import DogsVSCatsDataset, DogsVSCatsDataLoader
+from models.networks import ResNet18, VisionTransformer
+from utils.configs import *
 from utils.utils import save_checkpoint, load_checkpoint
 from utils.utils import board_add_image, board_add_images, save_image_w_norm
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--exper_name", default="debug", help="実験名")
-    parser.add_argument("--dataset_dir", type=str, default="dataset/templete_dataset")
+    parser.add_argument("--dataset_dir", type=str, default="dataset/dog_vs_cat_dataset")
     parser.add_argument("--results_dir", type=str, default="results")
     parser.add_argument('--save_checkpoints_dir', type=str, default="checkpoints", help="モデルの保存ディレクトリ")
     parser.add_argument('--load_checkpoints_path', type=str, default="", help="モデルの読み込みファイルのパス")
+    parser.add_argument('--load_checkpoints_path_pretrained', type=str, default="checkpoints/ViT-B_16.npz", help="事前学習済み ViT の読み込みファイルパス")
     parser.add_argument('--tensorboard_dir', type=str, default="tensorboard", help="TensorBoard のディレクトリ")
     parser.add_argument("--n_epoches", type=int, default=100, help="エポック数")    
     parser.add_argument('--batch_size', type=int, default=4, help="バッチサイズ")
     parser.add_argument('--batch_size_valid', type=int, default=1, help="バッチサイズ")
+    parser.add_argument('--network_G_type', choices=['resnet18', 'vit-b16'], default="vit-b16", help="ネットワークの種類")
     parser.add_argument('--image_height', type=int, default=128, help="入力画像の高さ（pixel単位）")
     parser.add_argument('--image_width', type=int, default=128, help="入力画像の幅（pixel単位）")
+    parser.add_argument('--n_classes', type=int, default=2, help="分類ラベル数")
     parser.add_argument('--lr', type=float, default=0.0002, help="学習率")
     parser.add_argument('--beta1', type=float, default=0.5, help="学習率の減衰率")
     parser.add_argument('--beta2', type=float, default=0.999, help="学習率の減衰率")
@@ -117,7 +121,7 @@ if __name__ == '__main__':
     # データセットの読み込み
     #================================    
     # 学習用データセットとテスト用データセットの設定
-    ds_train = TempleteDataset( args, args.dataset_dir, datamode = "train", image_height = args.image_height, image_width = args.image_width, data_augument = args.data_augument, debug = args.debug )
+    ds_train = DogsVSCatsDataset( args, args.dataset_dir, datamode = "train", image_height = args.image_height, image_width = args.image_width, data_augument = args.data_augument, debug = args.debug )
 
     # 学習用データセットとテスト用データセットの設定
     index = np.arange(len(ds_train))
@@ -134,11 +138,21 @@ if __name__ == '__main__':
     #================================
     # モデルの構造を定義する。
     #================================
-    model_G = TempleteNetworks().to(device)
+    if( args.network_G_type == "resnet18" ):
+        model_G = ResNet18( n_classes = args.n_classes, pretrained = True ).to(device)
+    elif( args.network_G_type == "vit-b16" ):
+        config = get_b16_config()
+        model_G = VisionTransformer( config, image_height=args.image_height, image_width=args.image_width, num_classes=args.n_classes, zero_head=True, vis=False ).to(device)
+    else:
+        NotImplementedError()
+
     if( args.debug ):
         print( "model_G\n", model_G )
 
     # モデルを読み込む
+    if not args.load_checkpoints_path_pretrained == '' and os.path.exists(args.load_checkpoints_path_pretrained):
+        model_G.load_from(np.load(args.load_checkpoints_path_pretrained))
+
     if not args.load_checkpoints_path == '' and os.path.exists(args.load_checkpoints_path):
         load_checkpoint(model_G, device, args.load_checkpoints_path )
         
@@ -161,7 +175,7 @@ if __name__ == '__main__':
     #================================
     # loss 関数の設定
     #================================
-    loss_fn = nn.L1Loss()
+    loss_fn = nn.CrossEntropyLoss()
 
     #================================
     # モデルの学習
@@ -187,16 +201,23 @@ if __name__ == '__main__':
             #----------------------------------------------------
             # 生成器 の forword 処理
             #----------------------------------------------------
-            output = model_G( image )
+            if( args.network_G_type == "resnet18" ):
+                output = model_G( image )
+            else:
+                output, attentions = model_G( image )
+
             if( args.debug and n_print > 0 ):
                 print( "output.shape : ", output.shape )
+                if( args.network_G_type == "vit-b16" ):
+                    print( "len(attentions) : ", len(attentions) )
+                    for i,attention in enumerate(attentions):
+                        print( "attentions[{}].shape : ".format(i,attention.shape) )
 
             #----------------------------------------------------
             # 生成器の更新処理
             #----------------------------------------------------
             # 損失関数を計算する
-            #loss_G = loss_fn( output, target )
-            loss_G = torch.zeros(1, requires_grad=True).float().to(device)
+            loss_G = loss_fn( output, target )
 
             # ネットワークの更新処理
             optimizer_G.zero_grad()
@@ -222,18 +243,38 @@ if __name__ == '__main__':
                 board_train.add_scalar('G/loss_G', loss_G.item(), step)
                 print( "step={}, loss_G={:.5f}".format(step, loss_G.item()) )
 
-                # visual images
-                visuals = [
-                    [ image.detach(), target.detach(), output.detach() ],
-                ]
-                board_add_images(board_train, 'train', visuals, step+1)
+                #
+                board_add_image(board_train, 'image', image, step+1)
+                board_train.add_histogram('output[0]', output[0], step+1) 
+                print( "step={}, target=({}), output=({:.5f},{:.5f})".format(step+1, target[0].item(), output[0,0], output[0,1]) )
+
+                #----------------------------------------------------
+                # 正解率を計算する。（バッチデータ）
+                #----------------------------------------------------
+                # 確率値が最大のラベルを予想ラベルとする。
+                # dim = 1 ⇒ 列方向で最大値をとる
+                # Returns : (Tensor, LongTensor)
+                _, predict = torch.max( output.data, dim = 1 )
+                if( args.debug and n_print > 0 ):
+                    print( "predict.shape :", predict.shape )
+
+                # 正解数のカウント
+                n_tests = target.size(0)
+
+                # ミニバッチ内で一致したラベルをカウント
+                n_correct = ( predict == target ).sum().item()
+
+                accuracy = n_correct / n_tests
+                print( "step={}, accuracy={:.5f}".format(step+1, accuracy) )
+                board_train.add_scalar('G/accuracy', accuracy, step+1)
 
             #====================================================
             # valid データでの処理
             #====================================================
-            if( step != 0 and ( step % args.n_display_valid_step == 0 ) ):
+            if( step == 0 or ( step % args.n_display_valid_step == 0 ) ):
                 loss_G_total = 0
                 n_valid_loop = 0
+                n_correct_total = 0
                 for iter, inputs in enumerate( tqdm(dloader_valid, desc = "valid") ):
                     model_G.eval()            
 
@@ -247,26 +288,29 @@ if __name__ == '__main__':
 
                     # 推論処理
                     with torch.no_grad():
-                        output = model_G( image )
+                        if( args.network_G_type == "resnet18" ):
+                            output = model_G( image )
+                        else:
+                            output, attentions = model_G( image )
 
                     # 損失関数を計算する
-                    #loss_G = loss_fn( output, target )
-                    loss_G = torch.zeros(1, requires_grad=True).float().to(device)
+                    loss_G = loss_fn( output, target )
                     loss_G_total += loss_G
 
-                    # 生成画像表示
-                    if( iter <= args.n_display_valid ):
-                        # visual images
-                        visuals = [
-                            [ image.detach(), target.detach(), output.detach() ],
-                        ]
-                        board_add_images(board_valid, 'valid/{}'.format(iter), visuals, step+1)
+                    # 正解率を計算する。（バッチデータ）
+                    _, predict = torch.max( output.data, dim = 1 )
+                    n_correct = ( predict == target ).sum().item()
+                    n_correct_total += n_correct
 
                     n_valid_loop += 1
 
                 # loss 値表示
                 board_valid.add_scalar('G/loss_G', loss_G_total.item()/n_valid_loop, step)
-                
+
+                # 正解率表示（全 vailid）
+                accuracy = n_correct_total / n_valid_loop
+                board_valid.add_scalar('G/accuracy', accuracy, step+1)
+
             step += 1
             n_print -= 1
 

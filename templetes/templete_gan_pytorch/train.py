@@ -20,6 +20,11 @@ import torchvision
 from torchvision.utils import save_image
 from tensorboardX import SummaryWriter
 
+try:
+    from apex import amp
+except ImportError:
+    amp = None
+
 # 自作モジュール
 from data.dataset import TempleteDataset, TempleteDataLoader
 from models.generators import Pix2PixHDGenerator
@@ -62,6 +67,8 @@ if __name__ == '__main__':
     parser.add_argument('--use_cuda_benchmark', action='store_true', help="torch.backends.cudnn.benchmark の使用有効化")
     parser.add_argument('--use_cuda_deterministic', action='store_true', help="再現性確保のために cuDNN に決定論的振る舞い有効化")
     parser.add_argument('--detect_nan', action='store_true')
+    parser.add_argument('--use_amp', action='store_true', help="AMP [Automatic Mixed Precision] の使用有効化")
+    parser.add_argument('--opt_level', choices=['O0','O1','O2','O3'], default='O1', help='mixed precision calculation mode')
     parser.add_argument('--debug', action='store_true')
     args = parser.parse_args()
     if( args.debug ):
@@ -157,6 +164,17 @@ if __name__ == '__main__':
     optimizer_D = optim.Adam( params = model_D.parameters(), lr = args.lr, betas = (args.beta1,args.beta2) )
 
     #================================
+    # apex initialize
+    #================================
+    if( args.use_amp ):
+        [model_D, model_G], [optimizer_D, optimizer_G] = amp.initialize(
+            [model_D, model_G], 
+            [optimizer_D, optimizer_G], 
+            opt_level = args.opt_level,
+            num_losses = 2
+        )
+        
+    #================================
     # loss 関数の設定
     #================================
     loss_l1_fn = nn.L1Loss()
@@ -211,7 +229,12 @@ if __name__ == '__main__':
 
             # ネットワークの更新処理
             optimizer_D.zero_grad()
-            loss_D.backward(retain_graph=True)
+            if( args.use_amp ):
+                with amp.scale_loss(loss_D, optimizer_D, loss_id=0) as loss_D_scaled:
+                    loss_D_scaled.backward(retain_graph=True)
+            else:
+                loss_D.backward(retain_graph=True)
+
             optimizer_D.step()
 
             # 無効化していた識別器 D のネットワークの勾配計算を有効化。
@@ -229,7 +252,12 @@ if __name__ == '__main__':
 
             # ネットワークの更新処理
             optimizer_G.zero_grad()
-            loss_G.backward()
+            if( args.use_amp ):
+                with amp.scale_loss(loss_G, optimizer_G, loss_id=1) as loss_G_scaled:
+                    loss_G_scaled.backward()
+            else:
+                loss_G.backward()
+                
             optimizer_G.step()
 
             #====================================================
