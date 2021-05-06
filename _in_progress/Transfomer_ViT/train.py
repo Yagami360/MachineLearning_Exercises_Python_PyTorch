@@ -29,8 +29,10 @@ except ImportError:
 from data.dataset import DogsVSCatsDataset, DogsVSCatsDataLoader
 from models.networks import ResNet18, VisionTransformer
 from utils.configs import *
+from utils.scheduler import WarmupLinearSchedule, WarmupCosineSchedule
 from utils.utils import save_checkpoint, load_checkpoint
 from utils.utils import board_add_image, board_add_images, save_image_w_norm
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -48,9 +50,11 @@ if __name__ == '__main__':
     parser.add_argument('--image_height', type=int, default=128, help="入力画像の高さ（pixel単位）")
     parser.add_argument('--image_width', type=int, default=128, help="入力画像の幅（pixel単位）")
     parser.add_argument('--n_classes', type=int, default=2, help="分類ラベル数")
-    parser.add_argument('--lr', type=float, default=0.0002, help="学習率")
-    parser.add_argument('--beta1', type=float, default=0.5, help="学習率の減衰率")
-    parser.add_argument('--beta2', type=float, default=0.999, help="学習率の減衰率")
+    parser.add_argument('--lr', type=float, default=3e-2, help="学習率")
+    parser.add_argument('--momentum', type=float, default=0.9, help="学習率の減衰率")
+    parser.add_argument('--weight_decay', type=float, default=0.0, help="学習率の減衰率")
+    parser.add_argument("--lr_decay_type", choices=["cosine", "linear"], default="cosine", help="How to decay the learning rate.")
+    parser.add_argument("--lr_warmup_steps", default=500, type=int, help="Step of training to perform learning rate warmup for.")
     parser.add_argument("--n_diaplay_step", type=int, default=100,)
     parser.add_argument('--n_display_valid_step', type=int, default=500, help="valid データの tensorboard への表示間隔")
     parser.add_argument("--n_save_epoches", type=int, default=10,)
@@ -159,7 +163,7 @@ if __name__ == '__main__':
     #================================
     # optimizer_G の設定
     #================================
-    optimizer_G = optim.Adam( params = model_G.parameters(), lr = args.lr, betas = (args.beta1,args.beta2) )
+    optimizer_G = optim.SGD( params = model_G.parameters(), lr = args.lr, momentum = args.momentum, weight_decay = args.weight_decay )
 
     #================================
     # apex initialize
@@ -176,6 +180,14 @@ if __name__ == '__main__':
     # loss 関数の設定
     #================================
     loss_fn = nn.CrossEntropyLoss()
+
+    #================================
+    # scheduler の設定
+    #================================
+    if args.lr_decay_type == "cosine":
+        scheduler = WarmupCosineSchedule(optimizer_G, warmup_steps=args.lr_warmup_steps, t_total=args.n_epoches*len(dloader_train))
+    else:
+        scheduler = WarmupLinearSchedule(optimizer_G, warmup_steps=args.lr_warmup_steps, t_total=args.n_epoches*len(dloader_train))
 
     #================================
     # モデルの学習
@@ -228,7 +240,8 @@ if __name__ == '__main__':
                 loss_G.backward()
 
             optimizer_G.step()
-            
+            scheduler.step()
+
             #====================================================
             # 学習過程の表示
             #====================================================

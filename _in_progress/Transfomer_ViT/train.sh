@@ -28,7 +28,6 @@ python train.py \
     --image_height ${IMAGE_HIGHT} --image_width ${IMAGE_WIDTH} --batch_size ${BATCH_SIZE} \
     --n_diaplay_step ${N_DISPLAY_STEP} --n_display_valid_step ${N_DISPLAY_VALID_STEP} \
     --data_augument \
-    --val_rate 0.1 \
     --debug
 
 if [ $1 = "poweroff" ] ; then

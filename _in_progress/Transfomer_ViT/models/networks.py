@@ -61,6 +61,147 @@ class ResNet18( nn.Module ):
         return out
 
 #====================================
+# 埋め込み変換 E として利用する ResNet
+#====================================
+def np2th(weights, conv=False):
+    """Possibly convert HWIO to OIHW."""
+    if conv:
+        weights = weights.transpose([3, 2, 0, 1])
+    return torch.from_numpy(weights)
+
+
+class StdConv2d(nn.Conv2d):
+
+    def forward(self, x):
+        w = self.weight
+        v, m = torch.var_mean(w, dim=[1, 2, 3], keepdim=True, unbiased=False)
+        w = (w - m) / torch.sqrt(v + 1e-5)
+        return F.conv2d(x, w, self.bias, self.stride, self.padding,
+                        self.dilation, self.groups)
+
+
+def conv3x3(cin, cout, stride=1, groups=1, bias=False):
+    return StdConv2d(cin, cout, kernel_size=3, stride=stride,
+                     padding=1, bias=bias, groups=groups)
+
+
+def conv1x1(cin, cout, stride=1, bias=False):
+    return StdConv2d(cin, cout, kernel_size=1, stride=stride,
+                     padding=0, bias=bias)
+
+
+class PreActBottleneck(nn.Module):
+    """Pre-activation (v2) bottleneck block.
+    """
+
+    def __init__(self, cin, cout=None, cmid=None, stride=1):
+        super().__init__()
+        cout = cout or cin
+        cmid = cmid or cout//4
+
+        self.gn1 = nn.GroupNorm(32, cmid, eps=1e-6)
+        self.conv1 = conv1x1(cin, cmid, bias=False)
+        self.gn2 = nn.GroupNorm(32, cmid, eps=1e-6)
+        self.conv2 = conv3x3(cmid, cmid, stride, bias=False)  # Original code has it on conv1!!
+        self.gn3 = nn.GroupNorm(32, cout, eps=1e-6)
+        self.conv3 = conv1x1(cmid, cout, bias=False)
+        self.relu = nn.ReLU(inplace=True)
+
+        if (stride != 1 or cin != cout):
+            # Projection also with pre-activation according to paper.
+            self.downsample = conv1x1(cin, cout, stride, bias=False)
+            self.gn_proj = nn.GroupNorm(cout, cout)
+
+    def forward(self, x):
+
+        # Residual branch
+        residual = x
+        if hasattr(self, 'downsample'):
+            residual = self.downsample(x)
+            residual = self.gn_proj(residual)
+
+        # Unit's branch
+        y = self.relu(self.gn1(self.conv1(x)))
+        y = self.relu(self.gn2(self.conv2(y)))
+        y = self.gn3(self.conv3(y))
+
+        y = self.relu(residual + y)
+        return y
+
+    def load_from(self, weights, n_block, n_unit):
+        conv1_weight = np2th(weights[pjoin(n_block, n_unit, "conv1/kernel")], conv=True)
+        conv2_weight = np2th(weights[pjoin(n_block, n_unit, "conv2/kernel")], conv=True)
+        conv3_weight = np2th(weights[pjoin(n_block, n_unit, "conv3/kernel")], conv=True)
+
+        gn1_weight = np2th(weights[pjoin(n_block, n_unit, "gn1/scale")])
+        gn1_bias = np2th(weights[pjoin(n_block, n_unit, "gn1/bias")])
+
+        gn2_weight = np2th(weights[pjoin(n_block, n_unit, "gn2/scale")])
+        gn2_bias = np2th(weights[pjoin(n_block, n_unit, "gn2/bias")])
+
+        gn3_weight = np2th(weights[pjoin(n_block, n_unit, "gn3/scale")])
+        gn3_bias = np2th(weights[pjoin(n_block, n_unit, "gn3/bias")])
+
+        self.conv1.weight.copy_(conv1_weight)
+        self.conv2.weight.copy_(conv2_weight)
+        self.conv3.weight.copy_(conv3_weight)
+
+        self.gn1.weight.copy_(gn1_weight.view(-1))
+        self.gn1.bias.copy_(gn1_bias.view(-1))
+
+        self.gn2.weight.copy_(gn2_weight.view(-1))
+        self.gn2.bias.copy_(gn2_bias.view(-1))
+
+        self.gn3.weight.copy_(gn3_weight.view(-1))
+        self.gn3.bias.copy_(gn3_bias.view(-1))
+
+        if hasattr(self, 'downsample'):
+            proj_conv_weight = np2th(weights[pjoin(n_block, n_unit, "conv_proj/kernel")], conv=True)
+            proj_gn_weight = np2th(weights[pjoin(n_block, n_unit, "gn_proj/scale")])
+            proj_gn_bias = np2th(weights[pjoin(n_block, n_unit, "gn_proj/bias")])
+
+            self.downsample.weight.copy_(proj_conv_weight)
+            self.gn_proj.weight.copy_(proj_gn_weight.view(-1))
+            self.gn_proj.bias.copy_(proj_gn_bias.view(-1))
+
+class ResNetV2(nn.Module):
+    """Implementation of Pre-activation (v2) ResNet mode."""
+
+    def __init__(self, block_units, width_factor):
+        super().__init__()
+        width = int(64 * width_factor)
+        self.width = width
+
+        # The following will be unreadable if we split lines.
+        # pylint: disable=line-too-long
+        self.root = nn.Sequential(OrderedDict([
+            ('conv', StdConv2d(3, width, kernel_size=7, stride=2, bias=False, padding=3)),
+            ('gn', nn.GroupNorm(32, width, eps=1e-6)),
+            ('relu', nn.ReLU(inplace=True)),
+            ('pool', nn.MaxPool2d(kernel_size=3, stride=2, padding=0))
+        ]))
+
+        self.body = nn.Sequential(OrderedDict([
+            ('block1', nn.Sequential(OrderedDict(
+                [('unit1', PreActBottleneck(cin=width, cout=width*4, cmid=width))] +
+                [(f'unit{i:d}', PreActBottleneck(cin=width*4, cout=width*4, cmid=width)) for i in range(2, block_units[0] + 1)],
+                ))),
+            ('block2', nn.Sequential(OrderedDict(
+                [('unit1', PreActBottleneck(cin=width*4, cout=width*8, cmid=width*2, stride=2))] +
+                [(f'unit{i:d}', PreActBottleneck(cin=width*8, cout=width*8, cmid=width*2)) for i in range(2, block_units[1] + 1)],
+                ))),    
+            ('block3', nn.Sequential(OrderedDict(
+                [('unit1', PreActBottleneck(cin=width*8, cout=width*16, cmid=width*4, stride=2))] +
+                [(f'unit{i:d}', PreActBottleneck(cin=width*16, cout=width*16, cmid=width*4)) for i in range(2, block_units[2] + 1)],
+                ))),
+        ]))
+
+    def forward(self, x):
+        x = self.root(x)
+        x = self.body(x)
+        return x
+
+#====================================
 # Transfomer
 #====================================
 import math
@@ -76,12 +217,6 @@ FC_0 = "MlpBlock_3/Dense_0"
 FC_1 = "MlpBlock_3/Dense_1"
 ATTENTION_NORM = "LayerNorm_0"
 MLP_NORM = "LayerNorm_2"
-
-def np2th(weights, conv=False):
-    """Possibly convert HWIO to OIHW."""
-    if conv:
-        weights = weights.transpose([3, 2, 0, 1])
-    return torch.from_numpy(weights)
 
 def swish(x):
     return x * torch.sigmoid(x)
@@ -177,22 +312,20 @@ class Embeddings(nn.Module):
             n_patches = (image_height // patch_size[0]) * (image_width // patch_size[1])
             self.hybrid = False
 
+        print( "n_patches : ", n_patches )
         if self.hybrid:
-            self.hybrid_model = ResNetV2(block_units=config.resnet.num_layers,
-                                         width_factor=config.resnet.width_factor)
+            self.hybrid_model = ResNetV2(block_units=config.resnet.num_layers, width_factor=config.resnet.width_factor)
             in_channels = self.hybrid_model.width * 16
-        self.patch_embeddings = Conv2d(in_channels=in_channels,
-                                       out_channels=config.hidden_size,
-                                       kernel_size=patch_size,
-                                       stride=patch_size)
+
+        self.patch_embeddings = Conv2d(in_channels=in_channels, out_channels=config.hidden_size, kernel_size=patch_size, stride=patch_size)
         self.position_embeddings = nn.Parameter(torch.zeros(1, n_patches+1, config.hidden_size))
         self.cls_token = nn.Parameter(torch.zeros(1, 1, config.hidden_size))
-
         self.dropout = Dropout(config.transformer["dropout_rate"])
 
     def forward(self, x):
         B = x.shape[0]
         cls_tokens = self.cls_token.expand(B, -1, -1)
+        print( "cls_tokens.shape : ", cls_tokens.shape )
 
         if self.hybrid:
             x = self.hybrid_model(x)
@@ -292,6 +425,7 @@ class Transformer(nn.Module):
         self.encoder = Encoder(config, vis)
 
     def forward(self, input_ids):
+        print( "[Transformer] input_ids.shape : ", input_ids.shape )
         embedding_output = self.embeddings(input_ids)
         encoded, attn_weights = self.encoder(embedding_output)
         return encoded, attn_weights
