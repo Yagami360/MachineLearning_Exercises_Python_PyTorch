@@ -312,7 +312,7 @@ class Embeddings(nn.Module):
             n_patches = (image_height // patch_size[0]) * (image_width // patch_size[1])
             self.hybrid = False
 
-        print( "n_patches : ", n_patches )
+        #print( "n_patches : ", n_patches )
         if self.hybrid:
             self.hybrid_model = ResNetV2(block_units=config.resnet.num_layers, width_factor=config.resnet.width_factor)
             in_channels = self.hybrid_model.width * 16
@@ -325,7 +325,7 @@ class Embeddings(nn.Module):
     def forward(self, x):
         B = x.shape[0]
         cls_tokens = self.cls_token.expand(B, -1, -1)
-        print( "cls_tokens.shape : ", cls_tokens.shape )
+        #print( "cls_tokens.shape : ", cls_tokens.shape )
 
         if self.hybrid:
             x = self.hybrid_model(x)
@@ -344,9 +344,9 @@ class Block(nn.Module):
         super(Block, self).__init__()
         self.hidden_size = config.hidden_size
         self.attention_norm = LayerNorm(config.hidden_size, eps=1e-6)
+        self.attn = Attention(config, vis)
         self.ffn_norm = LayerNorm(config.hidden_size, eps=1e-6)
         self.ffn = Mlp(config)
-        self.attn = Attention(config, vis)
 
     def forward(self, x):
         h = x
@@ -425,7 +425,7 @@ class Transformer(nn.Module):
         self.encoder = Encoder(config, vis)
 
     def forward(self, input_ids):
-        print( "[Transformer] input_ids.shape : ", input_ids.shape )
+        #print( "[Transformer] input_ids.shape : ", input_ids.shape )
         embedding_output = self.embeddings(input_ids)
         encoded, attn_weights = self.encoder(embedding_output)
         return encoded, attn_weights

@@ -21,3 +21,5 @@ checkpoints
 results
 
 !dataset
+!dataset/dog_vs_cat_dataset_n100
+dataset/dog_vs_cat_dataset

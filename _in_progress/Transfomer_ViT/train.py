@@ -37,18 +37,18 @@ from utils.utils import board_add_image, board_add_images, save_image_w_norm
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--exper_name", default="debug", help="実験名")
-    parser.add_argument("--dataset_dir", type=str, default="dataset/dog_vs_cat_dataset")
+    parser.add_argument("--dataset_dir", type=str, default="dataset/dog_vs_cat_dataset_n100")
     parser.add_argument("--results_dir", type=str, default="results")
     parser.add_argument('--save_checkpoints_dir', type=str, default="checkpoints", help="モデルの保存ディレクトリ")
     parser.add_argument('--load_checkpoints_path', type=str, default="", help="モデルの読み込みファイルのパス")
-    parser.add_argument('--load_checkpoints_path_pretrained', type=str, default="checkpoints/ViT-B_16.npz", help="事前学習済み ViT の読み込みファイルパス")
+    parser.add_argument('--load_checkpoints_path_pretrained', type=str, default="checkpoints/imagenet21k/ViT-B_16.npz", help="事前学習済み ViT の読み込みファイルパス")
     parser.add_argument('--tensorboard_dir', type=str, default="tensorboard", help="TensorBoard のディレクトリ")
     parser.add_argument("--n_epoches", type=int, default=100, help="エポック数")    
     parser.add_argument('--batch_size', type=int, default=4, help="バッチサイズ")
     parser.add_argument('--batch_size_valid', type=int, default=1, help="バッチサイズ")
-    parser.add_argument('--network_G_type', choices=['resnet18', 'vit-b16'], default="vit-b16", help="ネットワークの種類")
-    parser.add_argument('--image_height', type=int, default=128, help="入力画像の高さ（pixel単位）")
-    parser.add_argument('--image_width', type=int, default=128, help="入力画像の幅（pixel単位）")
+    parser.add_argument('--netG_type', choices=['resnet18', 'vit-b16'], default="vit-b16", help="ネットワークの種類")
+    parser.add_argument('--image_height', type=int, default=224, help="入力画像の高さ（pixel単位）")
+    parser.add_argument('--image_width', type=int, default=224, help="入力画像の幅（pixel単位）")
     parser.add_argument('--n_classes', type=int, default=2, help="分類ラベル数")
     parser.add_argument('--lr', type=float, default=3e-2, help="学習率")
     parser.add_argument('--momentum', type=float, default=0.9, help="学習率の減衰率")
@@ -142,11 +142,11 @@ if __name__ == '__main__':
     #================================
     # モデルの構造を定義する。
     #================================
-    if( args.network_G_type == "resnet18" ):
+    if( args.netG_type == "resnet18" ):
         model_G = ResNet18( n_classes = args.n_classes, pretrained = True ).to(device)
-    elif( args.network_G_type == "vit-b16" ):
+    elif( args.netG_type == "vit-b16" ):
         config = get_b16_config()
-        model_G = VisionTransformer( config, image_height=args.image_height, image_width=args.image_width, num_classes=args.n_classes, zero_head=True, vis=False ).to(device)
+        model_G = VisionTransformer( config, image_height=args.image_height, image_width=args.image_width, num_classes=args.n_classes, zero_head=True, vis=True ).to(device)
     else:
         NotImplementedError()
 
@@ -184,10 +184,12 @@ if __name__ == '__main__':
     #================================
     # scheduler の設定
     #================================
+    total_step = args.n_epoches * (len(ds_train)//args.batch_size)
+    print( "total_step : ", total_step )
     if args.lr_decay_type == "cosine":
-        scheduler = WarmupCosineSchedule(optimizer_G, warmup_steps=args.lr_warmup_steps, t_total=args.n_epoches*len(dloader_train))
+        scheduler = WarmupCosineSchedule( optimizer_G, warmup_steps=args.lr_warmup_steps, t_total=total_step )
     else:
-        scheduler = WarmupLinearSchedule(optimizer_G, warmup_steps=args.lr_warmup_steps, t_total=args.n_epoches*len(dloader_train))
+        scheduler = WarmupLinearSchedule( optimizer_G, warmup_steps=args.lr_warmup_steps, t_total=total_step )
 
     #================================
     # モデルの学習
@@ -213,17 +215,17 @@ if __name__ == '__main__':
             #----------------------------------------------------
             # 生成器 の forword 処理
             #----------------------------------------------------
-            if( args.network_G_type == "resnet18" ):
+            if( args.netG_type == "resnet18" ):
                 output = model_G( image )
             else:
                 output, attentions = model_G( image )
 
             if( args.debug and n_print > 0 ):
                 print( "output.shape : ", output.shape )
-                if( args.network_G_type == "vit-b16" ):
+                if( args.netG_type == "vit-b16" ):
                     print( "len(attentions) : ", len(attentions) )
-                    for i,attention in enumerate(attentions):
-                        print( "attentions[{}].shape : ".format(i,attention.shape) )
+                    for i in range(len(attentions)):
+                        print( "attentions[{}].shape : {}".format(i,attentions[i].shape) )
 
             #----------------------------------------------------
             # 生成器の更新処理
@@ -256,10 +258,17 @@ if __name__ == '__main__':
                 board_train.add_scalar('G/loss_G', loss_G.item(), step)
                 print( "step={}, loss_G={:.5f}".format(step, loss_G.item()) )
 
-                #
+                # 入力画像
                 board_add_image(board_train, 'image', image, step+1)
                 board_train.add_histogram('output[0]', output[0], step+1) 
-                print( "step={}, target=({}), output=({:.5f},{:.5f})".format(step+1, target[0].item(), output[0,0], output[0,1]) )
+                #print( "step={}, target=({}), output=({:.5f},{:.5f})".format(step+1, target[0].item(), output[0,0], output[0,1]) )
+
+                # attention
+                for i in range(len(attentions)):
+                    visuals = [
+                        [ attentions[i][:,j,:,:].unsqueeze(1) for j in range(attentions[i].shape[1]) ],
+                    ]
+                    board_add_images(board_train, 'attention_{}'.format(i), visuals, step+1)
 
                 #----------------------------------------------------
                 # 正解率を計算する。（バッチデータ）
@@ -301,7 +310,7 @@ if __name__ == '__main__':
 
                     # 推論処理
                     with torch.no_grad():
-                        if( args.network_G_type == "resnet18" ):
+                        if( args.netG_type == "resnet18" ):
                             output = model_G( image )
                         else:
                             output, attentions = model_G( image )
