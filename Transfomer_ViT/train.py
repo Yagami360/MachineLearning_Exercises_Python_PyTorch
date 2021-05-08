@@ -53,8 +53,8 @@ if __name__ == '__main__':
     parser.add_argument('--lr', type=float, default=3e-2, help="学習率")
     parser.add_argument('--momentum', type=float, default=0.9, help="学習率の減衰率")
     parser.add_argument('--weight_decay', type=float, default=0.0, help="学習率の減衰率")
-    parser.add_argument("--lr_decay_type", choices=["cosine", "linear"], default="cosine", help="How to decay the learning rate.")
-    parser.add_argument("--lr_warmup_steps", default=500, type=int, help="Step of training to perform learning rate warmup for.")
+    parser.add_argument("--scheduler_type", choices=["none", "cosine", "linear"], default="cosine", help="How to decay the learning rate.")
+    parser.add_argument("--scheduler_warmup_steps", default=100, type=int, help="Step of training to perform learning rate warmup for.")
     parser.add_argument("--n_diaplay_step", type=int, default=100,)
     parser.add_argument('--n_display_valid_step', type=int, default=500, help="valid データの tensorboard への表示間隔")
     parser.add_argument("--n_save_epoches", type=int, default=10,)
@@ -186,10 +186,10 @@ if __name__ == '__main__':
     #================================
     total_step = args.n_epoches * (len(ds_train)//args.batch_size)
     print( "total_step : ", total_step )
-    if args.lr_decay_type == "cosine":
-        scheduler = WarmupCosineSchedule( optimizer_G, warmup_steps=args.lr_warmup_steps, t_total=total_step )
+    if args.scheduler_type == "cosine":
+        scheduler = WarmupCosineSchedule( optimizer_G, warmup_steps=args.scheduler_warmup_steps, t_total=total_step )
     else:
-        scheduler = WarmupLinearSchedule( optimizer_G, warmup_steps=args.lr_warmup_steps, t_total=total_step )
+        scheduler = WarmupLinearSchedule( optimizer_G, warmup_steps=args.scheduler_warmup_steps, t_total=total_step )
 
     #================================
     # モデルの学習
@@ -242,7 +242,9 @@ if __name__ == '__main__':
                 loss_G.backward()
 
             optimizer_G.step()
-            scheduler.step()
+
+            if( args.scheduler_type != "none" ):
+                scheduler.step()
 
             #====================================================
             # 学習過程の表示

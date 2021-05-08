@@ -47,7 +47,7 @@ nvidia-docker2 で動作します。
     1. [ResNet](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/ResNet_PyTorch)
     1. [UNet](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/UNet_PyTorch)
 1. CNN 系
-    1. [CNN_GeometricMatchingCNN](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/CNN_GeometricMatchingCNN)
+    1. [Geometric Matching CNN](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/CNN_GeometricMatchingCNN)
 1. GANs
     1. [Deep Convolutional GAN（DCGAN）](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_DCGAN_PyTorch)
     1. [Conditional GAN（cGAN）](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_cGAN_PyTorch)
@@ -59,13 +59,15 @@ nvidia-docker2 で動作します。
     1. [light-weight GAN](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GAN_LightweightGAN)
 1. Graph Convolutional Networks (GCN)
     1. [GCN_simple_classication](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GCN_simple_classication)
-    1. [GCN_graphonomy](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GCN_graphonomy)
+    1. [Graphonomy](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/GCN_graphonomy)
+1. Transfomer
+    1. [Vision Transformer (ViT)](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/Transfomer_ViT)
 1. 正則化層
-    1. [AdaIN_SPADE_pix2pixHD](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/AdaIN_SPADE_pix2pixHD)
+    1. [AdaIN vs SPADE](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/AdaIN_SPADE_pix2pixHD)
 1. Attention 機構
     1. [Attention_pix2pixHD](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/Attention_pix2pixHD)
 1. データオーギュメント
-    1. [DA_DeepSIM](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/DA_DeepSIM)
+    1. [DeepSIM](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/DA_DeepSIM)
 1. 強化学習
     1. [【外部リンク】ReinforcementLearning](https://github.com/Yagami360/ReinforcementLearning_Exercises)
 1. 仮想試着モデル
