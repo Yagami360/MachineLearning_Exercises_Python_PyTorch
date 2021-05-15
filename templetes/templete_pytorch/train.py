@@ -52,7 +52,7 @@ if __name__ == '__main__':
     parser.add_argument("--n_save_epoches", type=int, default=10,)
     parser.add_argument("--val_rate", type=float, default=0.01)
     parser.add_argument('--n_display_valid', type=int, default=8, help="valid データの tensorboard への表示数")
-    parser.add_argument('--data_augument', action='store_true')
+    parser.add_argument('--data_augument_types', type=str, default="resize,crop")
     parser.add_argument("--seed", type=int, default=71)
     parser.add_argument('--device', choices=['cpu', 'gpu'], default="gpu", help="使用デバイス (CPU or GPU)")
     parser.add_argument('--n_workers', type=int, default=4, help="CPUの並列化数（0 で並列化なし）")
@@ -63,6 +63,7 @@ if __name__ == '__main__':
     parser.add_argument('--opt_level', choices=['O0','O1','O2','O3'], default='O1', help='mixed precision calculation mode')
     parser.add_argument('--debug', action='store_true')
     args = parser.parse_args()
+    args.data_augument_types = args.data_augument_types.split(',')
     if( args.debug ):
         for key, value in vars(args).items():
             print('%s: %s' % (str(key), str(value)))
@@ -117,7 +118,7 @@ if __name__ == '__main__':
     # データセットの読み込み
     #================================    
     # 学習用データセットとテスト用データセットの設定
-    ds_train = TempleteDataset( args, args.dataset_dir, datamode = "train", image_height = args.image_height, image_width = args.image_width, data_augument = args.data_augument, debug = args.debug )
+    ds_train = TempleteDataset( args, args.dataset_dir, datamode = "train", image_height = args.image_height, image_width = args.image_width, data_augument_types = args.data_augument_types, debug = args.debug )
 
     # 学習用データセットとテスト用データセットの設定
     index = np.arange(len(ds_train))

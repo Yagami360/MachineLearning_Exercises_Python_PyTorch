@@ -53,6 +53,50 @@ def load_checkpoint_w_step(model, device, checkpoint_path, strict=True):
     model.to(device)
     return step
 
+from collections import OrderedDict
+def load_checkpoint_multiGPU(model, device, checkpoint_path, model_state_dict=True):
+    if not os.path.exists(checkpoint_path):
+        return
+        
+    state_dict = torch.load(checkpoint_path, map_location=torch.device('cpu'))
+    new_state_dict = OrderedDict()
+    if( model_state_dict ):
+        for k, v in state_dict["model_state_dict"].items():
+            if 'module' in k:
+                k = k.replace('module.', '')
+            new_state_dict[k] = v
+    else:
+        for k, v in state_dict.items():
+            if 'module' in k:
+                k = k.replace('module.', '')
+            new_state_dict[k] = v
+
+    model.load_state_dict(new_state_dict)
+    model.to(device)
+    return
+
+def load_checkpoint_multiGPU_w_step(model, device, checkpoint_path, model_state_dict=True):
+    if not os.path.exists(checkpoint_path):
+        return
+        
+    state_dict = torch.load(checkpoint_path)
+    new_state_dict = OrderedDict()
+    if( model_state_dict ):
+        for k, v in state_dict["model_state_dict"].items():
+            if 'module' in k:
+                k = k.replace('module.', '')
+            new_state_dict[k] = v
+    else:
+        for k, v in state_dict.items():
+            if 'module' in k:
+                k = k.replace('module.', '')
+            new_state_dict[k] = v
+
+    model.load_state_dict(new_state_dict)
+    model.to(device)
+    step = state_dict['step']
+    return step
+    
 #====================================================
 # 画像の保存関連
 #====================================================

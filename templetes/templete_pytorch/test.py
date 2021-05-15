@@ -97,7 +97,7 @@ if __name__ == '__main__':
     # データセットの読み込み
     #================================    
     # 学習用データセットとテスト用データセットの設定
-    ds_test = TempleteDataset( args, args.dataset_dir, datamode = "test", image_height = args.image_height, image_width = args.image_width, data_augument = False, debug = args.debug )
+    ds_test = TempleteDataset( args, args.dataset_dir, datamode = "test", image_height = args.image_height, image_width = args.image_width, data_augument_types = "resize,crop", debug = args.debug )
     dloader_test = torch.utils.data.DataLoader(ds_test, batch_size=args.batch_size_test, shuffle = False, num_workers = args.n_workers, pin_memory = True )
 
     #================================

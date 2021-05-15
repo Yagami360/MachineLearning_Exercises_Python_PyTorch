@@ -26,94 +26,78 @@ IMG_EXTENSIONS = (
 )
 
 class TempleteDataset(data.Dataset):
-    def __init__(self, args, root_dir, datamode = "train", image_height = 128, image_width = 128, data_augument = False, debug = False ):
+    def __init__(self, args, root_dir, datamode = "train", image_height = 128, image_width = 128, data_augument_types = "none", debug = False ):
         super(TempleteDataset, self).__init__()
         self.args = args
         self.datamode = datamode
-        self.data_augument = data_augument
+        self.data_augument_types = data_augument_types
         self.image_height = image_height
         self.image_width = image_width
         self.debug = debug
 
         self.image_dir = os.path.join( root_dir, "image" )
         self.target_dir = os.path.join( root_dir, "target" )
-        #self.image_names = sorted( [f for f in os.listdir(self.image_dir) if f.endswith(IMG_EXTENSIONS)], key=lambda s: int(re.search(r'\d+', s).group()) )
-        #self.target_names = sorted( [f for f in os.listdir(self.target_dir) if f.endswith(IMG_EXTENSIONS)], key=lambda s: int(re.search(r'\d+', s).group()) )
         self.image_names = sorted( [f for f in os.listdir(self.image_dir) if f.endswith(IMG_EXTENSIONS)], key=numerical_sort )
         self.target_names = sorted( [f for f in os.listdir(self.target_dir) if f.endswith(IMG_EXTENSIONS)], key=numerical_sort )
 
         # transform
-        if( data_augument ):
-            self.transform = transforms.Compose(
-                [
-                    transforms.Resize( (args.image_height, args.image_width), interpolation=Image.LANCZOS ),
-                    transforms.RandomHorizontalFlip(),
-                    transforms.RandomVerticalFlip(),
-                    transforms.RandomAffine( degrees = (-10,10),  translate=(0.0, 0.0), scale = (1.00,1.00), resample=Image.BICUBIC ),
-                    transforms.RandomPerspective(),
-                    transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5),
-                    transforms.CenterCrop( size = (args.image_height, args.image_width) ),
-                    transforms.ToTensor(),
-                    transforms.Normalize( [0.5,0.5,0.5], [0.5,0.5,0.5] ),
-                    RandomErasing( probability = 0.5, sl = 0.02, sh = 0.2, r1 = 0.3, mean=[0.5, 0.5, 0.5] ),
-                ]
-            )
+        transform_list = []
+        transform_mask_list = []
+        transform_mask_woToTensor_list = []
 
-            self.transform_mask = transforms.Compose(
-                [
-                    transforms.Resize( (args.image_height, args.image_width), interpolation=Image.NEAREST ),
-                    transforms.RandomHorizontalFlip(),
-                    transforms.RandomVerticalFlip(),
-                    transforms.RandomAffine( degrees = (-10,10),  translate=(0.0, 0.0), scale = (1.00,1.00), resample=Image.NEAREST ),
-                    transforms.RandomPerspective(),
-                    transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5),
-                    transforms.CenterCrop( size = (args.image_height, args.image_width) ),
-                    transforms.ToTensor(),
-                    transforms.Normalize( [0.5], [0.5] ),
-                    RandomErasing( probability = 0.5, sl = 0.02, sh = 0.2, r1 = 0.3, mean=[0.5, 0.5, 0.5] ),
-                ]
-            )
+        if( "resize" in data_augument_types ):
+            transform_list.append(transforms.Resize( (args.image_height, args.image_width), interpolation=Image.LANCZOS ))
+            transform_mask_list.append(transforms.Resize( (args.image_height, args.image_width), interpolation=Image.NEAREST ))
+            transform_mask_woToTensor_list.append(transforms.Resize( (args.image_height, args.image_width), interpolation=Image.NEAREST ))
+        if( "crop" in data_augument_types ):
+            transform_list.append(transforms.CenterCrop( size = (args.image_height, args.image_width) ))
+            transform_mask_list.append(transforms.CenterCrop( size = (args.image_height, args.image_width) ))
+            transform_mask_woToTensor_list.append(transforms.CenterCrop( size = (args.image_height, args.image_width) ))
+        if( "tps" in data_augument_types ):
+            transform_list.append(TPSTransform(tps_points_per_dim=5))
+            transform_mask_list.append(TPSTransform(tps_points_per_dim=5))
+            transform_mask_woToTensor_list.append(TPSTransform(tps_points_per_dim=5))
+        if( "hflip" in data_augument_types ):
+            transform_list.append(transforms.RandomHorizontalFlip())
+            transform_mask_list.append(transforms.RandomHorizontalFlip())
+            transform_mask_woToTensor_list.append(transforms.RandomHorizontalFlip())
+        if( "vflip" in data_augument_types ):
+            transform_list.append(transforms.RandomVerticalFlip())
+            transform_mask_list.append(transforms.RandomVerticalFlip())
+            transform_mask_woToTensor_list.append(transforms.RandomVerticalFlip())
+        if( "affine" in data_augument_types ):
+            transform_list.append(transforms.RandomAffine(degrees = (-10,10),  translate=(0.15, 0.15), scale = (0.85,1.25), resample=Image.BICUBIC))
+            transform_mask_list.append(transforms.RandomAffine(degrees = (-10,10),  translate=(0.15, 0.15), scale = (0.85,1.25), resample=Image.NEAREST))
+            transform_mask_woToTensor_list.append(transforms.RandomAffine(degrees = (-10,10),  translate=(0.15, 0.15), scale = (0.85,1.25), resample=Image.NEAREST))
+        if( "perspect" in data_augument_types ):
+            transform_list.append(transforms.RandomPerspective())
+            transform_mask_list.append(transforms.RandomPerspective())
+            transform_mask_woToTensor_list.append(transforms.RandomPerspective())
+        if( "color" in data_augument_types ):
+            transform_list.append(transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5))
 
-            self.transform_mask_woToTensor = transforms.Compose(
-                [
-                    transforms.Resize( (args.image_height, args.image_width), interpolation=Image.NEAREST ),
-                    transforms.RandomHorizontalFlip(),
-                    transforms.RandomVerticalFlip(),
-                    transforms.RandomAffine( degrees = (-10,10),  translate=(0.0, 0.0), scale = (1.00,1.00), resample=Image.NEAREST ),
-                    transforms.RandomPerspective(),
-                    transforms.ColorJitter(brightness=0.5, contrast=0.5, saturation=0.5),
-                    transforms.CenterCrop( size = (args.image_height, args.image_width) ),
-                    RandomErasing( probability = 0.5, sl = 0.02, sh = 0.2, r1 = 0.3, mean=[0.5, 0.5, 0.5] ),
-                ]
-            )
-        else:
-            self.transform = transforms.Compose(
-                [
-                    transforms.Resize( (args.image_height, args.image_width), interpolation=Image.LANCZOS ),
-                    transforms.CenterCrop( size = (args.image_height, args.image_width) ),
-                    transforms.ToTensor(),
-                    transforms.Normalize( [0.5,0.5,0.5], [0.5,0.5,0.5] ),
-                ]
-            )
-            self.transform_mask = transforms.Compose(
-                [
-                    transforms.Resize( (args.image_height, args.image_width), interpolation=Image.NEAREST ),
-                    transforms.CenterCrop( size = (args.image_height, args.image_width) ),
-                    transforms.ToTensor(),
-                    transforms.Normalize( [0.5], [0.5] ),
-                ]
-            )
-            self.transform_mask_woToTensor = transforms.Compose(
-                [
-                    transforms.Resize( (args.image_height, args.image_width), interpolation=Image.NEAREST ),
-                    transforms.CenterCrop( size = (args.image_height, args.image_width) ),
-                ]
-            )
+        transform_list.append(transforms.ToTensor())
+        transform_mask_list.append(transforms.ToTensor())
+
+        transform_list.append(transforms.Normalize([0.5,0.5,0.5],[0.5,0.5,0.5]))
+        transform_mask_list.append(transforms.Normalize([0.5],[0.5]))
+
+        if( "erase" in data_augument_types ):
+            transform_list.append(RandomErasing( probability = 0.5, sl = 0.02, sh = 0.2, r1 = 0.3, mean=[-1.0, -1.0, -1.0] ))
+            transform_mask_list.append(RandomErasing( probability = 0.5, sl = 0.02, sh = 0.2, r1 = 0.3, mean=[-1.0] ))
+            transform_mask_woToTensor_list.append(RandomErasing( probability = 0.5, sl = 0.02, sh = 0.2, r1 = 0.3, mean=[-1.0] ))
+
+        self.transform = transforms.Compose(transform_list)
+        self.transform_mask = transforms.Compose(transform_mask_list)
+        self.transform_mask_woToTensor = transforms.Compose(transform_mask_woToTensor_list)
 
         if( self.debug ):
             print( "self.image_dir :", self.image_dir)
             print( "len(self.image_names) :", len(self.image_names))
             print( "self.image_names[0:5] :", self.image_names[0:5])
+            print( "self.transform :", self.transform)
+            print( "self.transform_mask :", self.transform_mask)
+            print( "self.transform_mask_woToTensor :", self.transform_mask_woToTensor)
 
         return
 
@@ -127,7 +111,7 @@ class TempleteDataset(data.Dataset):
 
         # image
         image = Image.open( os.path.join(self.image_dir,image_name) ).convert('RGB')
-        if( self.data_augument ):
+        if not( "none" in self.data_augument_types ):
             set_random_seed( self.seed_da )
 
         image = self.transform(image)
@@ -135,8 +119,7 @@ class TempleteDataset(data.Dataset):
         # target
         if( self.datamode == "train" ):
             target = Image.open( os.path.join(self.target_dir, target_name) )
-            #self.seed_da = random.randint(0,10000)
-            if( self.data_augument ):
+            if not( "none" in self.data_augument_types ):
                 set_random_seed( self.seed_da )
 
             target = self.transform_mask(target)
