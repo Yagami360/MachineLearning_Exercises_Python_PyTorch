@@ -22,7 +22,7 @@ from tensorboardX import SummaryWriter
 
 # 自作モジュール
 from data.dataset import TempleteDataset, TempleteDataLoader
-from models.networks import TempleteNetworks
+from models.generators import Pix2PixHDGenerator
 from utils.utils import save_checkpoint, load_checkpoint
 from utils.utils import board_add_image, board_add_images, save_image_w_norm
 
@@ -38,14 +38,22 @@ if __name__ == '__main__':
     parser.add_argument('--image_height', type=int, default=128, help="入力画像の高さ（pixel単位）")
     parser.add_argument('--image_width', type=int, default=128, help="入力画像の幅（pixel単位）")
     parser.add_argument("--seed", type=int, default=71)
-    parser.add_argument('--device', choices=['cpu', 'gpu'], default="gpu", help="使用デバイス (CPU or GPU)")
+    parser.add_argument("--gpu_ids", default="0", help="使用GPU番号")
     parser.add_argument('--n_workers', type=int, default=4, help="CPUの並列化数（0 で並列化なし）")
     parser.add_argument('--use_cuda_benchmark', action='store_true', help="torch.backends.cudnn.benchmark の使用有効化")
     parser.add_argument('--use_cuda_deterministic', action='store_true', help="再現性確保のために cuDNN に決定論的振る舞い有効化")
     parser.add_argument('--detect_nan', action='store_true')
     parser.add_argument('--debug', action='store_true')
-
     args = parser.parse_args()
+
+    #os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu_ids
+    str_gpu_ids = args.gpu_ids.split(',')
+    args.gpu_ids = []
+    for str_gpu_id in str_gpu_ids:
+        gpu_id = int(str_gpu_id)
+        if gpu_id >= 0:
+            args.gpu_ids.append(gpu_id)  
+
     if( args.debug ):
         for key, value in vars(args).items():
             print('%s: %s' % (str(key), str(value)))
@@ -59,20 +67,17 @@ if __name__ == '__main__':
         os.mkdir(os.path.join(args.results_dir, args.exper_name, "output"))
 
     # 実行 Device の設定
-    if( args.device == "gpu" ):
-        use_cuda = torch.cuda.is_available()
-        if( use_cuda == True ):
-            device = torch.device( "cuda" )
-            #torch.cuda.set_device(args.gpu_ids[0])
-            print( "実行デバイス :", device)
-            print( "GPU名 :", torch.cuda.get_device_name(device))
-            print("torch.cuda.current_device() =", torch.cuda.current_device())
+    if( torch.cuda.is_available() ):
+        if(len(args.gpu_ids) > 2 ):
+            device = torch.device(f'cuda:{args.gpu_ids[0]}')
         else:
-            print( "can't using gpu." )
-            device = torch.device( "cpu" )
-            print( "実行デバイス :", device)
+            device = torch.device(f'cuda:{gpu_id}')
+
+        print( "実行デバイス :", device)
+        print( "GPU名 :", torch.cuda.get_device_name(device))
+        print("torch.cuda.current_device() =", torch.cuda.current_device())
     else:
-        device = torch.device( "cpu" )
+        device = torch.device("cpu")
         print( "実行デバイス :", device)
 
     # seed 値の固定
@@ -103,7 +108,7 @@ if __name__ == '__main__':
     #================================
     # モデルの構造を定義する。
     #================================
-    model_G = TempleteNetworks().to(device)
+    model_G = Pix2PixHDGenerator().to(device)
     if( args.debug ):
         print( "model_G\n", model_G )
 
@@ -111,6 +116,12 @@ if __name__ == '__main__':
     if not args.load_checkpoints_path == '' and os.path.exists(args.load_checkpoints_path):
         load_checkpoint(model_G, device, args.load_checkpoints_path )
         
+    #================================
+    # マルチ GPU
+    #================================
+    if len(args.gpu_ids) >= 2:
+        model_G = torch.nn.DataParallel(model_G)
+
     #================================
     # モデルの推論
     #================================    

@@ -3,6 +3,10 @@
 set -eu
 mkdir -p _logs
 
+GPU_IDS="0"
+#GPU_IDS="1"
+#GPU_IDS="0,1,2,3"
+
 #----------------------
 # model
 #----------------------
@@ -28,6 +32,7 @@ python train.py \
     --image_height ${IMAGE_HIGHT} --image_width ${IMAGE_WIDTH} --batch_size ${BATCH_SIZE} \
     --n_diaplay_step ${N_DISPLAY_STEP} --n_display_valid_step ${N_DISPLAY_VALID_STEP} \
     --diaplay_scores \
+    --gpu_ids ${GPU_IDS} \
     --debug
 
 if [ $1 = "poweroff" ] ; then
