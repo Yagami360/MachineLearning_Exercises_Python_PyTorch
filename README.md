@@ -70,7 +70,5 @@ nvidia-docker2 で動作します。
     1. [DeepSIM](https://github.com/Yagami360/MachineLearning_Exercises_Python_PyTorch/tree/master/DA_DeepSIM)
 1. 強化学習
     1. [【外部リンク】ReinforcementLearning](https://github.com/Yagami360/ReinforcementLearning_Exercises)
-1. 仮想試着モデル
-    1. [【外部リンク】virtual-try-on_exercises_pytorch](https://github.com/Yagami360/virtual-try-on_exercises_pytorch)
 
 ## ■ 参考文献＆サイト
